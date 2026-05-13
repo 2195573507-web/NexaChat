@@ -1,0 +1,79 @@
+# NexaChat Build Execution Plan
+
+## Goal
+
+Build the existing NexaChat plans into a runnable local-first Electron + React + TypeScript desktop app. The app must cover the eight planned modules, persist local data in SQLite, implement a real Provider -> Router -> Gateway -> Chat loop, expose a local OpenAI-compatible gateway, and include verification before completion.
+
+## Scope Source
+
+- `docs/build-plans/00-master-build-plan.md`
+- `docs/build-plans/01-workspace-and-dashboard/build-plan.md`
+- `docs/build-plans/02-chat-assistant-local-history/build-plan.md`
+- `docs/build-plans/03-model-provider-center/build-plan.md`
+- `docs/build-plans/04-knowledge-context-center/build-plan.md`
+- `docs/build-plans/05-tools-mcp-agent-center/build-plan.md`
+- `docs/build-plans/06-local-gateway-router-center/build-plan.md`
+- `docs/build-plans/07-config-data-import-export-center/build-plan.md`
+- `docs/build-plans/08-logs-evaluation-security-system/build-plan.md`
+- `docs/design/*.md`
+- `docs/architecture/*.md`
+- `docs/testing/acceptance-criteria.md`
+
+## Parallel Agent Requirement
+
+- Agent A: Chat / Provider / Model / Router / Gateway audit.
+- Agent B: Knowledge / Tools / MCP / Agent / Data Config audit.
+- Agent C: UI / Dashboard / Logs / Settings / Acceptance audit.
+
+At least three agents were launched concurrently before implementation work continued.
+
+## Phases
+
+1. Complete scope audit from plans and agent outputs.
+2. Initialize app skeleton and dependencies.
+3. Implement main-process database, repositories, IPC, services, and gateway.
+4. Implement renderer shell, navigation, module pages, chat flow, provider/model pages, gateway/config/log/settings pages.
+5. Implement tests, smoke checks, and validation scripts.
+6. Refresh progress docs and final verification.
+
+## Current Status
+
+- Phase 1: complete.
+- Phase 2: complete.
+- Phase 3: complete.
+- Phase 4: complete.
+- Phase 5: complete.
+- Phase 6: in progress.
+
+## Implementation Summary
+
+- Initialized Electron + React + TypeScript + Vite.
+- Implemented shared navigation metadata for exactly eight modules.
+- Implemented SQLite schema and main-process store for core local data.
+- Implemented Provider, Model, Router, Chat, request log, usage, audit, gateway key, Knowledge file, MCP registry, Agent definition, snapshot, diagnostics, and UI preferences actions.
+- Implemented safe preload IPC bridge.
+- Implemented local gateway endpoints `/v1/models`, `/v1/chat/completions`, `/v1/embeddings`, and reserved `/v1/responses`.
+- Implemented renderer shell, dashboard, chat, model center, knowledge, tools/MCP/Agent, gateway, data config, and settings/security pages.
+- Implemented browser fallback API for Vite/Playwright tests.
+- Added Vitest and Playwright smoke tests.
+
+## Completion Gates
+
+- `npm.cmd install` succeeds.
+- TypeScript typecheck passes.
+- Unit tests pass.
+- Production build passes.
+- UI smoke test can load the app shell and navigate modules.
+- The app has no fake-complete labels for reserved features.
+- `git status -sb` is reviewed before final response.
+
+## Verification Log
+
+- `npm.cmd install`: completed; dependency install output reported 0 vulnerabilities. The shell wrapper hit its timeout after packages were installed.
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test`: passed, 1 test file / 3 tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run verify`: passed.
+- `npm.cmd exec -- playwright install chromium`: completed after transient network retry messages.
+- `npm.cmd run test:ui-smoke`: passed, 2 tests.
+- `npm.cmd run test:electron-smoke`: passed after fixing Windows Electron executable launch and ESM path resolution.

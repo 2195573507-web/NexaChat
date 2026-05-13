@@ -1,49 +1,62 @@
 # NexaChat / AI 对话中枢
 
-NexaChat 是一个从零规划的新桌面应用项目，定位为“本地优先的多模型 AI 对话中枢”。本仓库当前处于规划阶段，重点是明确项目构建计划、模块边界、技术架构、数据模型、UI/UX 设计、交互流程和验收标准。
+NexaChat 是一个本地优先、多模型 AI 对话中枢，当前已经从“规划仓库”推进为可运行的 Electron + React + TypeScript + Vite + SQLite 桌面应用。
 
-## 项目目标
+## 当前已实现
 
-- 建立一个清晰、可维护、可验收的本地优先 AI 对话客户端。
-- 支持多个 Provider 和 Model，但不把聊天历史绑定到任意一个 API。
-- 用本地 SQLite 保存会话、消息、请求日志、用量和配置快照。
-- 在第一版先做好对话、模型配置、本地历史、网关边界、日志诊断和导入导出设计。
-- 为知识库、MCP、Agent、工作流、评测、安全等后续能力预留接口，但不做空壳功能。
+- Electron 桌面壳，启动只打开一个主窗口。
+- 8 个一级模块：工作台、对话、模型、知识库、工具与 Agent、本地网关、数据配置、设置与安全。
+- 基于 `src/shared/navigation.ts` 的配置驱动导航，并显示 `implemented` / `planned` / `reserved` 状态。
+- 主进程 SQLite schema 与本地 store，覆盖工作区、供应商、模型、会话、消息、请求日志、用量、网关 Key、知识文件、MCP Server、Agent 定义、快照、审计和界面偏好。
+- Renderer 通过 preload IPC 调用主进程能力，不直接读取 SQLite 或 raw secret。
+- Provider -> Model -> Router -> Gateway -> Chat 核心闭环。
+- 本地会话历史持久化；切换 Provider、Model 或 API Key 不会删除会话。
+- Assistant 消息保存真实 provider、model、model snapshot、request id、tokens、latency、finish reason、状态、context strategy 和 metadata。
+- 本地 OpenAI-compatible 网关：`127.0.0.1:8787`，包含 `/v1/models`、`/v1/chat/completions`、`/v1/embeddings`，`/v1/responses` 明确为 reserved。
+- 日志与诊断的敏感信息脱敏基础设施。
+- Vite/Playwright 浏览器模式 fallback API。
 
-## 模块结构设想
+## 仍为计划或预留
 
-一级导航最多 8 个：
+- 真实上游 Provider 转发尚未完成；当前回复生成是本地确定性路径，用于验证持久化、路由、网关形状和日志链路。
+- 完整 RAG、真实 embedding/rerank、PDF/Office/OCR、向量库评测仍为 planned。
+- MCP 执行、自定义工具执行、真实 Agent Run、Workflow canvas、trace replay、人类审批执行、代码沙箱为 reserved。
+- 完整冲突导入、备份恢复、迁移 UI、带 secrets 的加密备份仍为 planned。
+- 打包安装器和桌面快捷方式验证不在本轮范围内。
 
-1. 工作台
-2. 对话
-3. 模型
-4. 知识库
-5. 工具与 Agent
-6. 本地网关
-7. 数据配置
-8. 设置与安全
+## 运行
 
-后端能力按 service 分层，不按页面乱写。规划服务包括 `workspace-service`、`chat-service`、`conversation-service`、`message-service`、`provider-service`、`model-service`、`router-service`、`gateway-service`、`knowledge-service`、`mcp-service`、`security-service`、`settings-service` 等。
+```powershell
+npm.cmd install
+npm.cmd run dev
+npm.cmd run dev:electron
+```
 
-## 数据本地化原则
+构建并启动桌面应用：
 
-聊天历史属于本地数据库，不属于任何 API。API 只是生成回复的通道。切换 DeepSeek、Claude、Ollama 或其他 Provider 后，同一个 conversation 仍应保留完整历史并继续对话。
+```powershell
+npm.cmd run build
+npm.cmd run start
+```
 
-每条 assistant 消息必须记录实际使用的 `provider_id`、`model_id`、`model_name_snapshot`、`request_id`、token、耗时和错误信息，保证可追踪、可诊断、可导出。
+## 验证
 
-## UI 设计方向
+```powershell
+npm.cmd run typecheck
+npm.cmd run test
+npm.cmd run build
+npm.cmd run verify
+npm.cmd run test:ui-smoke
+npm.cmd run test:electron-smoke
+```
 
-NexaChat UI 要现代、克制、干净，适合长期使用：
+## 关键文档
 
-- 不做复杂 Liquid Glass。
-- 不做花哨拟物。
-- 不做杂乱后台。
-- 参考 CCS / cc-switch 类工具的清晰配置体验。
-- 参考 Chatbox / Cherry Studio / LobeChat 的对话体验。
-- 参考 Linear / Raycast / Notion 的信息层级和快捷操作。
-- 预留用户字体设置，包含 KaiTi / 楷体选项，但默认使用系统字体。
-
-## 运行设想
-
-后续实现建议使用 Electron + React + TypeScript + Vite，SQLite 做本地数据存储，Electron safeStorage / 系统 Keychain 保护密钥，IPC 安全桥隔离 renderer 与主进程能力。本轮只写计划，不写业务代码。
-
+- 主构建计划：`docs/build-plans/00-master-build-plan.md`
+- 实现闭环说明：`docs/implementation/build-closure.md`
+- 当前执行计划：`task_plan.md`
+- 发现记录：`findings.md`
+- 进度日志：`progress.md`
+- UI/UX 主计划：`docs/design/00-ui-ux-master-plan.md`
+- 架构文档：`docs/architecture/`
+- 验收与未来测试：`docs/testing/`

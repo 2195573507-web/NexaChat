@@ -2,76 +2,62 @@
 
 ## Current Round
 
-This round is the from-scratch planning stage for NexaChat. It does not write formal business code, does not move legacy code, does not reuse an old `src` folder, and does not continue a previous project structure.
+This round builds the existing NexaChat plans into a runnable desktop app. The repository now contains application source, tests, build scripts, implementation closure notes, and verification artifacts.
 
-## Parallel Work Lanes
+## Parallel Work Requirement
 
-- A lane: competitive research, lessons learned, and ADR decisions.
-- B lane: module build plans, architecture, data model, service boundaries, and acceptance criteria.
-- C lane: UI/UX plan, information architecture, layouts, component inventory, interaction flows, and state design.
-- D lane: README, progress record, testing plan, Git setup, validation, commit, and push.
+The user required agent assistance with at least three agents running and at least three tasks progressing concurrently. This was satisfied in two waves:
 
-## Completed This Round
+- Agent A: Chat / Provider / Model / Router / Gateway plan audit.
+- Agent B: Knowledge / Tools / MCP / Agent / Data Config plan audit.
+- Agent C: UI / Dashboard / Logs / Settings / Acceptance audit.
+- Worker D: tests under `tests/`.
+- Worker E: implementation closure document under `docs/implementation/`.
+- Worker F: browser fallback API under `src/renderer/mockApi.ts`.
 
-- Confirmed the project root is `D:\NexaChat`.
-- Initialized Git in the current NexaChat folder.
-- Set `origin` to `https://github.com/2195573507-web/NexaChat.git`.
-- Checked tool state: Git, Node, `npm.cmd`, and Codex CLI are available; `pnpm` and GitHub CLI are unavailable.
-- Checked skills: `using-superpowers` is available; `using-superpower` is not available.
-- Created project documentation for README, build plans, UI/UX plans, architecture, ADRs, competitive research, acceptance criteria, and future tests.
+## Implemented
 
-## Created Files
+- Electron + React + TypeScript + Vite app skeleton.
+- One-window desktop shell with default size 1280 x 820 and minimum 1040 x 680.
+- Eight-module UI: 工作台, 对话, 模型, 知识库, 工具与 Agent, 本地网关, 数据配置, 设置与安全.
+- Config-driven navigation and second-level module tabs with honest feature-stage labels.
+- Main-process SQLite schema and store for core local data.
+- Safe preload IPC bridge.
+- Provider and Model creation/testing.
+- Router decision path and local Chat send flow.
+- Conversation and message persistence with provider/model/request/token/latency/error metadata.
+- Request logs, usage records, gateway keys, gateway logs, audit logs, snapshots, diagnostics, and UI preferences.
+- Local OpenAI-compatible gateway endpoints: `/v1/models`, `/v1/chat/completions`, `/v1/embeddings`; `/v1/responses` is reserved.
+- Knowledge file records and text lexical chunk fallback.
+- MCP server registry and Agent definition storage, without pretending full execution is complete.
+- Data Config snapshot and diagnostic export surfaces.
+- Settings and Security pages including logs, usage, error diagnosis, key security, audit, UI settings, and system settings.
+- Browser fallback API for local web testing.
+- Unit, UI smoke, and Electron launch smoke tests.
 
-- `README.md`
-- `README.zh-CN.md`
-- `PROJECT_PROGRESS.md`
-- `docs/build-plans/00-master-build-plan.md`
-- `docs/build-plans/01-workspace-and-dashboard/build-plan.md`
-- `docs/build-plans/02-chat-assistant-local-history/build-plan.md`
-- `docs/build-plans/03-model-provider-center/build-plan.md`
-- `docs/build-plans/04-knowledge-context-center/build-plan.md`
-- `docs/build-plans/05-tools-mcp-agent-center/build-plan.md`
-- `docs/build-plans/06-local-gateway-router-center/build-plan.md`
-- `docs/build-plans/07-config-data-import-export-center/build-plan.md`
-- `docs/build-plans/08-logs-evaluation-security-system/build-plan.md`
-- `docs/design/00-ui-ux-master-plan.md`
-- `docs/design/01-information-architecture.md`
-- `docs/design/02-design-system.md`
-- `docs/design/03-page-layouts.md`
-- `docs/design/04-component-inventory.md`
-- `docs/design/05-interaction-flows.md`
-- `docs/design/06-empty-loading-error-states.md`
-- `docs/design/07-ui-acceptance-criteria.md`
-- `docs/architecture/module-relationships.md`
-- `docs/architecture/data-model.md`
-- `docs/architecture/technical-stack.md`
-- `docs/decisions/adr-0001-from-scratch.md`
-- `docs/decisions/adr-0002-local-chat-history.md`
-- `docs/decisions/adr-0003-provider-model-router-gateway-separation.md`
-- `docs/decisions/adr-0004-ui-design-direction.md`
-- `docs/research/competitive-research.md`
-- `docs/testing/acceptance-criteria.md`
-- `docs/testing/future-test-plan.md`
+## Planned / Reserved
 
-## UI/UX Plan Status
+- Real upstream provider forwarding.
+- Production-grade streaming state machine and cancellation.
+- Full document parsing, RAG, embedding/rerank providers, vector DB, OCR, and knowledge evaluation.
+- MCP execution, custom tool execution, real Agent Run Center, trace replay, workflow canvas, human approval execution, and code sandbox.
+- Full conflict-aware import/export, restore, migrations, cleanup execution, and encrypted backup with secrets.
+- Packaging, installer, desktop shortcut creation, and shortcut verification.
 
-Completed as a planning artifact. The plan defines navigation, page layout, components, interaction flows, empty/loading/error states, theme tokens, font options, KaiTi / 楷体 option, desktop window constraints, and UI acceptance criteria.
+## Verification
 
-## Not Completed
+Verified on 2026-05-13:
 
-- No formal app runtime has been initialized.
-- No source implementation has been written.
-- No desktop shortcut has been created, because no runnable application exists yet.
-- No provider connection, model request, SQLite migration, or Electron shell has been implemented.
+- `npm.cmd install`: packages installed, audit reported 0 vulnerabilities. The shell wrapper timed out after install output, but `node_modules` and `package-lock.json` were created.
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test`: passed, 1 file / 3 tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run verify`: passed.
+- `npm.cmd run test:ui-smoke`: passed, 2 Playwright tests.
+- `npm.cmd run test:electron-smoke`: passed; built Electron app launched and was stopped after startup window check.
 
-## Next Round Recommendation
+## Important Notes
 
-Start with project initialization skeleton, not complex features:
-
-1. Initialize Electron + React + TypeScript + Vite.
-2. Add a minimal app shell matching the planned 8-module navigation.
-3. Add SQLite schema migrations for the core local history tables.
-4. Add secure IPC boundaries and service stubs.
-5. Implement the smallest Provider -> Model -> Router -> Gateway -> Chat loop with one OpenAI-compatible adapter.
-6. Add smoke tests and verify the desktop shortcut only after a real app entry exists.
-
+- The implementation uses Node's experimental `node:sqlite` API. It works in the current local Node/Electron environment but should be revisited before production packaging.
+- Secrets are represented through a local secret abstraction and redaction pipeline, not yet through a verified packaged safeStorage/keychain flow.
+- `docs/implementation/build-closure.md`, `task_plan.md`, `findings.md`, and `progress.md` are the current implementation closeout surfaces.
