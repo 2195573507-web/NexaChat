@@ -26,6 +26,13 @@ Key changes:
 - Kept planned/reserved/admin pages honest with explicit placeholder text and no fake action controls.
 - Documented the mapping and audit in `docs/build-plans/ui-navigation-refactor/plan.md`.
 
+Follow-up visibility fix after review:
+
+- Reworked `ModuleSubNav` from a thin horizontal tab row into a visible module-level secondary navigation panel.
+- Added the "二级导航" summary, current subpage name/description, larger subpage cards, clearer active indicator, and permission/stage cues.
+- Updated UI smoke assertions to verify the secondary navigation panel itself is visible and synchronized with the active route.
+- Ran a local visual smoke screenshot check for `/gateway/keys`, confirming the new panel is visible in the running renderer.
+
 Current verified results:
 
 - `npm.cmd run typecheck`: passed.

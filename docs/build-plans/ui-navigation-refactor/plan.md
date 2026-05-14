@@ -37,6 +37,7 @@ The refactor prioritizes UI information architecture and component boundaries. E
 - Split module pages into focused files under `src/renderer/modules/`.
 - Updated tests to cover every first-level module and every second-level tab.
 - Kept planned/reserved pages as explicit placeholders with no fake execution buttons.
+- Follow-up visibility fix: `ModuleSubNav` now renders as a clear module-level secondary navigation panel with a "二级导航" summary, current subpage description, larger subpage cards, stronger active state, and permission/stage cues. This makes the split visible in the running app instead of looking like the previous thin tab row.
 
 ## Placeholder Or Pending Areas
 
@@ -68,5 +69,6 @@ Current verified results in this round:
 - `npm.cmd run test:electron-smoke`: passed; Electron shell rendered.
 - `lint`: no script exists in `package.json`.
 - Desktop shortcut: `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe` with argument and working directory `D:\NexaChat`; no project shortcut creation script exists under `scripts/`.
+- Follow-up visual smoke: `/gateway/keys` exposes `.module-subnav-panel`, shows "二级导航 / API Key 管理", and a local screenshot check confirmed the new navigation panel is visible.
 
 Additional build, verify, Electron smoke, and desktop shortcut checks are recorded in `PROJECT_PROGRESS.md` after final verification.

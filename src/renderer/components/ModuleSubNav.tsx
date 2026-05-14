@@ -97,36 +97,47 @@ interface ModuleSubNavProps {
 
 export function ModuleSubNav({ module, activeTab, onTabChange }: ModuleSubNavProps) {
   return (
-    <div className="module-tabs" role="tablist" aria-label={`${module.label} 二级导航`}>
-      {module.tabs.map((tab) => {
-        const Icon = tab.icon ? tabIcons[tab.icon] : undefined;
-        return (
-          <button
-            type="button"
-            role="tab"
-            key={tab.id}
-            id={`tab-${module.id}-${tab.id}`}
-            aria-selected={activeTab.id === tab.id}
-            aria-controls={`panel-${module.id}-${tab.id}`}
-            data-route={tab.route}
-            data-label-key={tab.labelKey}
-            data-description-key={tab.descriptionKey}
-            data-permission={tab.permission}
-            title={tab.permission ? `${tab.description ?? tab.label} · permission: ${tab.permission}` : tab.description ?? tab.label}
-            className={[
-              tab.stage === 'implemented' ? 'tab-ready' : 'tab-muted',
-              activeTab.id === tab.id ? 'is-active' : '',
-              tab.stage === 'reserved' ? 'is-reserved' : '',
-              tab.permission ? 'has-permission-note' : '',
-            ].filter(Boolean).join(' ')}
-            onClick={() => onTabChange(tab.id)}
-          >
-            {Icon ? <Icon size={15} /> : null}
-            <span>{tab.label}</span>
-            <StatusPill stage={tab.stage} />
-          </button>
-        );
-      })}
-    </div>
+    <section className="module-subnav-panel" aria-label={`${module.label} 二级导航`}>
+      <div className="module-subnav-summary">
+        <span>二级导航</span>
+        <strong>{activeTab.label}</strong>
+        <p>{activeTab.description ?? module.description}</p>
+      </div>
+
+      <div className="module-tabs" role="tablist" aria-label={`${module.label} 二级导航`}>
+        {module.tabs.map((tab) => {
+          const Icon = tab.icon ? tabIcons[tab.icon] : undefined;
+          return (
+            <button
+              type="button"
+              role="tab"
+              key={tab.id}
+              id={`tab-${module.id}-${tab.id}`}
+              aria-selected={activeTab.id === tab.id}
+              aria-controls={`panel-${module.id}-${tab.id}`}
+              data-route={tab.route}
+              data-label-key={tab.labelKey}
+              data-description-key={tab.descriptionKey}
+              data-permission={tab.permission}
+              title={tab.permission ? `${tab.description ?? tab.label} · permission: ${tab.permission}` : tab.description ?? tab.label}
+              className={[
+                tab.stage === 'implemented' ? 'tab-ready' : 'tab-muted',
+                activeTab.id === tab.id ? 'is-active' : '',
+                tab.stage === 'reserved' ? 'is-reserved' : '',
+                tab.permission ? 'has-permission-note' : '',
+              ].filter(Boolean).join(' ')}
+              onClick={() => onTabChange(tab.id)}
+            >
+              <span className="tab-icon">{Icon ? <Icon size={16} /> : null}</span>
+              <span className="tab-copy">
+                <strong>{tab.label}</strong>
+                <small>{tab.description}</small>
+              </span>
+              <StatusPill stage={tab.stage} />
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }

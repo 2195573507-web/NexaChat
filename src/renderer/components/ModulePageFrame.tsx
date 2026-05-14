@@ -24,7 +24,7 @@ export function ModulePageFrame({
         <div>
           <h1>{activeModule.label}</h1>
           <p>{activeTab.description ?? activeModule.description ?? activeTab.label}</p>
-          <span className="route-chip">{activeRoute}</span>
+          <span className="route-chip">当前路径 {activeRoute}</span>
         </div>
         <StatusPill stage={activeModule.stage} />
       </div>

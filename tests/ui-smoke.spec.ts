@@ -24,11 +24,13 @@ async function clickModule(page: Page, module: NavModule) {
 }
 
 async function clickTab(page: Page, tab: NavTab) {
-  await page.locator('.module-tabs').getByRole('tab', { name: new RegExp(tab.label) }).click();
+  await page.locator(`#tab-${tab.route?.split('/')[1] ?? ''}-${tab.id}`).click();
 }
 
 async function expectActiveRouteAndPanel(page: Page, module: NavModule, tab: NavTab) {
-  await expect(page.locator('.module-tabs').getByRole('tab', { name: new RegExp(tab.label) })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator(`#tab-${module.id}-${tab.id}`)).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.module-subnav-panel')).toContainText('二级导航');
+  await expect(page.locator('.module-subnav-summary')).toContainText(tab.label);
   await expect(page).toHaveURL(new RegExp(`${getTabRoute(module.id, tab.id)}$`));
   const panel = page.locator(`main [role="tabpanel"][data-module="${module.id}"][data-tab="${tab.id}"]`);
   await expect(panel).toBeVisible();
