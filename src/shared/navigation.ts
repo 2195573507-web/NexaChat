@@ -91,8 +91,8 @@ export const navModules: NavModule[] = [
     children: [
       {
         id: 'overview',
-        label: '系统总览',
-        description: '工作区、默认模型、网关状态、今日用量、待处理事项和真实快速入口。',
+        label: '工作台首页',
+        description: '工作区、默认模型、网关状态、今日用量、待处理事项和常用入口。',
         icon: 'layout-dashboard',
         default: true,
         featureBoundary: '只汇总状态和提供跳转入口，不直接编辑 Provider、Gateway Key、知识文件或安全设置。',

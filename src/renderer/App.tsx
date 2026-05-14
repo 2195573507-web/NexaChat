@@ -119,7 +119,6 @@ function App() {
       activeModule={activeModule}
       activeModuleId={activeModuleId}
       activeTab={activeTab}
-      activeRoute={navigationState.route}
       onModuleChange={(moduleId) => navigateTo(moduleId)}
       onTabChange={(tabId, moduleId = activeModuleId) => navigateTo(moduleId, tabId)}
       snapshot={snapshot}

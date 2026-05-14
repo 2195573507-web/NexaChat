@@ -20,11 +20,15 @@ This note closes the current implementation pass against `docs/build-plans/*` an
 - Provider and model creation, provider health check, model capability metadata, local routing, conversation creation, message persistence, local assistant response generation, request logs, usage records, and audit logs are implemented.
 - Local chat history is real local persistence: messages carry conversation, provider, model, request, token, latency, status, context, and error metadata.
 - Safe IPC handlers exist for snapshot loading, provider/model creation, chat send, gateway key creation/toggle, UI preferences, knowledge file registration, MCP server registration, agent registration, snapshots, and diagnostic export.
+- Iteration 01 IPC handlers also cover gateway key revocation, knowledge retry, MCP permission changes, Agent dry-run preview, import manifest validation/application, snapshot restore preview, and opening the log directory.
 - Local gateway runtime exists on `127.0.0.1:8787` with authenticated `/v1/models`, `/v1/chat/completions`, and `/v1/embeddings`.
 - `/v1/responses` is intentionally implemented as a reserved endpoint returning `501`.
 - Gateway keys have generated secrets, previews, scopes, quota counters, revoke/expiry fields, and last-used tracking.
+- Gateway key UX now shows the full generated key once, supports copy, and supports revocation from the gateway page.
 - Logs and diagnostics use redaction helpers for sensitive values and headers.
 - Renderer shell presents the compact desktop-tool layout, module tabs, stage labels, dashboard/chat/model/gateway/data/settings surfaces, empty states, and error diagnosis components.
+- Iteration 02 turns module tabs into real route-aware subpages using canonical `/<module>/<tab>` routes, active tab state, controlled tab buttons, contextual tab panels, and active-tab-aware right rail content.
+- Planned/reserved tab panels now use a shared placeholder that explains the inactive state and next dependency without exposing fake execution buttons.
 
 ## Planned Or Reserved
 
@@ -34,8 +38,9 @@ This note closes the current implementation pass against `docs/build-plans/*` an
 - MCP execution, tool invocation, Agent run execution, trace replay, human approval execution, workflow, and code sandbox are planned/reserved. Current records are registration and status surfaces, not live execution.
 - Multi-model comparison and artifact generation are planned.
 - Model evaluation runner is planned.
-- Secure storage is represented by a local secret abstraction and redaction boundary; it is not yet verified against OS keychain/safeStorage behavior in a packaged desktop build.
-- Import/export is at snapshot and diagnostics level. Full conflict-aware import, backup restore, migration, and cleanup flows remain planned.
+- Model parameter templates are `environment-limited` until per-model generation template persistence exists.
+- Secure storage uses Electron `safeStorage` when available. Non-Electron/bootstrap paths use a `local-dev:v1:` fallback and existing base64 secrets remain readable for compatibility.
+- Import/export now includes manifest preflight, invalid-manifest rejection, ready-plan confirmation, snapshots, diagnostics, and restore preview. Destructive restore, migrations, cleanup execution, and full conflict-aware import application remain planned.
 - Packaging, installer, desktop shortcut, and production launch validation are outside this closure unless a later worker verifies them.
 
 ## Core Acceptance Commands
@@ -84,6 +89,15 @@ Expected boundary: `/v1/models` and `/v1/chat/completions` should work with a va
 - `npm.cmd run verify`: passed.
 - `npm.cmd run test:ui-smoke`: passed, 2 Playwright tests.
 - `npm.cmd run test:electron-smoke`: passed; the built Electron app launched and was stopped after the startup window check.
+- Iteration 01 rerun `npm.cmd run typecheck`: passed.
+- Iteration 01 rerun `npm.cmd run test`: passed, 1 file / 3 tests.
+- Iteration 01 rerun `npm.cmd run test:ui-smoke`: passed, 4 Playwright tests including 1040 x 680 overflow, gateway key revoke, and invalid import rejection coverage.
+- Iteration 01 rerun `npm.cmd run verify`: passed.
+- Iteration 01 rerun `npm.cmd run test:electron-smoke`: passed; Electron rendered the NexaChat shell.
+- Iteration 02 rerun `npm.cmd run typecheck`: passed.
+- Iteration 02 rerun `npm.cmd run test`: passed, 1 file / 3 tests.
+- Iteration 02 rerun `npm.cmd run test:ui-smoke`: passed, 6 Playwright tests covering every module/tab, route fallback, planned/reserved placeholders, 1040 x 680 representative tabs, gateway key revoke, chat send, and invalid import rejection.
+- Iteration 02 rerun `npm.cmd run verify`: passed.
 
 ## Fixes From Verification
 

@@ -28,7 +28,14 @@ try {
   await window.locator('.app-shell').waitFor({ timeout: 15_000 });
   await window.getByText('NexaChat', { exact: true }).first().waitFor({ timeout: 5_000 });
   await window.locator('.module-nav-item').filter({ hasText: '对话' }).waitFor({ timeout: 5_000 });
-  await window.getByText('/workspace/overview', { exact: true }).waitFor({ timeout: 5_000 });
+  await window.getByText('当前概览', { exact: true }).waitFor({ timeout: 5_000 });
+  const bodyText = await window.locator('body').innerText();
+  if (/(^|\s)\/(workspace|chat|models|knowledge|tools|gateway|data|settings)\//.test(bodyText)) {
+    throw new Error('Visible route path leaked into the Electron shell.');
+  }
+  if (pageErrors.length || consoleMessages.length) {
+    throw new Error(`Renderer emitted errors: ${[...pageErrors, ...consoleMessages].join('\n')}`);
+  }
   console.log('Electron smoke rendered the NexaChat shell.');
 } catch (error) {
   const bodyText = await window.locator('body').innerText().catch(() => '');

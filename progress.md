@@ -30,3 +30,77 @@
 - Fixed Electron smoke Windows process launch by using `node_modules/electron/dist/electron.exe`.
 - Fixed Electron ESM runtime path by replacing `__dirname` with `fileURLToPath(import.meta.url)`.
 - Ran `npm.cmd run test:electron-smoke`: passed; built Electron app launched and was stopped after startup window check.
+- Created goal to complete both Iteration 01 plans without reducing scope and to keep at least three task lanes active.
+- Read `docs/iteration-plans/01-core-flow-and-function-iteration-plan.md` and `docs/iteration-plans/01-ui-iteration-plan.md` as the execution boundary.
+- Started three concurrent audit lanes:
+  - Lane A: startup/chat/provider/model/router/gateway.
+  - Lane B: knowledge/tools/MCP/Agent/logs/security/import/export.
+  - Lane C: UI skeleton/density/status/responsive acceptance.
+- Integrated lane findings:
+  - Gateway API keys now support one-time full-value display, copy, and revocation.
+  - Chat uses workspace default model and preserves route/context metadata on user and assistant messages.
+  - Provider form now has an API key input, URL validation, actionable provider-test failures, and logged errors.
+  - Knowledge files now show failed/indexed state, error reason, retry action, and a real lexical test action.
+  - MCP registry now supports grant/deny approval; Agent definitions create dry-run previews only.
+  - Data config now validates import manifests, rejects invalid manifests visibly, applies only ready plans, and creates restore previews.
+  - Settings now shows request logs with copy/open-log actions, usage, gateway logs, key security, diagnosis, and audit.
+  - UI now has tighter topbar/header overflow handling, table long-text wrapping, unified status badges, and earlier right-rail/chat-context collapse.
+- Updated `tests/ui-smoke.spec.ts` from 2 to 4 tests, adding 1040 x 680 overflow coverage, key revoke coverage, and invalid import rejection coverage.
+- Added `docs/implementation/iteration-01-closure.md`.
+- Ran `npm.cmd run typecheck`: passed.
+- Ran `npm.cmd run test`: passed, 1 file / 3 tests.
+- Ran `npm.cmd run test:ui-smoke`: passed, 4 Playwright tests.
+- Ran `npm.cmd run verify`: passed.
+- Ran `npm.cmd run test:electron-smoke`: passed; Electron rendered the NexaChat shell.
+
+## 2026-05-14
+
+- Created active goal for the next NexaChat iteration plan: reduce crowded module pages by introducing real second-level navigation under each module.
+- Loaded applicable skills: `using-superpowers`, `brainstorming`, `planning-with-files-zh`, and `ui-ux-pro-max`.
+- Checked memory for `D:\NexaChat` / NexaChat and found no direct prior memory entry; used the current repository state as the source of truth.
+- Re-read `task_plan.md`, `findings.md`, `progress.md`, `PROJECT_PROGRESS.md`, iteration plan README, existing Iteration 01 plans, and Iteration 01 closure note.
+- Inspected `src/shared/navigation.ts`, `src/renderer/AppShell.tsx`, `src/renderer/App.tsx`, `src/shared/types.ts`, and relevant CSS selectors to confirm the current second-level tabs are visual only and do not drive content switching.
+- Re-read design and build-plan sources for information architecture, page layouts, UI acceptance criteria, module relationships, and all eight module build plans.
+- Confirmed source files are UTF-8 and contain readable Chinese labels; PowerShell default output can show mojibake unless read with `-Encoding UTF8`.
+- Attempted to run the UI skill search script; it failed with the known local Python prefix/`encodings` issue, so static UX guidance from the skill was used instead.
+- Added `docs/iteration-plans/02-secondary-navigation-and-module-decomposition-iteration-plan.md`.
+- Updated `docs/iteration-plans/README.md`, `task_plan.md`, and `findings.md` to record the new Iteration 02 planning boundary.
+- Created active goal to execute Iteration 02 with multi-task parallel agent assistance.
+- Re-read the Iteration 02 plan and current app/test entry points.
+- Launched four concurrent audit lanes:
+  - Lane A: navigation contract, route state, AppShell tab behavior, and test-sensitive selectors.
+  - Lane B: Dashboard, Chat, Models, and Gateway tab decomposition.
+  - Lane C: Knowledge, Tools/Agent, Data Config, and Settings/Security tab decomposition.
+  - Lane D: all-module/all-tab UI smoke coverage, route identity, planned/reserved placeholder checks, and 1040 x 680 representative tab checks.
+- Integrated lane findings:
+  - Added canonical `/<module>/<tab>` route parsing/generation helpers in shared navigation.
+  - Converted second-level tabs into controlled `role="tab"` controls with `aria-selected` and stable tab panel IDs.
+  - Split all eight modules into focused tab panels instead of rendering every module function in one long page.
+  - Added shared planned/reserved placeholder panels with inactive reason and next dependency.
+  - Made the right rail active-module/tab-aware.
+  - Marked 模型 / 参数模板 as `environment-limited` because per-model generation template persistence is not implemented.
+  - Updated unit tests and UI smoke tests for route-aware tab behavior.
+- Added `docs/implementation/iteration-02-closure.md`.
+- Ran `npm.cmd run typecheck`: passed.
+- Ran `npm.cmd run test`: passed, 1 file / 3 tests.
+- Ran `npm.cmd run test:ui-smoke`: passed, 6 Playwright tests.
+- Ran `npm.cmd run verify`: passed.
+
+## 2026-05-14 UI Shell Redesign
+
+- Confirmed real project root with `git rev-parse --show-toplevel`: `D:/NexaChat`.
+- Tried both requested skill names: `using-superpowers` was available and read; `using-superpower` was not present under the Codex skills path.
+- Checked tooling: Git, Node, and `npm.cmd` are available; `gh` and `pnpm` are missing; `npm.cmd` is the reliable package runner.
+- Ran `npm.cmd install`: passed, dependencies up to date, 0 vulnerabilities.
+- Wrote `docs/build-plans/ui-shell-redesign/build-plan.md` before code edits.
+- Parallel group A+B: rebuilt `src/renderer/AppShell.tsx` and `src/renderer/styles.css` for route-free sidebar navigation, persisted expansion, compact topbar, and no-horizontal-overflow layout.
+- Parallel group C: rewrote `src/renderer/modules/DashboardPage.tsx` into 当前概览, 核心指标, 操作入口, 最近活动.
+- Parallel group D: updated `tests/ui-smoke.spec.ts` and `scripts/electron-smoke.mjs` to verify route leak removal, sidebar persistence, workbench quick entries, 1280/1440/1920 widths, and Electron renderer errors.
+- Ran `npm.cmd run typecheck`: passed.
+- Ran `npm.cmd run test`: passed, 1 file / 3 tests.
+- Ran `npm.cmd run test:ui-smoke`: passed, 10 Playwright tests.
+- Ran `npm.cmd run build`: passed.
+- Ran `npm.cmd run verify`: passed.
+- Ran `npm.cmd run test:electron-smoke`: first parallel run read old `dist`; serial rerun after build passed.
+- Ran responsive visual audit at 1280, 1440, and 1920: passed; screenshots stored under ignored `test-results/ui-shell-redesign/`.
+- Checked `C:\Users\至亲\Desktop\NexaChat.lnk`: target, arguments, working directory, and icon point to current `D:\NexaChat` launch entry.

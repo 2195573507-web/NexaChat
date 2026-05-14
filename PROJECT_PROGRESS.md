@@ -13,6 +13,41 @@ Iteration 02 is now closed in `docs/implementation/iteration-02-closure.md`:
 
 - `docs/iteration-plans/02-secondary-navigation-and-module-decomposition-iteration-plan.md`
 
+## 2026-05-14 UI Shell Redesign
+
+This round rebuilt the visible desktop shell, sidebar hierarchy, topbar, workbench home, and visual system so NexaChat reads as a formal compact desktop tool instead of a crowded prototype/debug panel.
+
+Parallel execution lanes:
+
+- Group A: audited and updated navigation IA, route aliases, sidebar active state, expansion/collapse, and local expansion persistence.
+- Group B: rebuilt AppShell, topbar, global visual tokens, spacing, surfaces, responsive grids, and no-horizontal-overflow rules.
+- Group C: rewrote the workspace overview into four product areas: 当前概览, 核心指标, 操作入口, 最近活动.
+- Group D: updated UI smoke and Electron smoke coverage, ran verification, captured responsive screenshots, rechecked the desktop shortcut, and prepared Git closure.
+
+Key UI changes:
+
+- Sidebar now renders only product/module/function names. It no longer displays `tab.route`, `/workspace/...`, or other internal app routes.
+- Sidebar first-level modules remain the required eight: 工作台, 对话, 模型, 知识库, 工具与 Agent, 本地网关, 数据配置, 设置与安全.
+- Sidebar child entries are driven from `src/shared/navigation.ts`, show route-aware active state, use stable icons/stage dots, and persist expanded module IDs in `localStorage`.
+- Topbar now keeps the current workspace, default model, gateway status, chat entry, Provider entry, Model entry, and log shortcut without clipping at 1280/1440/1920 widths.
+- Workbench overview now uses real `AppSnapshot` data and links to real feature pages for chat, Provider, Model, Gateway Key, import, and logs.
+- Visual system was tightened in `src/renderer/styles.css`: flatter surfaces, stronger text hierarchy, consistent borders/radius/spacing, responsive grids, and no Liquid Glass or decorative gradients.
+- The old visible secondary tab strip and route chip path leak are removed from the product shell.
+
+Verification on 2026-05-14:
+
+- `npm.cmd install`: passed, dependencies up to date, 0 vulnerabilities.
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test`: passed, 1 file / 3 tests.
+- `npm.cmd run test:ui-smoke`: passed, 10 Playwright tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run verify`: passed.
+- `npm.cmd run test:electron-smoke`: passed after rerunning it after build completion. A first parallel run read an older `dist` build, so the serialized rerun is the valid result.
+- `lint`: no script exists in `package.json`.
+- `smoke`: no generic `smoke` script exists in `package.json`; `test:ui-smoke` and `test:electron-smoke` are the project equivalents.
+- Responsive visual audit: passed at 1280, 1440, and 1920 widths with screenshots under ignored `test-results/ui-shell-redesign/`; no console errors, no route leak, and no horizontal overflow in `.app-shell`, `.topbar`, `.content-grid`, `.workbench-overview`, or `.sidebar`.
+- Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"` as the app argument, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`.
+
 ## 2026-05-14 UI Navigation Refactor
 
 This round completed the module interface simplification and secondary navigation split requested for NexaChat. The first-level module count remains unchanged, but each module now has a clearer module container, route-aware secondary navigation, and focused tab pages.
