@@ -16,6 +16,7 @@
 - Ran `npm.cmd run test:ui-smoke`: passed, 10 Playwright tests.
 - Ran `npm.cmd run test:electron-smoke`: passed.
 - Ran `git diff --check`: passed with LF/CRLF warnings only.
+- Committed Round 0 delivery as `1fa6d630d691465be9140d552f119b752e4f2191` and confirmed `origin/main` at the same hash.
 
 ## 2026-05-13
 

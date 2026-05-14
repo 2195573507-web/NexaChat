@@ -2,7 +2,7 @@
 
 Date: 2026-05-14
 
-Status: Completed pending commit hash backfill after the Round 0 delivery commit exists.
+Status: Completed.
 
 ## Root And Tooling
 
@@ -155,7 +155,8 @@ The shortcut is valid for the current local Electron launch model. No shortcut w
 - Hardcoding and duplicate-link findings categorized: yes.
 - Desktop shortcut recorded: yes.
 - Business code changes: none in Round 0.
-- Commit hash: pending post-commit backfill.
+- Commit hash: `1fa6d630d691465be9140d552f119b752e4f2191`.
+- Push result: `origin/main` confirmed at `1fa6d630d691465be9140d552f119b752e4f2191`.
 - Remaining issues: None for Round 0 inventory. Implementation gaps are queued to Round 1 through Round 15.
 
 ## Changed Files
