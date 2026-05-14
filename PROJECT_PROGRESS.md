@@ -1,5 +1,31 @@
 # NexaChat Project Progress
 
+## 2026-05-14 Full App Multi-Round Iteration Roadmap
+
+This docs-only round created a new authoritative full-app roadmap for future NexaChat work:
+
+- `docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md`
+
+Round goal:
+
+- Establish a detailed, executable, and verifiable multi-round blueprint covering architecture, data, IPC, security, Provider and model management, conversation, local gateway, API keys, knowledge/RAG, Agent, MCP, tools, Workflow, audit logs, usage, import/export, settings, desktop launch, UI, theme, language switching, maintainability, testing, packaging, release, documentation, and future extension.
+
+Completed in this round:
+
+- Confirmed project root with `git rev-parse --show-toplevel`: `D:\NexaChat`.
+- Probed both requested skill names: `using-superpower` was not available; `using-superpowers` was available.
+- Checked Codex CLI, Git, Node, `npm.cmd`, PowerShell `npm`, and GitHub CLI state. `npm.cmd` is the usable npm runner; PowerShell `npm.ps1` is blocked by execution policy; `gh` is not available.
+- Reviewed current source, docs, tests, scripts, package scripts, navigation, shared types, IPC, store, local gateway, and desktop shortcut state.
+- Created the new full-app plan under `docs/iteration-plans/`.
+- Kept the round docs-only: no business code, source refactor, dependency, or `package.json` change.
+- Recorded that every future actual code, UI, runtime, packaging, or launch-entry round must recheck and document the desktop shortcut or packaged entry.
+
+Desktop shortcut status:
+
+- `C:\Users\至亲\Desktop\NexaChat.lnk` currently points to `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"` as the app argument, uses `D:\NexaChat` as working directory, and uses `D:\NexaChat\assets\app-icon.ico,0`.
+- No shortcut was modified in this docs-only round.
+- Future rounds that change runtime code, UI, build output, packaging, or launch entry must revalidate this shortcut and record the result. If a packaged executable is introduced later, shortcut migration must be treated as a high-priority release task after packaged launch smoke passes.
+
 ## Current Round
 
 This round builds the existing NexaChat plans into a runnable desktop app. The repository now contains application source, tests, build scripts, implementation closure notes, and verification artifacts.
