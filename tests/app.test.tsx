@@ -13,6 +13,10 @@ async function renderApp() {
   await screen.findByRole('button', { name: /工作台/ });
 }
 
+function activePanel() {
+  return document.querySelector('main [role="tabpanel"]') as HTMLElement;
+}
+
 describe('NexaChat renderer', () => {
   it('renders all eight first-level modules', async () => {
     await renderApp();
@@ -41,17 +45,28 @@ describe('NexaChat renderer', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /模型/ }));
     expect(screen.getByRole('heading', { name: 'Provider Hub' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /模型列表/ }));
     expect(screen.getByRole('heading', { name: 'Model Hub' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '能力矩阵' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /密钥管理/ }));
+    expect(activePanel()).toHaveAttribute('data-tab', 'capabilities');
+    expect(activePanel()).toHaveTextContent('密钥管理');
 
     fireEvent.click(screen.getByRole('button', { name: /本地网关/ }));
     expect(screen.getByRole('heading', { name: '本地 OpenAI-compatible 网关' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'API Key' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '外部接入生成器' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /API Key 管理/ }));
+    expect(activePanel()).toHaveAttribute('data-tab', 'keys');
+    expect(activePanel()).toHaveTextContent('API Key');
+    fireEvent.click(screen.getByRole('tab', { name: /CCS\/sub2api 导入/ }));
+    expect(screen.getByRole('heading', { name: '导入配置预览' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /设置与安全/ }));
-    expect(screen.getByRole('heading', { name: '请求日志' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '密钥安全' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '界面设置' })).toBeInTheDocument();
+    expect(activePanel()).toHaveAttribute('data-tab', 'request-logs');
+    expect(activePanel()).toHaveTextContent('运行监控');
+    fireEvent.click(screen.getByRole('tab', { name: /安全中心/ }));
+    expect(activePanel()).toHaveAttribute('data-tab', 'keys');
+    expect(activePanel()).toHaveTextContent('安全中心');
+    fireEvent.click(screen.getByRole('tab', { name: /系统设置/ }));
+    expect(activePanel()).toHaveAttribute('data-tab', 'ui');
+    expect(activePanel()).toHaveTextContent('系统设置');
   });
 });

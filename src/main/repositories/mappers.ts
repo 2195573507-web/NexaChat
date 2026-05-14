@@ -3,6 +3,7 @@ import type {
   AuditLog,
   Conversation,
   GatewayApiKey,
+  GatewayLog,
   ImportExportResult,
   KnowledgeFile,
   McpServer,
@@ -150,6 +151,18 @@ export function mapRequestLog(row: Row): RequestLog {
   };
 }
 
+export function mapGatewayLog(row: Row): GatewayLog {
+  return {
+    id: String(row.id),
+    requestLogId: nullableString(row.request_log_id),
+    method: String(row.method),
+    path: String(row.path),
+    statusCode: Number(row.status_code),
+    redactedHeadersJson: nullableString(row.redacted_headers_json),
+    createdAt: Number(row.created_at),
+  };
+}
+
 export function mapUsageRecord(row: Row): UsageRecord {
   return {
     id: String(row.id),
@@ -221,12 +234,22 @@ export function mapAgent(row: Row): AgentDefinition {
 }
 
 export function mapImportExportResult(row: Row): ImportExportResult {
+  const manifestJson = nullableString(row.manifest_json);
+  const lowerSummary = String(row.summary).toLowerCase();
   return {
     id: String(row.id),
     action: String(row.action) as ImportExportResult['action'],
     status: String(row.status) as ImportExportResult['status'],
     summary: String(row.summary),
     redacted: bool(row.redacted),
+    manifestJson,
+    errorMessage: String(row.status) === 'failed' ? String(row.summary) : null,
+    conflictCount: manifestJson && /"conflictCount"\s*:/.test(manifestJson)
+      ? Number.parseInt(manifestJson.match(/"conflictCount"\s*:\s*(\d+)/)?.[1] ?? '0', 10)
+      : lowerSummary.includes('conflict')
+        ? 1
+        : 0,
+    requiresConfirmation: manifestJson ? /"requiresConfirmation"\s*:\s*true/.test(manifestJson) : lowerSummary.includes('确认'),
     createdAt: Number(row.created_at),
   };
 }

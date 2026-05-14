@@ -8,6 +8,10 @@ const stageLabels: Record<ModuleStage, string> = {
   'environment-limited': '环境受限',
 };
 
+export function stageLabel(stage: ModuleStage): string {
+  return stageLabels[stage];
+}
+
 export function StatusPill({ stage }: { stage: ModuleStage }) {
   return <span className={`status-pill status-${stage}`}>{stageLabels[stage]}</span>;
 }

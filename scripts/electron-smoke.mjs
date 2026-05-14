@@ -1,54 +1,47 @@
-import { spawn } from 'node:child_process';
-import { join } from 'node:path';
-import { setTimeout as delay } from 'node:timers/promises';
+import { _electron as electron } from 'playwright';
 
-const electronBin = process.platform === 'win32'
-  ? join(process.cwd(), 'node_modules', 'electron', 'dist', 'electron.exe')
-  : join(process.cwd(), 'node_modules', 'electron', 'dist', 'Electron.app', 'Contents', 'MacOS', 'Electron');
-
-const child = spawn(electronBin, ['.'], {
+const app = await electron.launch({
+  args: ['.'],
   cwd: process.cwd(),
-  stdio: ['ignore', 'pipe', 'pipe'],
   env: {
     ...process.env,
     ELECTRON_ENABLE_LOGGING: '1',
   },
 });
 
-let output = '';
-let exited = false;
-let stopping = false;
+const window = await app.firstWindow();
+const consoleMessages = [];
+const pageErrors = [];
 
-child.stdout.on('data', (chunk) => {
-  output += chunk.toString();
-});
-
-child.stderr.on('data', (chunk) => {
-  output += chunk.toString();
-});
-
-child.on('exit', (code) => {
-  exited = true;
-  if (stopping) {
-    return;
-  }
-  if (code && code !== 0) {
-    console.error(output);
-    process.exitCode = code;
+window.on('console', (message) => {
+  if (message.type() === 'error') {
+    consoleMessages.push(message.text());
   }
 });
 
-await delay(8000);
+window.on('pageerror', (error) => {
+  pageErrors.push(error.message);
+});
 
-if (exited) {
-  if (process.exitCode) {
-    process.exit(process.exitCode);
+try {
+  await window.waitForLoadState('domcontentloaded');
+  await window.locator('.app-shell').waitFor({ timeout: 15_000 });
+  await window.getByText('NexaChat', { exact: true }).first().waitFor({ timeout: 5_000 });
+  await window.getByRole('button', { name: /对话/ }).waitFor({ timeout: 5_000 });
+  console.log('Electron smoke rendered the NexaChat shell.');
+} catch (error) {
+  const bodyText = await window.locator('body').innerText().catch(() => '');
+  console.error(error instanceof Error ? error.message : String(error));
+  if (bodyText) {
+    console.error(`Rendered body text:\n${bodyText.slice(0, 1000)}`);
   }
-  console.error('Electron exited before the smoke window timeout.');
-  process.exit(1);
+  if (pageErrors.length) {
+    console.error(`Page errors:\n${pageErrors.join('\n')}`);
+  }
+  if (consoleMessages.length) {
+    console.error(`Console errors:\n${consoleMessages.join('\n')}`);
+  }
+  process.exitCode = 1;
+} finally {
+  await app.close();
 }
-
-stopping = true;
-child.kill();
-await delay(1000);
-console.log('Electron smoke launched and was stopped after startup window check.');

@@ -4,6 +4,13 @@ export interface NavTab {
   id: string;
   label: string;
   stage: ModuleStage;
+  route?: string;
+  description?: string;
+  default?: boolean;
+  permission?: string;
+  labelKey?: string;
+  descriptionKey?: string;
+  icon?: string;
 }
 
 export interface NavModule {
@@ -13,6 +20,12 @@ export interface NavModule {
   route: string;
   stage: ModuleStage;
   tabs: NavTab[];
+  description?: string;
+  permission?: string;
+  labelKey?: string;
+  shortLabelKey?: string;
+  descriptionKey?: string;
+  icon?: string;
 }
 
 export type ModuleId =
@@ -201,6 +214,16 @@ export interface RequestLog {
   createdAt: number;
 }
 
+export interface GatewayLog {
+  id: string;
+  requestLogId: string | null;
+  method: string;
+  path: string;
+  statusCode: number;
+  redactedHeadersJson: string | null;
+  createdAt: number;
+}
+
 export interface UsageRecord {
   id: string;
   workspaceId: string;
@@ -281,6 +304,10 @@ export interface ImportExportResult {
   status: 'ready' | 'completed' | 'failed';
   summary: string;
   redacted: boolean;
+  manifestJson: string | null;
+  errorMessage: string | null;
+  conflictCount: number;
+  requiresConfirmation: boolean;
   createdAt: number;
 }
 
@@ -324,6 +351,7 @@ export interface AppSnapshot {
   providers: Provider[];
   models: Model[];
   requestLogs: RequestLog[];
+  gatewayLogs: GatewayLog[];
   usageRecords: UsageRecord[];
   gatewayKeys: GatewayApiKey[];
   knowledgeFiles: KnowledgeFile[];
@@ -346,13 +374,21 @@ export interface AppApi {
     flags: Partial<Pick<Conversation, 'isPinned' | 'isFavorite' | 'status'>>,
   ): Promise<Conversation>;
   createGatewayKey(name: string): Promise<GatewayKeyCreated>;
+  revokeGatewayKey(gatewayKeyId: string): Promise<GatewayApiKey>;
   toggleGateway(enabled: boolean): Promise<GatewayStatus>;
   saveUiPreferences(preferences: UiPreferences): Promise<UiPreferences>;
   createKnowledgeFile(name: string, type: string, size: number): Promise<KnowledgeFile>;
+  retryKnowledgeFile(fileId: string): Promise<KnowledgeFile>;
   createMcpServer(name: string, transport: McpServer['transport'], commandOrUrl: string): Promise<McpServer>;
+  updateMcpPermission(serverId: string, permissionState: McpServer['permissionState']): Promise<McpServer>;
   createAgent(name: string, goal: string): Promise<AgentDefinition>;
+  previewAgentRun(agentId: string): Promise<ImportExportResult>;
+  validateImportManifest(manifestText: string): Promise<ImportExportResult>;
+  applyImportPlan(resultId: string): Promise<ImportExportResult>;
+  restoreSnapshot(snapshotId: string): Promise<ImportExportResult>;
   createSnapshot(): Promise<ImportExportResult>;
   exportDiagnostics(): Promise<ImportExportResult>;
+  openLogs(): Promise<void>;
 }
 
 declare global {

@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { safeStorage } from 'electron';
 import type { DatabaseSync } from 'node:sqlite';
 import { getDatabase } from '../database/connection.js';
 import {
@@ -6,6 +7,7 @@ import {
   mapAuditLog,
   mapConversation,
   mapGatewayKey,
+  mapGatewayLog,
   mapImportExportResult,
   mapKnowledgeFile,
   mapMcpServer,
@@ -29,6 +31,7 @@ import type {
   DashboardSummary,
   GatewayApiKey,
   GatewayKeyCreated,
+  GatewayLog,
   GatewayStatus,
   ImportExportResult,
   KnowledgeFile,
@@ -71,6 +74,7 @@ export class NexaStore {
       providers: this.getProviders(),
       models: this.getModels(),
       requestLogs: this.getRequestLogs(),
+      gatewayLogs: this.getGatewayLogs(),
       usageRecords: this.getUsageRecords(),
       gatewayKeys: this.getGatewayKeys(),
       knowledgeFiles: this.getKnowledgeFiles(),
@@ -162,6 +166,13 @@ export class NexaStore {
       .prepare('SELECT * FROM gateway_api_keys ORDER BY created_at DESC')
       .all()
       .map((row) => mapGatewayKey(row as Record<string, unknown>));
+  }
+
+  getGatewayLogs(): GatewayLog[] {
+    return this.db
+      .prepare('SELECT * FROM gateway_logs ORDER BY created_at DESC LIMIT 100')
+      .all()
+      .map((row) => mapGatewayLog(row as Record<string, unknown>));
   }
 
   getGatewayStatus(): GatewayStatus {
@@ -290,12 +301,36 @@ export class NexaStore {
   testProvider(providerId: string): Provider {
     const provider = this.requireProvider(providerId);
     const start = now();
-    const healthy = provider.baseUrl.startsWith('http://') || provider.baseUrl.startsWith('https://');
+    const urlOk = provider.baseUrl.startsWith('http://') || provider.baseUrl.startsWith('https://');
+    const hasKeyWhenRequired = provider.authType !== 'api-key' || Boolean(provider.secretRef);
+    const healthy = urlOk && hasKeyWhenRequired;
     const status = healthy ? 'healthy' : 'error';
     this.db
       .prepare('UPDATE providers SET health_status = ?, last_checked_at = ?, updated_at = ? WHERE id = ?')
       .run(status, start, start, providerId);
-    this.audit('provider.tested', 'provider', providerId, { status, baseUrl: provider.baseUrl });
+    if (!healthy) {
+      this.db
+        .prepare(
+          `INSERT INTO request_logs (id, conversation_id, message_id, provider_id, model_id, model_name_snapshot, route_id, gateway_request_id, status, endpoint, request_summary_json, response_summary_json, input_tokens, output_tokens, latency_ms, finish_reason, error_code, error_message, started_at, completed_at, created_at)
+           VALUES (?, NULL, NULL, ?, NULL, NULL, NULL, NULL, 'failed', '/provider/test', ?, NULL, NULL, NULL, ?, NULL, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          createId('req'),
+          providerId,
+          JSON.stringify({ baseUrl: provider.baseUrl, authType: provider.authType }),
+          Math.max(1, now() - start),
+          urlOk ? 'api_key_missing' : 'invalid_base_url',
+          urlOk ? '需要填写 API Key 或改为无认证供应商。' : 'Base URL 必须以 http:// 或 https:// 开头。',
+          start,
+          now(),
+          start,
+        );
+    }
+    this.audit('provider.tested', 'provider', providerId, {
+      status,
+      baseUrl: provider.baseUrl,
+      nextStep: healthy ? 'provider is ready for local routing' : 'fix Base URL or API key, then test again',
+    });
     return this.requireProvider(providerId);
   }
 
@@ -347,15 +382,24 @@ export class NexaStore {
     this.db
       .prepare(
         `INSERT INTO messages (id, conversation_id, workspace_id, parent_message_id, role, content, provider_id, model_id, model_name_snapshot, request_id, request_log_id, input_tokens, output_tokens, latency_ms, finish_reason, error_message, status, content_format, context_strategy, context_message_ids_json, summary_id, artifact_ids_json, error_code, metadata_json, created_at, updated_at, deleted_at)
-         VALUES (?, ?, ?, NULL, 'user', ?, NULL, NULL, NULL, NULL, NULL, ?, NULL, NULL, NULL, NULL, 'completed', 'markdown', ?, NULL, NULL, NULL, NULL, NULL, ?, ?, NULL)`,
+         VALUES (?, ?, ?, NULL, 'user', ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, 'completed', 'markdown', ?, NULL, NULL, NULL, NULL, ?, ?, ?, NULL)`,
       )
       .run(
         userMessageId,
         conversation.id,
         conversation.workspaceId,
         input.content.trim(),
+        routeDecision.providerId,
+        routeDecision.modelId,
+        routeDecision.modelNameSnapshot,
+        requestId,
+        requestLogId,
         inputTokens,
         input.contextStrategy ?? 'recent_n',
+        JSON.stringify({
+          routeReason: routeDecision.reason,
+          fallbackUsed: routeDecision.fallbackUsed,
+        }),
         timestamp,
         timestamp,
       );
@@ -472,6 +516,16 @@ export class NexaStore {
     return { key, record: this.requireGatewayKey(id) };
   }
 
+  revokeGatewayKey(gatewayKeyId: string): GatewayApiKey {
+    const key = this.requireGatewayKey(gatewayKeyId);
+    const timestamp = now();
+    this.db
+      .prepare('UPDATE gateway_api_keys SET revoked_at = ? WHERE id = ?')
+      .run(key.revokedAt ?? timestamp, gatewayKeyId);
+    this.audit('gateway.key.revoked', 'gateway_api_key', gatewayKeyId, { keyPreview: key.keyPreview });
+    return this.requireGatewayKey(gatewayKeyId);
+  }
+
   toggleGateway(enabled: boolean): GatewayStatus {
     this.gatewayEnabled = enabled;
     this.audit(enabled ? 'gateway.enabled' : 'gateway.disabled', 'gateway', null, { bindHost: '127.0.0.1', port: 8787 });
@@ -489,7 +543,7 @@ export class NexaStore {
       .all() as Array<Record<string, unknown> & { encrypted_value: string }>;
 
     for (const row of rows) {
-      const decoded = Buffer.from(String(row.encrypted_value), 'base64').toString('utf8');
+      const decoded = decodeSecretValue(String(row.encrypted_value));
       if (decoded !== rawKey) {
         continue;
       }
@@ -560,14 +614,15 @@ export class NexaStore {
     const timestamp = now();
     const id = createId('file');
     const textLike = /text|markdown|json|csv|code|txt|md/i.test(`${name} ${type}`);
-    const status = textLike ? 'indexed' : 'queued';
+    const status = textLike ? 'indexed' : 'failed';
     const chunkCount = textLike ? 3 : 0;
+    const errorMessage = textLike ? null : '当前迭代只解析文本/Markdown/JSON/CSV；请转换为文本或等待 planned 解析器。';
     this.db
       .prepare(
         `INSERT INTO files (id, name, type, size, parse_status, chunk_count, error_message, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(id, name.trim(), type.trim() || 'text/plain', size, status, chunkCount, timestamp, timestamp);
+      .run(id, name.trim(), type.trim() || 'text/plain', size, status, chunkCount, errorMessage, timestamp, timestamp);
     if (textLike) {
       for (let index = 0; index < chunkCount; index += 1) {
         this.db
@@ -584,8 +639,26 @@ export class NexaStore {
           );
       }
     }
-    this.audit('knowledge.file.created', 'file', id, { name, status });
+    this.audit('knowledge.file.created', 'file', id, { name, status, errorMessage });
     return this.requireKnowledgeFile(id);
+  }
+
+  retryKnowledgeFile(fileId: string): KnowledgeFile {
+    const file = this.requireKnowledgeFile(fileId);
+    const timestamp = now();
+    const textLike = /text|markdown|json|csv|code|txt|md/i.test(`${file.name} ${file.type}`);
+    if (!textLike) {
+      this.db
+        .prepare('UPDATE files SET parse_status = ?, error_message = ?, updated_at = ? WHERE id = ?')
+        .run('failed', '重试被拒绝：当前迭代只支持文本类 lexical fallback。', timestamp, fileId);
+      this.audit('knowledge.file.retry.failed', 'file', fileId, { reason: 'unsupported file type' });
+      return this.requireKnowledgeFile(fileId);
+    }
+    this.db
+      .prepare('UPDATE files SET parse_status = ?, chunk_count = ?, error_message = NULL, updated_at = ? WHERE id = ?')
+      .run('indexed', Math.max(file.chunkCount, 3), timestamp, fileId);
+    this.audit('knowledge.file.retry.completed', 'file', fileId, { chunkCount: Math.max(file.chunkCount, 3) });
+    return this.requireKnowledgeFile(fileId);
   }
 
   createMcpServer(name: string, transport: McpServer['transport'], commandOrUrl: string): McpServer {
@@ -601,6 +674,16 @@ export class NexaStore {
     return this.requireMcpServer(id);
   }
 
+  updateMcpPermission(serverId: string, permissionState: McpServer['permissionState']): McpServer {
+    const timestamp = now();
+    const enabled = permissionState === 'granted' ? 1 : 0;
+    this.db
+      .prepare('UPDATE mcp_servers SET permission_state = ?, enabled = ?, last_status = ?, updated_at = ? WHERE id = ?')
+      .run(permissionState, enabled, permissionState === 'granted' ? 'healthy' : 'unknown', timestamp, serverId);
+    this.audit('mcp.permission.updated', 'mcp_server', serverId, { permissionState, enabled: Boolean(enabled) });
+    return this.requireMcpServer(serverId);
+  }
+
   createAgent(name: string, goal: string): AgentDefinition {
     const timestamp = now();
     const id = createId('agent');
@@ -612,6 +695,117 @@ export class NexaStore {
       .run(id, name.trim(), goal.trim(), timestamp, timestamp);
     this.audit('agent.definition.created', 'agent', id, { name, mode: 'dry-run only' });
     return this.requireAgent(id);
+  }
+
+  previewAgentRun(agentId: string): ImportExportResult {
+    const agent = this.requireAgent(agentId);
+    const timestamp = now();
+    const id = createId('dryrun');
+    const manifest = {
+      agentId,
+      agentName: agent.name,
+      mode: 'dry-run',
+      requiresConfirmation: false,
+      steps: ['读取工作区状态', '检查模型/网关/知识边界', '生成只读建议'],
+    };
+    this.db
+      .prepare(
+        `INSERT INTO config_snapshots (id, action, status, summary, redacted, manifest_json, created_at)
+         VALUES (?, 'cleanup-preview', 'ready', ?, 1, ?, ?)`,
+      )
+      .run(id, `Agent dry-run 已生成：${agent.name}。不会执行工具、MCP 或危险操作。`, JSON.stringify(manifest), timestamp);
+    this.audit('agent.dry_run.previewed', 'agent', agentId, manifest);
+    return this.requireImportExportResult(id);
+  }
+
+  validateImportManifest(manifestText: string): ImportExportResult {
+    const timestamp = now();
+    const id = createId('import');
+    let status: ImportExportResult['status'] = 'ready';
+    let summary = '导入清单已通过预检；应用前仍需要确认冲突和密钥处理。';
+    let manifest: Record<string, unknown> = {
+      requiresConfirmation: true,
+      conflictCount: 0,
+      redaction: 'secrets must be supplied interactively and are not imported from plain text',
+    };
+
+    try {
+      const parsed = JSON.parse(manifestText) as Record<string, unknown>;
+      const providers = parsed.providers;
+      const models = parsed.models;
+      const hasValidList =
+        (Array.isArray(providers) && providers.length > 0) ||
+        (Array.isArray(models) && models.length > 0) ||
+        typeof parsed.workspace === 'object';
+      if (!hasValidList) {
+        throw new Error('清单必须包含 providers、models 或 workspace。');
+      }
+      const conflictCount = Array.isArray(providers)
+        ? providers.filter((provider) =>
+            this.getProviders().some((existing) => existing.name === String((provider as { name?: unknown }).name ?? '')),
+          ).length
+        : 0;
+      manifest = {
+        ...manifest,
+        providerCount: Array.isArray(providers) ? providers.length : 0,
+        modelCount: Array.isArray(models) ? models.length : 0,
+        conflictCount,
+        keys: 'stripped',
+      };
+      if (conflictCount > 0) {
+        summary = `导入清单可用，但发现 ${conflictCount} 个供应商名称冲突；需要确认合并策略。`;
+      }
+    } catch (error) {
+      status = 'failed';
+      summary = `导入清单被拒绝：${error instanceof Error ? error.message : String(error)}`;
+      manifest = {
+        requiresConfirmation: false,
+        conflictCount: 0,
+        error: summary,
+      };
+    }
+
+    this.db
+      .prepare(
+        `INSERT INTO config_snapshots (id, action, status, summary, redacted, manifest_json, created_at)
+         VALUES (?, 'import', ?, ?, 1, ?, ?)`,
+      )
+      .run(id, status, summary, JSON.stringify(manifest), timestamp);
+    this.audit('import.manifest.validated', 'config_snapshot', id, { status, summary });
+    return this.requireImportExportResult(id);
+  }
+
+  applyImportPlan(resultId: string): ImportExportResult {
+    const result = this.requireImportExportResult(resultId);
+    if (result.action !== 'import' || result.status !== 'ready') {
+      throw new Error('只有 ready 状态的导入预检结果可以应用。');
+    }
+    const timestamp = now();
+    this.db
+      .prepare('UPDATE config_snapshots SET status = ?, summary = ?, created_at = ? WHERE id = ?')
+      .run('completed', '导入计划已确认应用；本迭代只记录确认结果，不静默覆盖现有配置。', timestamp, resultId);
+    this.audit('import.plan.applied', 'config_snapshot', resultId, { mode: 'confirmed preview only' });
+    return this.requireImportExportResult(resultId);
+  }
+
+  restoreSnapshot(snapshotId: string): ImportExportResult {
+    const snapshot = this.requireImportExportResult(snapshotId);
+    const timestamp = now();
+    const id = createId('restore');
+    const manifest = {
+      sourceSnapshotId: snapshot.id,
+      requiresConfirmation: true,
+      conflictCount: 0,
+      mode: 'preview-only',
+    };
+    this.db
+      .prepare(
+        `INSERT INTO config_snapshots (id, action, status, summary, redacted, manifest_json, created_at)
+         VALUES (?, 'cleanup-preview', 'ready', ?, 1, ?, ?)`,
+      )
+      .run(id, '恢复预检已创建；当前迭代不会无确认覆盖本地配置。', JSON.stringify(manifest), timestamp);
+    this.audit('snapshot.restore.previewed', 'config_snapshot', snapshotId, manifest);
+    return this.requireImportExportResult(id);
   }
 
   createSnapshot(): ImportExportResult {
@@ -815,7 +1009,7 @@ export class NexaStore {
   private saveSecret(label: string, value: string): string {
     const id = createId('secret');
     const timestamp = now();
-    const encoded = Buffer.from(value, 'utf8').toString('base64');
+    const encoded = encodeSecretValue(value);
     this.db
       .prepare('INSERT INTO secrets (id, label, encrypted_value, preview, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
       .run(id, label, encoded, previewSecret(value), timestamp, timestamp);
@@ -891,6 +1085,27 @@ export class NexaStore {
 
 function normalizeBaseUrl(value: string): string {
   return value.trim().replace(/\/+$/, '');
+}
+
+function encodeSecretValue(value: string): string {
+  try {
+    if (safeStorage.isEncryptionAvailable()) {
+      return `safeStorage:v1:${safeStorage.encryptString(value).toString('base64')}`;
+    }
+  } catch {
+    // Electron safeStorage can be unavailable in early test/runtime bootstrap.
+  }
+  return `local-dev:v1:${Buffer.from(value, 'utf8').toString('base64')}`;
+}
+
+function decodeSecretValue(value: string): string {
+  if (value.startsWith('safeStorage:v1:')) {
+    return safeStorage.decryptString(Buffer.from(value.slice('safeStorage:v1:'.length), 'base64'));
+  }
+  if (value.startsWith('local-dev:v1:')) {
+    return Buffer.from(value.slice('local-dev:v1:'.length), 'base64').toString('utf8');
+  }
+  return Buffer.from(value, 'base64').toString('utf8');
 }
 
 function inferTitle(currentTitle: string, content: string): string {

@@ -1,6 +1,6 @@
 import { diagnoses } from '../../shared/errors';
 
-export function ErrorDiagnosisPanel() {
+export function ErrorDiagnosisPanel({ onOpenLogs }: { onOpenLogs?: () => void }) {
   return (
     <div className="diagnosis-grid">
       {diagnoses.map((item) => (
@@ -18,8 +18,12 @@ export function ErrorDiagnosisPanel() {
               </ul>
             </details>
             <div className="diagnosis-actions">
-              <button type="button">复制错误</button>
-              <button type="button">打开日志</button>
+              <button type="button" onClick={() => void navigator.clipboard?.writeText(`${item.code} ${item.title}\n${item.reason}`)}>
+                复制错误
+              </button>
+              <button type="button" onClick={onOpenLogs}>
+                打开日志
+              </button>
             </div>
           </div>
         </article>

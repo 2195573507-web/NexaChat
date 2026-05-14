@@ -11,8 +11,9 @@ import {
 } from 'lucide-react';
 import type { ComponentType, ReactNode } from 'react';
 import { navModules } from '../shared/navigation';
-import type { AppSnapshot, ModuleId, NavModule } from '../shared/types';
-import { StatusPill } from './components/StatusPill';
+import type { AppSnapshot, ModuleId, NavModule, NavTab } from '../shared/types';
+import { ModulePageFrame } from './components/ModulePageFrame';
+import { stageLabel } from './components/StatusPill';
 
 const icons: Record<ModuleId, ComponentType<{ size?: number }>> = {
   dashboard: Gauge,
@@ -28,15 +29,29 @@ const icons: Record<ModuleId, ComponentType<{ size?: number }>> = {
 interface AppShellProps {
   activeModule: NavModule;
   activeModuleId: ModuleId;
+  activeTab: NavTab;
+  activeRoute: string;
   onModuleChange: (moduleId: ModuleId) => void;
+  onTabChange: (tabId: string) => void;
   snapshot: AppSnapshot;
   children: ReactNode;
   rightRail?: ReactNode;
 }
 
-export function AppShell({ activeModule, activeModuleId, onModuleChange, snapshot, children, rightRail }: AppShellProps) {
+export function AppShell({
+  activeModule,
+  activeModuleId,
+  activeTab,
+  activeRoute,
+  onModuleChange,
+  onTabChange,
+  snapshot,
+  children,
+  rightRail,
+}: AppShellProps) {
+  const themeClass = snapshot.uiPreferences.theme === 'dark' ? 'theme-dark' : 'theme-light';
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${themeClass} density-${snapshot.uiPreferences.density} font-${snapshot.uiPreferences.fontMode}`}>
       <aside className="sidebar" aria-label="一级模块导航">
         <div className="brand">
           <div className="brand-mark">N</div>
@@ -56,8 +71,9 @@ export function AppShell({ activeModule, activeModuleId, onModuleChange, snapsho
                 onClick={() => onModuleChange(module.id)}
               >
                 <Icon size={18} />
-                <span>{module.label}</span>
-                <span className={`stage-dot stage-${module.stage}`} />
+                <span className="module-label-full">{module.label}</span>
+                <span className="module-label-short">{module.shortLabel}</span>
+                <span className={`stage-dot stage-${module.stage}`} title={stageLabel(module.stage)} aria-label={stageLabel(module.stage)} />
               </button>
             );
           })}
@@ -66,9 +82,14 @@ export function AppShell({ activeModule, activeModuleId, onModuleChange, snapsho
 
       <div className="shell-main">
         <header className="topbar">
-          <div>
+          <div className="topbar-context">
             <strong>{snapshot.dashboard.workspace.name}</strong>
-            <span>默认模型：{snapshot.models[0]?.displayName ?? '未配置'}</span>
+            <span>
+              默认模型：
+              {snapshot.models.find((model) => model.id === snapshot.dashboard.workspace.defaultModelId)?.displayName ??
+                snapshot.models[0]?.displayName ??
+                '未配置'}
+            </span>
           </div>
           <div className="topbar-actions">
             <button type="button" onClick={() => onModuleChange('chat')}>
@@ -83,27 +104,12 @@ export function AppShell({ activeModule, activeModuleId, onModuleChange, snapsho
           </div>
         </header>
 
-        <div className="module-header">
-          <div>
-            <h1>{activeModule.label}</h1>
-            <p>{activeModule.route}</p>
+        <ModulePageFrame activeModule={activeModule} activeTab={activeTab} activeRoute={activeRoute} onTabChange={onTabChange}>
+          <div className="content-grid">
+            <main className="content-area">{children}</main>
+            {rightRail ? <aside className="right-rail">{rightRail}</aside> : null}
           </div>
-          <StatusPill stage={activeModule.stage} />
-        </div>
-
-        <div className="module-tabs" role="tablist" aria-label={`${activeModule.label} 二级标签`}>
-          {activeModule.tabs.map((tab) => (
-            <button type="button" role="tab" key={tab.id} className={tab.stage === 'implemented' ? 'tab-ready' : 'tab-muted'}>
-              {tab.label}
-              <StatusPill stage={tab.stage} />
-            </button>
-          ))}
-        </div>
-
-        <div className="content-grid">
-          <main className="content-area">{children}</main>
-          {rightRail ? <aside className="right-rail">{rightRail}</aside> : null}
-        </div>
+        </ModulePageFrame>
       </div>
     </div>
   );

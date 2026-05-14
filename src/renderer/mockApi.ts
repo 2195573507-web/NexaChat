@@ -8,6 +8,7 @@ import type {
   Conversation,
   GatewayApiKey,
   GatewayKeyCreated,
+  GatewayLog,
   GatewayStatus,
   HealthStatus,
   ImportExportResult,
@@ -33,6 +34,7 @@ interface MockState {
   conversations: Conversation[];
   messages: Message[];
   requestLogs: RequestLog[];
+  gatewayLogs: GatewayLog[];
   usageRecords: UsageRecord[];
   gatewayStatus: GatewayStatus;
   gatewayKeys: GatewayApiKey[];
@@ -199,6 +201,7 @@ function createSeedState(): MockState {
     conversations,
     messages,
     requestLogs: [],
+    gatewayLogs: [],
     usageRecords: [],
     gatewayStatus: {
       enabled: true,
@@ -369,6 +372,7 @@ function buildSnapshot(state: MockState): AppSnapshot {
     providers: state.providers,
     models: state.models,
     requestLogs: state.requestLogs,
+    gatewayLogs: state.gatewayLogs,
     usageRecords: state.usageRecords,
     gatewayKeys: state.gatewayKeys,
     knowledgeFiles: state.knowledgeFiles,
@@ -393,12 +397,21 @@ export function createMockApi(): AppApi {
 
   function createResult(action: ImportExportResult['action'], summary: string, redacted: boolean): ImportExportResult {
     const timestamp = now();
+    const status: ImportExportResult['status'] = summary.includes('被拒绝') ? 'failed' : action === 'import' || action === 'cleanup-preview' ? 'ready' : 'completed';
     const result: ImportExportResult = {
       id: createId(action.replace('-', '_')),
       action,
-      status: 'completed',
+      status,
       summary,
       redacted,
+      manifestJson: JSON.stringify({
+        requiresConfirmation: status === 'ready',
+        conflictCount: summary.includes('冲突') ? 1 : 0,
+        source: 'browser-mock',
+      }),
+      errorMessage: status === 'failed' ? summary : null,
+      conflictCount: summary.includes('冲突') ? 1 : 0,
+      requiresConfirmation: status === 'ready',
       createdAt: timestamp,
     };
     state.importExportResults.unshift(result);
@@ -412,6 +425,9 @@ export function createMockApi(): AppApi {
     },
 
     async createProvider(input: ProviderInput) {
+      if (!/^https?:\/\//i.test(input.baseUrl.trim())) {
+        throw new Error('Base URL 必须以 http:// 或 https:// 开头。');
+      }
       const timestamp = now();
       const provider: Provider = {
         id: createId('provider'),
@@ -474,7 +490,7 @@ export function createMockApi(): AppApi {
     async testProvider(providerId: string) {
       const provider = findById(state.providers, providerId, 'Provider');
       const timestamp = now();
-      const status: HealthStatus = provider.enabled ? 'healthy' : 'warning';
+      const status: HealthStatus = /^https?:\/\//i.test(provider.baseUrl) && provider.enabled ? 'healthy' : 'error';
       provider.healthStatus = status;
       provider.lastCheckedAt = timestamp;
       provider.updatedAt = timestamp;
@@ -488,6 +504,31 @@ export function createMockApi(): AppApi {
         });
 
       pushAudit('provider.test', 'provider', provider.id, { status });
+      if (status === 'error') {
+        state.requestLogs.unshift({
+          id: createId('request'),
+          conversationId: null,
+          messageId: null,
+          providerId: provider.id,
+          modelId: null,
+          modelNameSnapshot: null,
+          routeId: null,
+          gatewayRequestId: null,
+          status: 'failed',
+          endpoint: '/provider/test',
+          requestSummaryJson: JSON.stringify({ baseUrl: provider.baseUrl }),
+          responseSummaryJson: null,
+          inputTokens: null,
+          outputTokens: null,
+          latencyMs: 1,
+          finishReason: null,
+          errorCode: 'invalid_base_url',
+          errorMessage: 'Base URL 必须以 http:// 或 https:// 开头。',
+          startedAt: timestamp,
+          completedAt: timestamp,
+          createdAt: timestamp,
+        });
+      }
       return clone(provider);
     },
 
@@ -687,6 +728,13 @@ export function createMockApi(): AppApi {
       return clone(created);
     },
 
+    async revokeGatewayKey(gatewayKeyId: string) {
+      const key = findById(state.gatewayKeys, gatewayKeyId, 'Gateway key');
+      key.revokedAt = key.revokedAt ?? now();
+      pushAudit('gateway.revokeKey', 'gatewayKey', key.id, { keyPreview: key.keyPreview });
+      return clone(key);
+    },
+
     async toggleGateway(enabled: boolean) {
       state.gatewayStatus = {
         ...state.gatewayStatus,
@@ -706,20 +754,39 @@ export function createMockApi(): AppApi {
 
     async createKnowledgeFile(name: string, type: string, size: number) {
       const timestamp = now();
+      const textLike = /text|markdown|json|csv|code|txt|md/i.test(`${name} ${type}`);
       const file: KnowledgeFile = {
         id: createId('knowledge'),
         name: name.trim() || 'untitled.txt',
         type: type.trim() || 'text/plain',
         size: Math.max(0, Math.floor(size)),
-        parseStatus: 'indexed',
-        chunkCount: Math.max(1, Math.ceil(Math.max(0, size) / 1024)),
-        errorMessage: null,
+        parseStatus: textLike ? 'indexed' : 'failed',
+        chunkCount: textLike ? Math.max(1, Math.ceil(Math.max(0, size) / 1024)) : 0,
+        errorMessage: textLike ? null : '当前迭代只支持文本类 lexical fallback。',
         createdAt: timestamp,
         updatedAt: timestamp,
       };
 
       state.knowledgeFiles.unshift(file);
       pushAudit('knowledge.createFile', 'knowledgeFile', file.id, { type: file.type, size: file.size });
+      return clone(file);
+    },
+
+    async retryKnowledgeFile(fileId: string) {
+      const file = findById(state.knowledgeFiles, fileId, 'Knowledge file');
+      const timestamp = now();
+      const textLike = /text|markdown|json|csv|code|txt|md/i.test(`${file.name} ${file.type}`);
+      if (textLike) {
+        file.parseStatus = 'indexed';
+        file.chunkCount = Math.max(file.chunkCount, 1);
+        file.errorMessage = null;
+        pushAudit('knowledge.retry.completed', 'knowledgeFile', file.id);
+      } else {
+        file.parseStatus = 'failed';
+        file.errorMessage = '重试被拒绝：当前迭代只支持文本类 lexical fallback。';
+        pushAudit('knowledge.retry.failed', 'knowledgeFile', file.id);
+      }
+      file.updatedAt = timestamp;
       return clone(file);
     },
 
@@ -730,7 +797,7 @@ export function createMockApi(): AppApi {
         name: name.trim() || 'Untitled MCP server',
         transport,
         commandOrUrl: commandOrUrl.trim(),
-        enabled: true,
+        enabled: false,
         permissionState: 'discovered',
         lastStatus: 'unknown',
         createdAt: timestamp,
@@ -742,6 +809,16 @@ export function createMockApi(): AppApi {
       return clone(server);
     },
 
+    async updateMcpPermission(serverId: string, permissionState: McpServer['permissionState']) {
+      const server = findById(state.mcpServers, serverId, 'MCP server');
+      server.permissionState = permissionState;
+      server.enabled = permissionState === 'granted';
+      server.lastStatus = permissionState === 'granted' ? 'healthy' : 'unknown';
+      server.updatedAt = now();
+      pushAudit('mcp.updatePermission', 'mcpServer', server.id, { permissionState });
+      return clone(server);
+    },
+
     async createAgent(name: string, goal: string) {
       const timestamp = now();
       const agent: AgentDefinition = {
@@ -750,7 +827,7 @@ export function createMockApi(): AppApi {
         goal: goal.trim() || 'Assist with NexaChat browser mock testing.',
         defaultModelId: state.workspace.defaultModelId,
         approvalPolicy: 'destructive-only',
-        stage: 'implemented',
+        stage: 'planned',
         createdAt: timestamp,
         updatedAt: timestamp,
       };
@@ -758,6 +835,45 @@ export function createMockApi(): AppApi {
       state.agents.unshift(agent);
       pushAudit('agent.create', 'agent', agent.id);
       return clone(agent);
+    },
+
+    async previewAgentRun(agentId: string) {
+      const agent = findById(state.agents, agentId, 'Agent');
+      const result = createResult('cleanup-preview', `Agent dry-run 已生成：${agent.name}。不会执行工具或危险操作。`, true);
+      pushAudit('agent.previewRun', 'agent', agent.id, { resultId: result.id });
+      return clone(result);
+    },
+
+    async validateImportManifest(manifestText: string) {
+      try {
+        const parsed = JSON.parse(manifestText) as Record<string, unknown>;
+        if (!Array.isArray(parsed.providers) && !Array.isArray(parsed.models) && typeof parsed.workspace !== 'object') {
+          throw new Error('清单必须包含 providers、models 或 workspace。');
+        }
+        const result = createResult('import', '导入清单已通过预检；应用前仍需要确认冲突和密钥处理。', true);
+        return clone(result);
+      } catch (error) {
+        const result = createResult('import', `导入清单被拒绝：${error instanceof Error ? error.message : String(error)}`, true);
+        result.status = 'failed';
+        return clone(result);
+      }
+    },
+
+    async applyImportPlan(resultId: string) {
+      const result = findById(state.importExportResults, resultId, 'Import result');
+      if (result.action !== 'import' || result.status !== 'ready') {
+        throw new Error('只有 ready 状态的导入预检结果可以应用。');
+      }
+      result.status = 'completed';
+      result.summary = '导入计划已确认应用；浏览器模式只记录确认结果。';
+      pushAudit('data.applyImportPlan', 'importExportResult', result.id);
+      return clone(result);
+    },
+
+    async restoreSnapshot(snapshotId: string) {
+      findById(state.importExportResults, snapshotId, 'Snapshot');
+      const result = createResult('cleanup-preview', '恢复预检已创建；不会无确认覆盖本地配置。', true);
+      return clone(result);
     },
 
     async createSnapshot() {
@@ -776,6 +892,10 @@ export function createMockApi(): AppApi {
         true,
       );
       return clone(result);
+    },
+
+    async openLogs() {
+      pushAudit('system.openLogs', 'system', 'logs');
     },
   };
 

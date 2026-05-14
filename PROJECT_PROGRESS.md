@@ -4,6 +4,39 @@
 
 This round builds the existing NexaChat plans into a runnable desktop app. The repository now contains application source, tests, build scripts, implementation closure notes, and verification artifacts.
 
+The two Iteration 01 plans are now closed in `docs/implementation/iteration-01-closure.md`:
+
+- `docs/iteration-plans/01-core-flow-and-function-iteration-plan.md`
+- `docs/iteration-plans/01-ui-iteration-plan.md`
+
+Iteration 02 is now closed in `docs/implementation/iteration-02-closure.md`:
+
+- `docs/iteration-plans/02-secondary-navigation-and-module-decomposition-iteration-plan.md`
+
+## 2026-05-14 UI Navigation Refactor
+
+This round completed the module interface simplification and secondary navigation split requested for NexaChat. The first-level module count remains unchanged, but each module now has a clearer module container, route-aware secondary navigation, and focused tab pages.
+
+Key changes:
+
+- Added shared `ModulePageFrame` and `ModuleSubNav` components.
+- Extended shared navigation metadata with route, icon, permission, and i18n key fields.
+- Split the renderer module content into `src/renderer/modules/*Page.tsx`.
+- Updated Gateway, Provider/Model, Agent/MCP, Knowledge, Observability/Settings, Security/Admin, and Data surfaces to use focused secondary pages instead of long mixed panels.
+- Kept planned/reserved/admin pages honest with explicit placeholder text and no fake action controls.
+- Documented the mapping and audit in `docs/build-plans/ui-navigation-refactor/plan.md`.
+
+Current verified results:
+
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test`: passed, 1 file / 3 tests.
+- `npm.cmd run test:ui-smoke`: passed, 7 Playwright tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run verify`: passed.
+- `npm.cmd run test:electron-smoke`: passed; Electron shell rendered.
+- `lint`: no script exists in `package.json`.
+- Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"` as the app argument, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico`. No project shortcut creation script exists under `scripts/`, so no shortcut was regenerated.
+
 ## Parallel Work Requirement
 
 The user required agent assistance with at least three agents running and at least three tasks progressing concurrently. This was satisfied in two waves:
@@ -34,6 +67,9 @@ The user required agent assistance with at least three agents running and at lea
 - Settings and Security pages including logs, usage, error diagnosis, key security, audit, UI settings, and system settings.
 - Browser fallback API for local web testing.
 - Unit, UI smoke, and Electron launch smoke tests.
+- Iteration 01 flow improvements: workspace default model display, route metadata trace, gateway key one-time reveal and revoke, knowledge retry/failure handling, MCP grant/deny, Agent dry-run preview, import manifest rejection, and restore preview.
+- Iteration 01 UI improvements: tighter desktop tool layout, unified status badges, table long-text handling, accessible stage labels, right-rail collapse before main content compression, and 1040 x 680 overflow validation.
+- Iteration 02 navigation improvements: real route-aware second-level tabs, canonical `/<module>/<tab>` state, focused tab panels for every module, contextual right rail, all-tab smoke coverage, route fallback, and planned/reserved placeholders with no fake execution buttons.
 
 ## Planned / Reserved
 
@@ -41,7 +77,7 @@ The user required agent assistance with at least three agents running and at lea
 - Production-grade streaming state machine and cancellation.
 - Full document parsing, RAG, embedding/rerank providers, vector DB, OCR, and knowledge evaluation.
 - MCP execution, custom tool execution, real Agent Run Center, trace replay, workflow canvas, human approval execution, and code sandbox.
-- Full conflict-aware import/export, restore, migrations, cleanup execution, and encrypted backup with secrets.
+- Full conflict-aware import/export execution, destructive restore execution, migrations, cleanup execution, and encrypted backup with secrets.
 - Packaging, installer, desktop shortcut creation, and shortcut verification.
 
 ## Verification
@@ -55,9 +91,18 @@ Verified on 2026-05-13:
 - `npm.cmd run verify`: passed.
 - `npm.cmd run test:ui-smoke`: passed, 2 Playwright tests.
 - `npm.cmd run test:electron-smoke`: passed; built Electron app launched and was stopped after startup window check.
+- Iteration 01 rerun: `npm.cmd run typecheck` passed.
+- Iteration 01 rerun: `npm.cmd run test` passed, 1 file / 3 tests.
+- Iteration 01 rerun: `npm.cmd run test:ui-smoke` passed, 4 Playwright tests.
+- Iteration 01 rerun: `npm.cmd run verify` passed.
+- Iteration 01 rerun: `npm.cmd run test:electron-smoke` passed; Electron shell rendered.
+- Iteration 02 rerun: `npm.cmd run typecheck` passed.
+- Iteration 02 rerun: `npm.cmd run test` passed, 1 file / 3 tests.
+- Iteration 02 rerun: `npm.cmd run test:ui-smoke` passed, 6 Playwright tests.
+- Iteration 02 rerun: `npm.cmd run verify` passed.
 
 ## Important Notes
 
 - The implementation uses Node's experimental `node:sqlite` API. It works in the current local Node/Electron environment but should be revisited before production packaging.
-- Secrets are represented through a local secret abstraction and redaction pipeline, not yet through a verified packaged safeStorage/keychain flow.
-- `docs/implementation/build-closure.md`, `task_plan.md`, `findings.md`, and `progress.md` are the current implementation closeout surfaces.
+- New secrets use Electron `safeStorage` when available; non-Electron/bootstrap execution keeps a prefixed local-dev fallback and existing base64 values remain readable for compatibility.
+- `docs/implementation/build-closure.md`, `docs/implementation/iteration-01-closure.md`, `docs/implementation/iteration-02-closure.md`, `task_plan.md`, `findings.md`, and `progress.md` are the current implementation closeout surfaces.
