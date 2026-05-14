@@ -29,6 +29,21 @@ try {
   await window.getByText('NexaChat', { exact: true }).first().waitFor({ timeout: 5_000 });
   await window.locator('.module-nav-item').filter({ hasText: '对话' }).waitFor({ timeout: 5_000 });
   await window.getByText('当前概览', { exact: true }).waitFor({ timeout: 5_000 });
+  const preloadResult = await window.evaluate(async () => {
+    const api = window.nexachat;
+    if (!api || typeof api.getSnapshot !== 'function') {
+      return { ok: false, reason: 'window.nexachat.getSnapshot is unavailable' };
+    }
+    const snapshot = await api.getSnapshot();
+    return {
+      ok: Boolean(snapshot?.dashboard?.workspace?.id),
+      workspaceId: snapshot?.dashboard?.workspace?.id ?? null,
+      moduleCountHint: document.querySelectorAll('.module-nav-item').length,
+    };
+  });
+  if (!preloadResult.ok) {
+    throw new Error(`Preload API check failed: ${JSON.stringify(preloadResult)}`);
+  }
   const bodyText = await window.locator('body').innerText();
   if (/(^|\s)\/(workspace|chat|models|knowledge|tools|gateway|data|settings)\//.test(bodyText)) {
     throw new Error('Visible route path leaked into the Electron shell.');

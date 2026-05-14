@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import type { AppApi, AppSnapshot, ContextStrategy, ModuleId, NavTab, ProviderType } from '../../shared/types';
+import type { AppApi } from '../../shared/api';
+import type { AppSnapshot, ContextStrategy, ModuleId, NavTab, ProviderType } from '../../shared/types';
 import { EmptyState } from '../components/EmptyState';
 import { StatusPill } from '../components/StatusPill';
 

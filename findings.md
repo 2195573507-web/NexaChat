@@ -11,6 +11,13 @@
 - `src/renderer/styles.css` has token-like CSS variables, but local hardcoded colors and radii remain and must be addressed in the design/theme rounds.
 - The desktop shortcut is valid for the current local Electron launch model, but there is no project-owned shortcut check/create script yet.
 
+## Full App Round 1 Findings
+
+- IPC channel duplication was removed by `src/shared/ipc.ts`; remaining IPC validation is arity-only and should become schema validation in later rounds.
+- Production renderer missing preload no longer silently uses `mockApi`; browser smoke must opt into mock mode with `VITE_NEXACHAT_BROWSER_MOCK=1` or test mode.
+- Playwright UI smoke can read a stale dev server if reuse is enabled; Round 1 pins `reuseExistingServer: false` to ensure the explicit mock env applies.
+- `NexaStore` remains the behavior facade after Round 1; extraction order is documented in `docs/architecture/store-facade-boundaries.md`.
+
 ## Initial Repository State
 
 - Repository root: `D:\NexaChat`.

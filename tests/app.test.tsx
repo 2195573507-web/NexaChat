@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { beforeEach, describe, expect, it } from 'vitest';
 import App from '../src/renderer/App';
 import { createMockApi } from '../src/renderer/mockApi';
+import { IPC_CHANNELS, IPC_CHANNEL_LIST, assertIpcPayload, isIpcChannel } from '../src/shared/ipc';
 import { navModules } from '../src/shared/navigation';
 import type { NavModule, NavTab } from '../src/shared/types';
 
@@ -87,5 +88,18 @@ describe('NexaChat renderer', () => {
     openFeature(settings, settings.tabs.find((tab) => tab.id === 'security')!);
     expect(activePanel()).toHaveAttribute('data-tab', 'security');
     expect(activePanel()).toHaveTextContent('安全存储与 IPC 边界');
+  });
+});
+
+describe('IPC authority', () => {
+  it('keeps IPC channels unique and validates payload arity', () => {
+    expect(new Set(IPC_CHANNEL_LIST).size).toBe(IPC_CHANNEL_LIST.length);
+    expect(isIpcChannel(IPC_CHANNELS.chatSendMessage)).toBe(true);
+    expect(isIpcChannel('chat:unknown')).toBe(false);
+
+    expect(() => assertIpcPayload(IPC_CHANNELS.appGetSnapshot, [])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.chatSendMessage, [])).toThrow(/Invalid IPC payload/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.knowledgeCreateFile, ['name.md', 'text/markdown', 1])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.knowledgeCreateFile, ['name.md'])).toThrow(/Invalid IPC payload/);
   });
 });

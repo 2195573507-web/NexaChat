@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Copy } from 'lucide-react';
 import { getDefaultTab, getTabRoute, navModules, resolveNavigation } from '../shared/navigation';
-import type { AppApi, AppSnapshot, ModuleId, NavTab } from '../shared/types';
+import type { AppApi } from '../shared/api';
+import type { AppSnapshot, ModuleId, NavTab } from '../shared/types';
 import { AppShell } from './AppShell';
 import { getAppApi } from './api';
 import { ChatPage } from './modules/ChatPage';

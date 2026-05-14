@@ -288,6 +288,40 @@ These references guide product and engineering decisions. They are not permissio
 25. **Deliverables**: Refactored architecture, dependency-boundary doc, updated tests, progress update.
 26. **Next Round Input**: Stable service and IPC foundation for navigation and module IA work.
 
+### Round 1 Execution Status
+
+- Status: Completed.
+- Completion date: 2026-05-14.
+- Main changed files:
+  - `src/shared/api.ts`
+  - `src/shared/ipc.ts`
+  - `src/main/ipc.ts`
+  - `src/preload/index.ts`
+  - `src/renderer/api.ts`
+  - `src/renderer/App.tsx`
+  - `src/renderer/mockApi.ts`
+  - `src/renderer/modules/shared.tsx`
+  - `tests/ipc-contract.test.ts`
+  - `tests/renderer-api-boundary.test.ts`
+  - `tests/app.test.tsx`
+  - `scripts/electron-smoke.mjs`
+  - `playwright.config.ts`
+  - `docs/architecture/store-facade-boundaries.md`
+  - `docs/implementation/round-01-architecture-boundary-closure.md`
+- Added/modified functionality: established IPC channel authority, added IPC payload arity checks, split preload API typing from domain types, made browser mock fallback explicit, strengthened Electron preload smoke, and documented `NexaStore` facade extraction boundaries.
+- Deleted old links: raw IPC channel literals in main/preload were removed. `mockApi.ts` was not deleted; it is now explicitly gated for test/browser smoke.
+- Test commands and results:
+  - `npm.cmd run typecheck`: passed.
+  - `npm.cmd run test`: passed, 3 files / 10 tests.
+  - `npm.cmd run build`: passed.
+  - `npm.cmd run test:ui-smoke`: passed, 10 Playwright tests.
+  - `npm.cmd run test:electron-smoke`: passed.
+  - `npm.cmd run verify`: passed.
+- Desktop shortcut result: `C:\Users\至亲\Desktop\NexaChat.lnk` still points to the current local Electron launch entry and was not modified.
+- Acceptance result: Passed. IPC registry is used, preload/main boundary is typed, production renderer no longer silently falls back to mock, and existing flows pass smoke tests.
+- Commit hash: pending post-commit backfill.
+- Remaining issues: service/repository extraction, migration runner, endpoint registry, permission registry, and deeper payload validation remain queued for later rounds.
+
 ## 8. Round 2: Navigation And Module Information Architecture
 
 1. **Round Name**: Navigation And Module Information Architecture.

@@ -40,7 +40,8 @@ At least three agents were launched concurrently before implementation work cont
 
 ## Current Status
 
-- Full App Round 0 health check and authority inventory: in progress.
+- Full App Round 0 health check and authority inventory: complete.
+- Full App Round 1 architecture boundary reorganization: complete as implementation and verification; final Git hash backfill pending.
 - Phase 1: complete.
 - Phase 2: complete.
 - Phase 3: complete.

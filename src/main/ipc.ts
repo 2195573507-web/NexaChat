@@ -1,21 +1,29 @@
 import { app, ipcMain, shell } from 'electron';
 import { store } from './services/store.js';
 import { startLocalGateway, stopLocalGateway } from './services/localGateway.js';
+import { assertIpcPayload, IPC_CHANNELS, type IpcChannel } from '../shared/ipc.js';
 import type { McpServer, ModelInput, ProviderInput, SendMessageInput, UiPreferences } from '../shared/types.js';
 
+function handleIpc<C extends IpcChannel>(channel: C, handler: (...args: any[]) => unknown): void {
+  ipcMain.handle(channel, (_event, ...args: unknown[]) => {
+    assertIpcPayload(channel, args);
+    return handler(...args);
+  });
+}
+
 export function registerIpcHandlers(): void {
-  ipcMain.handle('app:getSnapshot', () => store.getSnapshot());
-  ipcMain.handle('provider:create', (_event, input: ProviderInput) => store.createProvider(input));
-  ipcMain.handle('provider:test', (_event, providerId: string) => store.testProvider(providerId));
-  ipcMain.handle('model:create', (_event, input: ModelInput) => store.createModel(input));
-  ipcMain.handle('chat:createConversation', (_event, title?: string) => store.createConversation(title));
-  ipcMain.handle('chat:sendMessage', (_event, input: SendMessageInput) => store.sendMessage(input));
-  ipcMain.handle('chat:updateConversationFlags', (_event, conversationId: string, flags) =>
+  handleIpc(IPC_CHANNELS.appGetSnapshot, () => store.getSnapshot());
+  handleIpc(IPC_CHANNELS.providerCreate, (input: ProviderInput) => store.createProvider(input));
+  handleIpc(IPC_CHANNELS.providerTest, (providerId: string) => store.testProvider(providerId));
+  handleIpc(IPC_CHANNELS.modelCreate, (input: ModelInput) => store.createModel(input));
+  handleIpc(IPC_CHANNELS.chatCreateConversation, (title?: string) => store.createConversation(title));
+  handleIpc(IPC_CHANNELS.chatSendMessage, (input: SendMessageInput) => store.sendMessage(input));
+  handleIpc(IPC_CHANNELS.chatUpdateConversationFlags, (conversationId: string, flags) =>
     store.updateConversationFlags(conversationId, flags),
   );
-  ipcMain.handle('gateway:createKey', (_event, name: string) => store.createGatewayKey(name));
-  ipcMain.handle('gateway:revokeKey', (_event, gatewayKeyId: string) => store.revokeGatewayKey(gatewayKeyId));
-  ipcMain.handle('gateway:toggle', async (_event, enabled: boolean) => {
+  handleIpc(IPC_CHANNELS.gatewayCreateKey, (name: string) => store.createGatewayKey(name));
+  handleIpc(IPC_CHANNELS.gatewayRevokeKey, (gatewayKeyId: string) => store.revokeGatewayKey(gatewayKeyId));
+  handleIpc(IPC_CHANNELS.gatewayToggle, async (enabled: boolean) => {
     if (enabled) {
       await startLocalGateway();
       store.toggleGateway(true);
@@ -25,25 +33,25 @@ export function registerIpcHandlers(): void {
     }
     return store.getGatewayStatus();
   });
-  ipcMain.handle('settings:saveUiPreferences', (_event, preferences: UiPreferences) => store.saveUiPreferences(preferences));
-  ipcMain.handle('knowledge:createFile', (_event, name: string, type: string, size: number) =>
+  handleIpc(IPC_CHANNELS.settingsSaveUiPreferences, (preferences: UiPreferences) => store.saveUiPreferences(preferences));
+  handleIpc(IPC_CHANNELS.knowledgeCreateFile, (name: string, type: string, size: number) =>
     store.createKnowledgeFile(name, type, size),
   );
-  ipcMain.handle('knowledge:retryFile', (_event, fileId: string) => store.retryKnowledgeFile(fileId));
-  ipcMain.handle('mcp:createServer', (_event, name: string, transport, commandOrUrl: string) =>
+  handleIpc(IPC_CHANNELS.knowledgeRetryFile, (fileId: string) => store.retryKnowledgeFile(fileId));
+  handleIpc(IPC_CHANNELS.mcpCreateServer, (name: string, transport, commandOrUrl: string) =>
     store.createMcpServer(name, transport, commandOrUrl),
   );
-  ipcMain.handle('mcp:updatePermission', (_event, serverId: string, permissionState: McpServer['permissionState']) =>
+  handleIpc(IPC_CHANNELS.mcpUpdatePermission, (serverId: string, permissionState: McpServer['permissionState']) =>
     store.updateMcpPermission(serverId, permissionState),
   );
-  ipcMain.handle('agent:create', (_event, name: string, goal: string) => store.createAgent(name, goal));
-  ipcMain.handle('agent:previewRun', (_event, agentId: string) => store.previewAgentRun(agentId));
-  ipcMain.handle('data:validateImportManifest', (_event, manifestText: string) => store.validateImportManifest(manifestText));
-  ipcMain.handle('data:applyImportPlan', (_event, resultId: string) => store.applyImportPlan(resultId));
-  ipcMain.handle('data:restoreSnapshot', (_event, snapshotId: string) => store.restoreSnapshot(snapshotId));
-  ipcMain.handle('data:createSnapshot', () => store.createSnapshot());
-  ipcMain.handle('data:exportDiagnostics', () => store.exportDiagnostics());
-  ipcMain.handle('system:openLogs', async () => {
+  handleIpc(IPC_CHANNELS.agentCreate, (name: string, goal: string) => store.createAgent(name, goal));
+  handleIpc(IPC_CHANNELS.agentPreviewRun, (agentId: string) => store.previewAgentRun(agentId));
+  handleIpc(IPC_CHANNELS.dataValidateImportManifest, (manifestText: string) => store.validateImportManifest(manifestText));
+  handleIpc(IPC_CHANNELS.dataApplyImportPlan, (resultId: string) => store.applyImportPlan(resultId));
+  handleIpc(IPC_CHANNELS.dataRestoreSnapshot, (snapshotId: string) => store.restoreSnapshot(snapshotId));
+  handleIpc(IPC_CHANNELS.dataCreateSnapshot, () => store.createSnapshot());
+  handleIpc(IPC_CHANNELS.dataExportDiagnostics, () => store.exportDiagnostics());
+  handleIpc(IPC_CHANNELS.systemOpenLogs, async () => {
     await shell.openPath(app.getPath('logs'));
   });
 }

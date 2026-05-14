@@ -18,6 +18,26 @@
 - Ran `git diff --check`: passed with LF/CRLF warnings only.
 - Committed Round 0 delivery as `1fa6d630d691465be9140d552f119b752e4f2191` and confirmed `origin/main` at the same hash.
 
+## 2026-05-14 Full App Round 1 Execution
+
+- Re-read Round 1 from the full-app blueprint and confirmed the target chain: renderer `AppApi` -> preload IPC invoke -> main IPC handler -> `NexaStore` facade -> SQLite/log/audit side effects -> renderer snapshot refresh.
+- Added IPC authority in `src/shared/ipc.ts` and replaced raw channel literals in `src/main/ipc.ts` and `src/preload/index.ts`.
+- Added first payload arity validation at the main-process IPC boundary.
+- Moved `AppApi` and `Window.nexachat` typing into `src/shared/api.ts`.
+- Changed renderer API fallback so browser mock is explicit test/browser mode only.
+- Updated Playwright web server environment and Electron smoke preload assertions.
+- Added `tests/ipc-contract.test.ts`, `tests/renderer-api-boundary.test.ts`, and `docs/architecture/store-facade-boundaries.md`.
+- Ran `npm.cmd run typecheck`: passed.
+- Ran `npm.cmd run test`: passed, 3 files / 10 tests.
+- Ran `npm.cmd run build`: passed.
+- First `npm.cmd run test:ui-smoke` timed out because the browser mock env was not reliably applied when a stale dev server was reused.
+- Fixed Playwright web server to use `cross-env VITE_NEXACHAT_BROWSER_MOCK=1` and `reuseExistingServer: false`.
+- Re-ran `npm.cmd run test:ui-smoke -- --grep "browser renderer exposes"`: passed.
+- Re-ran `npm.cmd run test:ui-smoke`: passed, 10 tests.
+- Ran `npm.cmd run test:electron-smoke`: passed.
+- Ran `npm.cmd run verify`: passed.
+- Checked `C:\Users\至亲\Desktop\NexaChat.lnk`: still valid for the current local Electron launch entry.
+
 ## 2026-05-13
 
 - Created active goal for full NexaChat app construction.

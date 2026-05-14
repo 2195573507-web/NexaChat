@@ -44,6 +44,44 @@ Git:
 - Round 0 delivery commit hash: `1fa6d630d691465be9140d552f119b752e4f2191`.
 - Push result: `origin/main` confirmed at `1fa6d630d691465be9140d552f119b752e4f2191`.
 
+## 2026-05-14 Full App Round 1 Architecture Boundary
+
+Round 1 of `docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md` is completed.
+
+Parallel execution lanes:
+
+- Main lane: IPC authority, preload/main replacement, renderer API boundary, Electron preload smoke.
+- Review lane: store facade extraction boundary and Round 1 testing recommendations.
+
+Key changes:
+
+- Added `src/shared/ipc.ts` as the IPC channel authority and first payload arity guard.
+- Added `src/shared/api.ts` for `AppApi` and `Window.nexachat` typing, reducing responsibility in `src/shared/types.ts`.
+- Replaced main/preload raw IPC string usage with `IPC_CHANNELS`.
+- Added `tests/ipc-contract.test.ts` and `tests/renderer-api-boundary.test.ts`.
+- Made browser fallback mock explicit via test mode or `VITE_NEXACHAT_BROWSER_MOCK=1`.
+- Updated Playwright web server command to set the browser mock flag with `cross-env` and avoid stale server reuse.
+- Strengthened `scripts/electron-smoke.mjs` to assert the real preload API can return a snapshot.
+- Added `docs/architecture/store-facade-boundaries.md`.
+
+Verification:
+
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test`: passed, 3 files / 10 tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run test:ui-smoke`: passed, 10 Playwright tests.
+- `npm.cmd run test:electron-smoke`: passed.
+- `npm.cmd run verify`: passed.
+
+Desktop shortcut status:
+
+- `C:\Users\至亲\Desktop\NexaChat.lnk` remains valid for the local Electron launch model and was not modified.
+
+Git:
+
+- Round 1 commit hash: pending post-commit backfill.
+- Push result: pending post-commit backfill.
+
 ## 2026-05-14 Full App Multi-Round Iteration Roadmap
 
 This docs-only round created a new authoritative full-app roadmap for future NexaChat work:

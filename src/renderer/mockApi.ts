@@ -1,6 +1,5 @@
 import type {
   AgentDefinition,
-  AppApi,
   AppSnapshot,
   AuditLog,
   ChatResponse,
@@ -26,6 +25,7 @@ import type {
   UsageRecord,
   Workspace,
 } from '../shared/types';
+import type { AppApi } from '../shared/api';
 
 interface MockState {
   workspace: Workspace;
