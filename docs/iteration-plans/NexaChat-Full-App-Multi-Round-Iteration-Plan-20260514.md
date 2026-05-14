@@ -319,7 +319,7 @@ These references guide product and engineering decisions. They are not permissio
   - `npm.cmd run verify`: passed.
 - Desktop shortcut result: `C:\Users\至亲\Desktop\NexaChat.lnk` still points to the current local Electron launch entry and was not modified.
 - Acceptance result: Passed. IPC registry is used, preload/main boundary is typed, production renderer no longer silently falls back to mock, and existing flows pass smoke tests.
-- Commit hash: pending post-commit backfill.
+- Commit hash: `284fd50d7b47fe15839243bf29b409b479aae23b`.
 - Remaining issues: service/repository extraction, migration runner, endpoint registry, permission registry, and deeper payload validation remain queued for later rounds.
 
 ## 8. Round 2: Navigation And Module Information Architecture

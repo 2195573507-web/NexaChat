@@ -2,7 +2,7 @@
 
 Date: 2026-05-14
 
-Status: Completed pending commit hash backfill.
+Status: Completed.
 
 ## Root-Cause And Chain Review
 
@@ -62,6 +62,6 @@ Passed. Domain boundaries are documented, IPC registry is used, renderer/preload
 
 ## Commit
 
-- Commit hash: pending post-commit backfill.
+- Commit hash: `284fd50d7b47fe15839243bf29b409b479aae23b`.
+- Push result: `origin/main` confirmed at `284fd50d7b47fe15839243bf29b409b479aae23b` using one-time Git proxy `http://127.0.0.1:7890` after direct GitHub HTTPS push timed out.
 - Remaining issues: deeper service/repository extraction, migration runner, and endpoint/permission registries are queued to later rounds.
-
