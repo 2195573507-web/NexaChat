@@ -24,6 +24,14 @@
 - `routeAliases` can remain for compatibility only if metadata identifies owner, reason, and deletion milestone.
 - A module page registry makes `navModules` alignment testable and prevents a future module from rendering an empty shell.
 
+## Full App Round 3 Findings
+
+- `styles.css` already had root variables, but active rows, chat bubbles, planned panels, snippets, secret notices, diagnosis blocks, chips, right rail, and pill indicators still used local color/radius literals.
+- The durable fix is a typed token authority plus a CSS scanner test; otherwise later UI/i18n/theme rounds can reintroduce page-local visual values.
+- The renderer navigation test timed out because broad `getAllByRole` regex queries across the whole shell were too slow; structural assertions against `aria-controls` and child-list content preserve coverage with less test fragility.
+- Round 3 does not migrate UI copy. A read-only i18n audit confirmed only `labelKey` placeholders exist and no runtime dictionary/`t()` authority exists yet, so Round 4 must create the real i18n authority before migrating text.
+- In-app browser automation timed out twice on the local dev page, but Playwright UI smoke produced equivalent responsive screenshot evidence under ignored `test-results/round-03-design-system/`.
+
 ## Initial Repository State
 
 - Repository root: `D:\NexaChat`.

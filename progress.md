@@ -159,3 +159,31 @@
 - Ran `npm.cmd run test:electron-smoke`: first parallel run read old `dist`; serial rerun after build passed.
 - Ran responsive visual audit at 1280, 1440, and 1920: passed; screenshots stored under ignored `test-results/ui-shell-redesign/`.
 - Checked `C:\Users\至亲\Desktop\NexaChat.lnk`: target, arguments, working directory, and icon point to current `D:\NexaChat` launch entry.
+
+## 2026-05-14 Full App Round 3 Execution
+
+- Reconfirmed real project root with `git rev-parse --show-toplevel`: `D:/NexaChat`.
+- Re-read Round 3 from `docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md`.
+- Used parallel work lanes:
+  - Lane A: theme token authority and CSS literal cleanup.
+  - Lane B: token scanner tests and renderer test stabilization.
+  - Lane C: responsive UI smoke screenshots, Electron smoke, shortcut readback, docs/closure.
+  - Lane D: read-only i18n audit for Round 4 input.
+- Added `src/shared/theme.ts`.
+- Refactored `src/renderer/styles.css` so active chat rows, user message bubbles, planned panels, code snippets, one-time secret notices, diagnosis blocks, endpoint chips, right rail, and pill indicators use semantic variables instead of local colors/radii.
+- Added `tests/theme-token-authority.test.ts` to fail literal CSS color/radius regressions outside token declarations.
+- Updated `tests/app.test.tsx` to avoid a broad role-query timeout while preserving the first-level/child navigation coverage.
+- Updated `tests/ui-smoke.spec.ts` to include 1040/1280/1440/1920 workspace screenshots under ignored `test-results/round-03-design-system/`.
+- Added `docs/architecture/design-token-authority.md` and `docs/implementation/round-03-design-system-closure.md`.
+- Updated the full-app blueprint Round 3 status, `PROJECT_PROGRESS.md`, and `docs/implementation/full-app-round-execution-matrix.md`.
+- Ran `npm.cmd run typecheck`: passed.
+- Ran `npm.cmd run test -- tests/theme-token-authority.test.ts`: passed, 1 file / 3 tests.
+- Ran `npm.cmd run test`: passed, 4 files / 15 tests.
+- Ran `npm.cmd run build`: passed.
+- Ran `npm.cmd run test:ui-smoke`: passed, 10 Playwright tests.
+- Ran `npm.cmd run test:electron-smoke`: passed.
+- Ran `npm.cmd run verify`: passed.
+- Ran `git diff --check`: passed with CRLF conversion warnings only.
+- Checked `C:\Users\至亲\Desktop\NexaChat.lnk`: target, arguments, working directory, and icon still point to the current local Electron launch entry.
+- Attempted in-app browser verification twice against `http://127.0.0.1:5173/workspace/overview`; the browser connection timed out, so the accepted visual evidence is the passing Playwright UI smoke plus generated screenshots.
+- Round 3 delivery commit and push are pending.

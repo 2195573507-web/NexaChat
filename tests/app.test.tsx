@@ -41,12 +41,19 @@ describe('NexaChat renderer', () => {
     expect(document.querySelectorAll('.module-nav-item')).toHaveLength(navModules.length);
 
     for (const module of navModules) {
-      expect(screen.getAllByRole('button', { name: new RegExp(module.label) }).length).toBeGreaterThan(0);
-      const expandButton = screen.getByRole('button', { name: new RegExp(`展开${module.label}|收起${module.label}`) });
+      const expandButton = document.querySelector(`button[aria-controls="sidebar-children-${module.id}"]`) as HTMLButtonElement | null;
+      if (!expandButton) {
+        throw new Error(`Missing expand button for ${module.id}`);
+      }
+      const moduleButton = expandButton.parentElement?.querySelector('.module-nav-item');
+      expect(moduleButton?.textContent).toContain(module.label);
+
       if (expandButton.getAttribute('aria-expanded') === 'false') {
         fireEvent.click(expandButton);
       }
-      expect(screen.getAllByRole('button', { name: new RegExp(`${module.tabs[0].label}`) }).length).toBeGreaterThan(0);
+      const childList = document.getElementById(`sidebar-children-${module.id}`);
+      expect(childList).toBeTruthy();
+      expect(childList?.textContent).toContain(module.tabs[0].label);
     }
   });
 

@@ -408,6 +408,35 @@ These references guide product and engineering decisions. They are not permissio
 25. **Deliverables**: Design system source, component inventory update, screenshots, smoke results, docs.
 26. **Next Round Input**: Token and component foundation for i18n and theme switching.
 
+### Round 3 Execution Status
+
+- Status: Completed.
+- Completion date: 2026-05-14.
+- Main changed files:
+  - `src/shared/theme.ts`
+  - `src/renderer/styles.css`
+  - `tests/theme-token-authority.test.ts`
+  - `tests/app.test.tsx`
+  - `tests/ui-smoke.spec.ts`
+  - `docs/architecture/design-token-authority.md`
+  - `docs/implementation/round-03-design-system-closure.md`
+  - `docs/implementation/full-app-round-execution-matrix.md`
+- Added/modified functionality: added typed theme token authority, expanded semantic CSS variables for light and dark rendering, removed local literal colors/raw radii outside token declarations, added token-regression tests, and extended responsive screenshot coverage to 1040/1280/1440/1920 widths.
+- Deleted old links: removed local CSS literals for active chat rows, user message bubbles, planned panels, code snippets, one-time secret notices, diagnosis blocks, endpoint chips, right rail, and pill indicators. No business behavior or data chain was changed.
+- Test commands and results:
+  - `npm.cmd run typecheck`: passed.
+  - `npm.cmd run test -- tests/theme-token-authority.test.ts`: passed, 1 file / 3 tests.
+  - `npm.cmd run test`: passed, 4 files / 15 tests.
+  - `npm.cmd run build`: passed.
+  - `npm.cmd run test:ui-smoke`: passed, 10 Playwright tests and screenshots under ignored `test-results/round-03-design-system/`.
+  - `npm.cmd run test:electron-smoke`: passed.
+  - `npm.cmd run verify`: passed.
+  - `git diff --check`: passed with CRLF conversion warnings only.
+- Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` still targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and uses `D:\NexaChat\assets\app-icon.ico,0`.
+- Acceptance result: Passed. Design token authority exists, local color/radius hardcoding is removed from active CSS outside token declarations, responsive smoke covers the required widths, and existing UI/Electron flows still pass.
+- Commit hash: Pending delivery commit.
+- Remaining issues: Round 4 still owns full i18n migration. Round 5 still owns runtime light/dark/system theme resolver and system preference listener.
+
 ## 10. Round 4: Chinese / English Switching And i18n Authority
 
 1. **Round Name**: Chinese / English Switching And i18n Authority.

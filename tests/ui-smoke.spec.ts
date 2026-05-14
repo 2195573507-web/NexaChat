@@ -184,8 +184,8 @@ test('renderer keeps the 1040x680 desktop floor usable without horizontal overfl
   await expectNoHorizontalOverflow(page, '.chat-layout');
 });
 
-test('shell stays readable at 1280 1440 and 1920 widths', async ({ page }) => {
-  for (const width of [1280, 1440, 1920]) {
+test('shell stays readable at 1040 1280 1440 and 1920 widths', async ({ page }) => {
+  for (const width of [1040, 1280, 1440, 1920]) {
     await page.setViewportSize({ width, height: 820 });
     await page.goto('/workspace/overview');
     await expect(page.getByRole('heading', { name: '当前概览' })).toBeVisible();
@@ -196,6 +196,7 @@ test('shell stays readable at 1280 1440 and 1920 widths', async ({ page }) => {
     await expect(page.locator('.topbar-context')).toContainText('默认模型');
     await expect(page.locator('.topbar-actions')).toContainText('打开聊天');
     await expectNoVisibleRouteLeak(page);
+    await page.screenshot({ path: `test-results/round-03-design-system/workspace-${width}.png`, fullPage: true });
   }
 });
 

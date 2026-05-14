@@ -156,6 +156,38 @@ Iteration 02 is now closed in `docs/implementation/iteration-02-closure.md`:
 
 - `docs/iteration-plans/02-secondary-navigation-and-module-decomposition-iteration-plan.md`
 
+## 2026-05-14 Full App Round 3 Design System
+
+Round 3 of the authoritative full-app blueprint is complete as an implementation and verification round. It established a typed theme/design-token authority and removed the remaining local color/radius literals from active renderer CSS outside token declarations.
+
+Parallel execution lanes:
+
+- Lane A: added `src/shared/theme.ts`, expanded semantic tokens, and refactored `src/renderer/styles.css`.
+- Lane B: added token authority tests and stabilized the existing renderer test that was timing out on broad role queries.
+- Lane C: extended UI smoke responsive screenshot checks, rechecked Electron smoke, verified the desktop shortcut, and updated the blueprint/progress surfaces.
+
+Key changes:
+
+- `src/shared/theme.ts` now owns supported theme modes and token names.
+- `src/renderer/styles.css` now uses semantic variables for primary/on-primary, focus ring, primary soft state, planned state, code snippets, one-time secret notices, and pill radius.
+- `tests/theme-token-authority.test.ts` fails if future CSS adds literal colors or raw `6px` / `8px` / `999px` border radii outside token definitions.
+- `tests/ui-smoke.spec.ts` now captures ignored responsive screenshots at 1040, 1280, 1440, and 1920 widths.
+- `docs/architecture/design-token-authority.md` and `docs/implementation/round-03-design-system-closure.md` document the token chain and verification.
+
+Verification on 2026-05-14:
+
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test -- tests/theme-token-authority.test.ts`: passed, 1 file / 3 tests.
+- `npm.cmd run test`: passed, 4 files / 15 tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run test:ui-smoke`: passed, 10 Playwright tests.
+- `npm.cmd run test:electron-smoke`: passed.
+- `npm.cmd run verify`: passed.
+- `git diff --check`: passed with CRLF conversion warnings only.
+- Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`.
+
+Round 3 commit hash is pending delivery commit. Round 4 remains responsible for i18n dictionary migration and Round 5 for runtime system-theme resolution.
+
 ## 2026-05-14 UI Shell Redesign
 
 This round rebuilt the visible desktop shell, sidebar hierarchy, topbar, workbench home, and visual system so NexaChat reads as a formal compact desktop tool instead of a crowded prototype/debug panel.
