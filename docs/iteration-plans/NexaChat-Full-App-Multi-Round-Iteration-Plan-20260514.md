@@ -235,6 +235,30 @@ These references guide product and engineering decisions. They are not permissio
 25. **Deliverables**: Health-check doc, authority-source map, scan matrix, deletion queue, verification matrix, updated `PROJECT_PROGRESS.md`.
 26. **Next Round Input**: Approved authority-source map and prioritized architecture split list.
 
+### Round 0 Execution Status
+
+- Status: Completed.
+- Completion date: 2026-05-14.
+- Main changed files:
+  - `docs/implementation/full-app-round-execution-matrix.md`
+  - `docs/implementation/round-00-health-check-authority-inventory.md`
+  - `PROJECT_PROGRESS.md`
+  - `task_plan.md`
+  - `progress.md`
+  - `findings.md`
+- Added/modified functionality: no runtime behavior changed. Added the Round 0-15 execution matrix, authority-source map, hardcoding/theme/IPC/mock/old-link inventory, chain map, deletion queue, desktop shortcut record, and verification matrix.
+- Deleted old links: None. Round 0 is inventory-only; old-link candidates were queued for later rounds.
+- Test commands and results:
+  - `npm.cmd run typecheck`: passed.
+  - `npm.cmd run test`: passed, 1 file / 3 tests.
+  - `npm.cmd run build`: passed.
+  - `npm.cmd run test:ui-smoke`: passed, 10 Playwright tests.
+  - `npm.cmd run test:electron-smoke`: passed.
+  - `git diff --check`: passed with LF/CRLF warnings only.
+- Acceptance result: Passed. Inventory exists, authority map exists, hardcoding and duplicate-link findings are categorized, desktop shortcut state is recorded, and no business code changed.
+- Commit hash: `1fa6d630d691465be9140d552f119b752e4f2191` for Round 0 delivery; `9b59e3c7f5fd43c39f04c17eaa74b1d997d1fe92` records remote confirmation.
+- Remaining issues: None for Round 0. Implementation gaps are queued to Round 1 through Round 15.
+
 ## 7. Round 1: Architecture Boundary Reorganization
 
 1. **Round Name**: Architecture Boundary Reorganization.
