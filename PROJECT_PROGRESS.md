@@ -186,7 +186,7 @@ Verification on 2026-05-14:
 - `git diff --check`: passed with CRLF conversion warnings only.
 - Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`.
 
-Round 3 commit hash is pending delivery commit. Round 4 remains responsible for i18n dictionary migration and Round 5 for runtime system-theme resolution.
+Round 3 delivery commit: `7a89160d0c83733b80176cda7643cc401e2dcdd2`, pushed and confirmed on `origin/main`. Round 4 remains responsible for i18n dictionary migration and Round 5 for runtime system-theme resolution.
 
 ## 2026-05-14 UI Shell Redesign
 

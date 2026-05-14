@@ -434,7 +434,7 @@ These references guide product and engineering decisions. They are not permissio
   - `git diff --check`: passed with CRLF conversion warnings only.
 - Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` still targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and uses `D:\NexaChat\assets\app-icon.ico,0`.
 - Acceptance result: Passed. Design token authority exists, local color/radius hardcoding is removed from active CSS outside token declarations, responsive smoke covers the required widths, and existing UI/Electron flows still pass.
-- Commit hash: Pending delivery commit.
+- Commit hash: `7a89160d0c83733b80176cda7643cc401e2dcdd2`.
 - Remaining issues: Round 4 still owns full i18n migration. Round 5 still owns runtime light/dark/system theme resolver and system preference listener.
 
 ## 10. Round 4: Chinese / English Switching And i18n Authority
