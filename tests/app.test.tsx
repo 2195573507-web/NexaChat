@@ -2,8 +2,9 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { beforeEach, describe, expect, it } from 'vitest';
 import App from '../src/renderer/App';
 import { createMockApi } from '../src/renderer/mockApi';
+import { modulePageRegistry } from '../src/renderer/modules/modulePageRegistry';
 import { IPC_CHANNELS, IPC_CHANNEL_LIST, assertIpcPayload, isIpcChannel } from '../src/shared/ipc';
-import { navModules } from '../src/shared/navigation';
+import { navModules, resolveNavigation, routeAliasRegistry } from '../src/shared/navigation';
 import type { NavModule, NavTab } from '../src/shared/types';
 
 beforeEach(() => {
@@ -101,5 +102,22 @@ describe('IPC authority', () => {
     expect(() => assertIpcPayload(IPC_CHANNELS.chatSendMessage, [])).toThrow(/Invalid IPC payload/);
     expect(() => assertIpcPayload(IPC_CHANNELS.knowledgeCreateFile, ['name.md', 'text/markdown', 1])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.knowledgeCreateFile, ['name.md'])).toThrow(/Invalid IPC payload/);
+  });
+});
+
+describe('navigation authority', () => {
+  it('keeps route aliases owned, milestone-bound, and resolvable', () => {
+    for (const alias of routeAliasRegistry) {
+      expect(alias.owner).toBeTruthy();
+      expect(alias.deleteAfterMilestone).toBe('round-15-quality-gates');
+      expect(alias.reason.length).toBeGreaterThan(8);
+      expect(resolveNavigation(alias.from).route).toBe(alias.target);
+    }
+  });
+
+  it('keeps every module tab route unique and every module has a page renderer', () => {
+    const routes = navModules.flatMap((module) => module.tabs.map((tab) => tab.route));
+    expect(new Set(routes).size).toBe(routes.length);
+    expect(Object.keys(modulePageRegistry).sort()).toEqual(navModules.map((module) => module.id).sort());
   });
 });

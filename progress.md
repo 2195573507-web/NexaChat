@@ -39,6 +39,21 @@
 - Checked `C:\Users\至亲\Desktop\NexaChat.lnk`: still valid for the current local Electron launch entry.
 - Committed Round 1 as `284fd50d7b47fe15839243bf29b409b479aae23b`; direct GitHub HTTPS push timed out twice, then one-time proxy push through `http://127.0.0.1:7890` succeeded and `origin/main` matched the same hash.
 
+## 2026-05-14 Full App Round 2 Execution
+
+- Re-read Round 2 from the full-app blueprint and confirmed the target chain: sidebar/content tab click -> route -> active tab -> page registry -> tab panel -> tests.
+- Added `routeAliasRegistry` with owner, deletion milestone, and reason metadata while preserving alias behavior.
+- Restored visible content-area secondary navigation in `ModulePageFrame`.
+- Added `src/renderer/modules/modulePageRegistry.tsx` and wired `App.tsx` to it.
+- Updated tests to require visible `.module-subnav-panel` and `.module-tabs`.
+- Ran `npm.cmd run typecheck`: passed.
+- Ran `npm.cmd run test`: passed, 3 files / 12 tests.
+- Ran `npm.cmd run build`: passed.
+- Ran `npm.cmd run test:ui-smoke`: passed, 10 tests.
+- Ran `npm.cmd run test:electron-smoke`: passed.
+- Ran `npm.cmd run verify`: passed.
+- Checked `C:\Users\至亲\Desktop\NexaChat.lnk`: still valid for the current local Electron launch entry.
+
 ## 2026-05-13
 
 - Created active goal for full NexaChat app construction.

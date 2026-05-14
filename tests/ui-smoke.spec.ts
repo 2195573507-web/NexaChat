@@ -28,8 +28,10 @@ async function openFeature(page: Page, module: NavModule, tab: NavTab) {
 }
 
 async function expectActiveRouteAndPanel(page: Page, module: NavModule, tab: NavTab) {
-  await expect(page.locator('.module-subnav-panel')).toHaveCount(0);
-  await expect(page.locator('.module-tabs')).toHaveCount(0);
+  await expect(page.locator('.module-subnav-panel')).toBeVisible();
+  await expect(page.locator('.module-subnav-panel')).toContainText(tab.label);
+  await expect(page.locator('.module-tabs')).toBeVisible();
+  await expect(page.locator('.module-tabs').getByRole('tab', { name: new RegExp(tab.label) })).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.module-child-link.is-active')).toContainText(tab.label);
   await expect(page).toHaveURL(new RegExp(`${getTabRoute(module.id, tab.id)}$`));
   const panel = page.locator(`main [role="tabpanel"][data-module="${module.id}"][data-tab="${tab.id}"]`);
@@ -172,7 +174,8 @@ test('renderer keeps the 1040x680 desktop floor usable without horizontal overfl
     await expect(page.locator('.right-rail')).toBeHidden();
     await expectNoHorizontalOverflow(page, '.app-shell');
     await expectNoHorizontalOverflow(page, '.content-grid');
-    await expect(page.locator('.module-tabs')).toHaveCount(0);
+    await expect(page.locator('.module-tabs')).toBeVisible();
+    await expectNoHorizontalOverflow(page, '.module-subnav-panel');
   }
 
   await page.goto('/chat/playground');

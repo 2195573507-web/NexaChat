@@ -351,6 +351,34 @@ These references guide product and engineering decisions. They are not permissio
 25. **Deliverables**: Navigation registry, schema tests, updated UI smoke, route migration notes, docs.
 26. **Next Round Input**: Stable IA for global UI and design system.
 
+### Round 2 Execution Status
+
+- Status: Completed.
+- Completion date: 2026-05-14.
+- Main changed files:
+  - `src/shared/navigation.ts`
+  - `src/renderer/components/ModulePageFrame.tsx`
+  - `src/renderer/AppShell.tsx`
+  - `src/renderer/App.tsx`
+  - `src/renderer/modules/modulePageRegistry.tsx`
+  - `src/renderer/styles.css`
+  - `tests/app.test.tsx`
+  - `tests/ui-smoke.spec.ts`
+  - `docs/implementation/round-02-navigation-ia-closure.md`
+- Added/modified functionality: added route alias metadata, restored visible content-area secondary navigation, added module page registry, and updated tests to verify navigation authority and route/page synchronization.
+- Deleted old links: removed test expectations that second-level navigation must be absent. Legacy route aliases were not deleted; they now have owner and `round-15-quality-gates` deletion milestone.
+- Test commands and results:
+  - `npm.cmd run typecheck`: passed.
+  - `npm.cmd run test`: passed, 3 files / 12 tests.
+  - `npm.cmd run build`: passed.
+  - `npm.cmd run test:ui-smoke`: passed, 10 Playwright tests.
+  - `npm.cmd run test:electron-smoke`: passed.
+  - `npm.cmd run verify`: passed.
+- Desktop shortcut result: `C:\Users\至亲\Desktop\NexaChat.lnk` still points to the current local Electron launch entry and was not modified.
+- Acceptance result: Passed. One navigation source exists; alias recovery is metadata-backed; every module has a page renderer; second-level navigation is visible and route-synced.
+- Commit hash: pending post-commit backfill.
+- Remaining issues: i18n labels, theme tokens, permission-to-route registry, and further page decomposition are queued to later rounds.
+
 ## 9. Round 3: Global UI And Design System Refactor
 
 1. **Round Name**: Global UI And Design System Refactor.

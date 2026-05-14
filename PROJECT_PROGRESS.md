@@ -82,6 +82,41 @@ Git:
 - Round 1 commit hash: `284fd50d7b47fe15839243bf29b409b479aae23b`.
 - Push result: `origin/main` confirmed at `284fd50d7b47fe15839243bf29b409b479aae23b`. Direct GitHub HTTPS push timed out twice; one-time Git proxy `http://127.0.0.1:7890` succeeded.
 
+## 2026-05-14 Full App Round 2 Navigation IA
+
+Round 2 of `docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md` is completed.
+
+Parallel execution lanes:
+
+- Main lane: route alias metadata, content-area secondary navigation, module page registry, tests.
+- Review lane: navigation IA risk review and UI smoke direction.
+
+Key changes:
+
+- `src/shared/navigation.ts` now exports `routeAliasRegistry` with `owner`, `deleteAfterMilestone`, and `reason`.
+- Content-area second-level navigation is visible through `ModulePageFrame` and synchronized with sidebar active state.
+- Added `src/renderer/modules/modulePageRegistry.tsx`.
+- Updated unit tests for alias metadata, alias resolution, unique tab routes, and page registry alignment.
+- Updated UI smoke to assert `.module-subnav-panel` and `.module-tabs` are visible and route-synced.
+
+Verification:
+
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test`: passed, 3 files / 12 tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run test:ui-smoke`: passed, 10 Playwright tests.
+- `npm.cmd run test:electron-smoke`: passed.
+- `npm.cmd run verify`: passed.
+
+Desktop shortcut status:
+
+- `C:\Users\至亲\Desktop\NexaChat.lnk` remains valid for the local Electron launch model and was not modified.
+
+Git:
+
+- Round 2 commit hash: pending post-commit backfill.
+- Push result: pending post-commit backfill.
+
 ## 2026-05-14 Full App Multi-Round Iteration Roadmap
 
 This docs-only round created a new authoritative full-app roadmap for future NexaChat work:

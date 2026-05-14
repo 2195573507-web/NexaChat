@@ -430,6 +430,74 @@ pre {
   margin-top: 4px;
 }
 
+.module-subnav-panel {
+  display: grid;
+  grid-template-columns: minmax(210px, 0.65fr) minmax(0, 1.8fr);
+  gap: 12px;
+  padding: 8px 20px 12px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.module-subnav-summary {
+  min-width: 0;
+}
+
+.module-subnav-summary span {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-subtle);
+}
+
+.module-subnav-summary strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.module-subnav-summary p {
+  margin-top: 3px;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.module-tabs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: 8px;
+  min-width: 0;
+  align-items: stretch;
+}
+
+.module-tabs button {
+  min-width: 0;
+  min-height: 42px;
+  justify-content: space-between;
+  gap: 8px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+}
+
+.module-tabs button span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.module-tabs button.is-active {
+  border-color: color-mix(in srgb, var(--color-primary) 34%, var(--color-border));
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  color: var(--color-primary);
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -1157,6 +1225,14 @@ th {
 
   .topbar-actions button {
     padding: 0 9px;
+  }
+
+  .module-subnav-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .module-tabs {
+    grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
   }
 
   .overview-grid,

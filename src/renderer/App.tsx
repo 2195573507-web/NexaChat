@@ -5,14 +5,7 @@ import type { AppApi } from '../shared/api';
 import type { AppSnapshot, ModuleId, NavTab } from '../shared/types';
 import { AppShell } from './AppShell';
 import { getAppApi } from './api';
-import { ChatPage } from './modules/ChatPage';
-import { DashboardPage } from './modules/DashboardPage';
-import { DataPage } from './modules/DataPage';
-import { GatewayPage } from './modules/GatewayPage';
-import { KnowledgePage } from './modules/KnowledgePage';
-import { ModelsPage } from './modules/ModelsPage';
-import { SettingsPage } from './modules/SettingsPage';
-import { ToolsPage } from './modules/ToolsPage';
+import { modulePageRegistry } from './modules/modulePageRegistry';
 import type { OpenModuleTarget } from './modules/shared';
 import { copyText, getDefaultModel } from './modules/shared';
 import './styles.css';
@@ -96,24 +89,16 @@ function App() {
     return <div className="boot-screen">NexaChat 正在加载本地数据...</div>;
   }
 
-  const page = {
-    workspace: (
-      <DashboardPage
-        activeTab={activeTab}
-        snapshot={snapshot}
-        onOpenModule={openModule}
-        onAction={(label, action) => runAction(label, action)}
-        api={api}
-      />
-    ),
-    chat: <ChatPage activeTab={activeTab} snapshot={snapshot} api={api} onAction={(label, action) => runAction(label, action)} onOpenModule={openModule} />,
-    models: <ModelsPage activeTab={activeTab} snapshot={snapshot} api={api} onAction={(label, action) => runAction(label, action)} onOpenModule={openModule} />,
-    knowledge: <KnowledgePage activeTab={activeTab} snapshot={snapshot} api={api} onAction={(label, action) => runAction(label, action)} onOpenModule={openModule} />,
-    tools: <ToolsPage activeTab={activeTab} snapshot={snapshot} api={api} onAction={(label, action) => runAction(label, action)} onOpenModule={openModule} />,
-    gateway: <GatewayPage activeTab={activeTab} snapshot={snapshot} api={api} onAction={(label, action) => runAction(label, action)} onOpenModule={openModule} />,
-    data: <DataPage activeTab={activeTab} snapshot={snapshot} api={api} onAction={(label, action) => runAction(label, action)} onOpenModule={openModule} />,
-    settings: <SettingsPage activeTab={activeTab} snapshot={snapshot} api={api} onAction={(label, action) => runAction(label, action)} onOpenModule={openModule} />,
-  }[activeModuleId];
+  const ActivePage = modulePageRegistry[activeModuleId];
+  const page = (
+    <ActivePage
+      activeTab={activeTab}
+      snapshot={snapshot}
+      api={api}
+      onAction={(label, action) => runAction(label, action)}
+      onOpenModule={openModule}
+    />
+  );
 
   return (
     <AppShell

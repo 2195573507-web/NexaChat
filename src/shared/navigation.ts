@@ -364,47 +364,71 @@ export const navModules: NavModule[] = [
 
 export const moduleRegistry = navModules;
 
-const routeAliases: Record<string, string> = {
-  '/': '/workspace/overview',
-  '/dashboard': '/workspace/overview',
-  '/dashboard/overview': '/workspace/overview',
-  '/dashboard/workspaces': '/workspace/overview',
-  '/dashboard/activity': '/workspace/activity',
-  '/dashboard/quick-actions': '/workspace/overview',
-  '/chat/assistants': '/tools/agents',
-  '/chat/prompt-lab': '/chat/playground',
-  '/chat/comparison': '/chat/context',
-  '/chat/artifacts': '/chat/context',
-  '/chat/local-history': '/chat/conversations',
-  '/models/models': '/models/catalog',
-  '/models/capabilities': '/models/providers',
-  '/models/templates': '/models/router',
-  '/models/health': '/models/router',
-  '/knowledge/bases': '/knowledge/files',
-  '/knowledge/context': '/knowledge/retrieval',
-  '/knowledge/memory': '/knowledge/retrieval',
-  '/knowledge/maintenance': '/knowledge/chunks',
-  '/tools/tools': '/tools/runs',
-  '/tools/workflow': '/tools/runs',
-  '/tools/debug': '/tools/runs',
-  '/gateway/status': '/gateway/overview',
-  '/gateway/virtual-models': '/gateway/docs',
-  '/gateway/routes': '/gateway/docs',
-  '/gateway/integrations': '/data/import',
-  '/data/import-export': '/data/import',
-  '/data/backup': '/data/snapshots',
-  '/settings/request-logs': '/gateway/logs',
-  '/settings/usage': '/gateway/logs',
-  '/settings/evals': '/models/router',
-  '/settings/diagnostics': '/data/diagnostics',
-  '/settings/feedback': '/settings/audit',
-  '/settings/users': '/settings/security',
-  '/settings/permissions': '/settings/security',
-  '/settings/keys': '/settings/security',
-  '/settings/ui': '/settings/preferences',
-  '/settings/system': '/settings/about',
-  '/settings/desktop': '/settings/about',
+export type RouteAliasOwner = ModuleId | 'root';
+
+export type RouteAliasEntry = {
+  from: string;
+  target: string;
+  owner: RouteAliasOwner;
+  deleteAfterMilestone: string;
+  reason: string;
 };
+
+const aliasDeleteAfterMilestone = 'round-15-quality-gates';
+
+function alias(from: string, target: string, owner: RouteAliasOwner, reason: string): RouteAliasEntry {
+  return {
+    from,
+    target,
+    owner,
+    deleteAfterMilestone: aliasDeleteAfterMilestone,
+    reason,
+  };
+}
+
+export const routeAliasRegistry: RouteAliasEntry[] = [
+  alias('/', '/workspace/overview', 'root', 'Root path opens the default workspace overview.'),
+  alias('/dashboard', '/workspace/overview', 'workspace', 'Dashboard module was renamed to workspace.'),
+  alias('/dashboard/overview', '/workspace/overview', 'workspace', 'Former dashboard overview route.'),
+  alias('/dashboard/workspaces', '/workspace/overview', 'workspace', 'Former workspace list route now maps to overview.'),
+  alias('/dashboard/activity', '/workspace/activity', 'workspace', 'Former dashboard activity route.'),
+  alias('/dashboard/quick-actions', '/workspace/overview', 'workspace', 'Quick actions are now part of workspace overview.'),
+  alias('/chat/assistants', '/tools/agents', 'tools', 'Assistants moved under tools and Agent.'),
+  alias('/chat/prompt-lab', '/chat/playground', 'chat', 'Prompt lab is folded into chat playground until Round 7.'),
+  alias('/chat/comparison', '/chat/context', 'chat', 'Comparison remains planned and is described in context.'),
+  alias('/chat/artifacts', '/chat/context', 'chat', 'Artifacts remain planned and are described in context.'),
+  alias('/chat/local-history', '/chat/conversations', 'chat', 'Local history moved to conversation management.'),
+  alias('/models/models', '/models/catalog', 'models', 'Model list route was renamed to catalog.'),
+  alias('/models/capabilities', '/models/providers', 'models', 'Provider capabilities are currently surfaced with provider management.'),
+  alias('/models/templates', '/models/router', 'models', 'Parameter templates remain environment-limited under router boundaries.'),
+  alias('/models/health', '/models/router', 'models', 'Model health is currently shown with router status.'),
+  alias('/knowledge/bases', '/knowledge/files', 'knowledge', 'Knowledge bases are not a separate executable surface yet.'),
+  alias('/knowledge/context', '/knowledge/retrieval', 'knowledge', 'Knowledge context maps to retrieval preview.'),
+  alias('/knowledge/memory', '/knowledge/retrieval', 'knowledge', 'Memory remains planned under retrieval/context.'),
+  alias('/knowledge/maintenance', '/knowledge/chunks', 'knowledge', 'Maintenance maps to chunk status.'),
+  alias('/tools/tools', '/tools/runs', 'tools', 'Tool execution remains environment-limited under execution preview.'),
+  alias('/tools/workflow', '/tools/runs', 'tools', 'Workflow is reserved under execution preview.'),
+  alias('/tools/debug', '/tools/runs', 'tools', 'Debugging maps to execution preview.'),
+  alias('/gateway/status', '/gateway/overview', 'gateway', 'Gateway status route was renamed to overview.'),
+  alias('/gateway/virtual-models', '/gateway/docs', 'gateway', 'Virtual models are not executable yet and are documented in gateway docs.'),
+  alias('/gateway/routes', '/gateway/docs', 'gateway', 'Gateway route examples live in docs until route rules are implemented.'),
+  alias('/gateway/integrations', '/data/import', 'data', 'External integration import belongs to data import preflight.'),
+  alias('/data/import-export', '/data/import', 'data', 'Import/export currently maps to import preflight.'),
+  alias('/data/backup', '/data/snapshots', 'data', 'Backup maps to snapshots until encrypted backup lands.'),
+  alias('/settings/request-logs', '/gateway/logs', 'gateway', 'Request logs moved to gateway logs.'),
+  alias('/settings/usage', '/gateway/logs', 'gateway', 'Usage is currently visible with request logs.'),
+  alias('/settings/evals', '/models/router', 'models', 'Evals are planned and model-related until Round 13.'),
+  alias('/settings/diagnostics', '/data/diagnostics', 'data', 'Diagnostics moved to data module.'),
+  alias('/settings/feedback', '/settings/audit', 'settings', 'Feedback remains planned and maps to audit context.'),
+  alias('/settings/users', '/settings/security', 'settings', 'Users/RBAC remain planned under security.'),
+  alias('/settings/permissions', '/settings/security', 'settings', 'Permissions remain planned under security.'),
+  alias('/settings/keys', '/settings/security', 'settings', 'Key security belongs to settings security.'),
+  alias('/settings/ui', '/settings/preferences', 'settings', 'UI settings route was renamed to preferences.'),
+  alias('/settings/system', '/settings/about', 'settings', 'System info moved to about environment.'),
+  alias('/settings/desktop', '/settings/about', 'settings', 'Desktop entry status moved to about environment.'),
+];
+
+export const routeAliases = Object.fromEntries(routeAliasRegistry.map((entry) => [entry.from, entry.target])) as Record<string, string>;
 
 function cleanPath(pathname: string) {
   const pathOnly = pathname.split(/[?#]/)[0] || '/';

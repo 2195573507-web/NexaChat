@@ -256,7 +256,7 @@ export function AppShell({
           </div>
         </header>
 
-        <ModulePageFrame activeModule={activeModule} activeTab={activeTab}>
+        <ModulePageFrame activeModule={activeModule} activeTab={activeTab} onTabChange={(tabId) => onTabChange(tabId, activeModuleId)}>
           <div className="content-grid">
             <main className="content-area">{children}</main>
             {rightRail ? <aside className="right-rail">{rightRail}</aside> : null}

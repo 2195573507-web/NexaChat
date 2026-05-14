@@ -18,6 +18,12 @@
 - Playwright UI smoke can read a stale dev server if reuse is enabled; Round 1 pins `reuseExistingServer: false` to ensure the explicit mock env applies.
 - `NexaStore` remains the behavior facade after Round 1; extraction order is documented in `docs/architecture/store-facade-boundaries.md`.
 
+## Full App Round 2 Findings
+
+- Content-area secondary navigation had been removed while docs still referenced it; Round 2 restored it and changed smoke tests to assert it exists.
+- `routeAliases` can remain for compatibility only if metadata identifies owner, reason, and deletion milestone.
+- A module page registry makes `navModules` alignment testable and prevents a future module from rendering an empty shell.
+
 ## Initial Repository State
 
 - Repository root: `D:\NexaChat`.
