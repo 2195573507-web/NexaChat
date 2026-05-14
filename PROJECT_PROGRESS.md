@@ -114,8 +114,8 @@ Desktop shortcut status:
 
 Git:
 
-- Round 2 commit hash: pending post-commit backfill.
-- Push result: pending post-commit backfill.
+- Round 2 commit hash: `075a87c0a4a2acfdb0cfb62f51951dfee38611b8`.
+- Push result: `origin/main` confirmed at `075a87c0a4a2acfdb0cfb62f51951dfee38611b8`.
 
 ## 2026-05-14 Full App Multi-Round Iteration Roadmap
 

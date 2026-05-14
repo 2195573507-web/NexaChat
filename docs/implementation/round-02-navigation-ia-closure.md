@@ -2,7 +2,7 @@
 
 Date: 2026-05-14
 
-Status: Completed pending commit hash backfill.
+Status: Completed.
 
 ## Root-Cause And Chain Review
 
@@ -57,6 +57,6 @@ Passed. One navigation registry owns modules/tabs/routes/aliases, module page re
 
 ## Commit
 
-- Commit hash: pending post-commit backfill.
+- Commit hash: `075a87c0a4a2acfdb0cfb62f51951dfee38611b8`.
+- Push result: `origin/main` confirmed at `075a87c0a4a2acfdb0cfb62f51951dfee38611b8` using one-time Git proxy `http://127.0.0.1:7890`.
 - Remaining issues: i18n labels, theme tokens, permission-to-route registry, and deeper page decomposition are queued to later rounds.
-

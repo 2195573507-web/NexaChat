@@ -376,7 +376,7 @@ These references guide product and engineering decisions. They are not permissio
   - `npm.cmd run verify`: passed.
 - Desktop shortcut result: `C:\Users\至亲\Desktop\NexaChat.lnk` still points to the current local Electron launch entry and was not modified.
 - Acceptance result: Passed. One navigation source exists; alias recovery is metadata-backed; every module has a page renderer; second-level navigation is visible and route-synced.
-- Commit hash: pending post-commit backfill.
+- Commit hash: `075a87c0a4a2acfdb0cfb62f51951dfee38611b8`.
 - Remaining issues: i18n labels, theme tokens, permission-to-route registry, and further page decomposition are queued to later rounds.
 
 ## 9. Round 3: Global UI And Design System Refactor
