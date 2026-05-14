@@ -296,7 +296,7 @@
 - `npm.cmd run verify`：通过，包含 typecheck、test、build。
 - `npm.cmd run test:electron-smoke`：通过，Electron shell 渲染并确认 `/workspace/overview`。
 - `lint`：项目 `package.json` 未提供 lint 脚本，已记录，未伪造执行结果。
-- `git diff --check`：待最终提交前执行。
+- `git diff --cached --check`：提交前通过。
 
 ## Desktop Shortcut Result
 
@@ -309,5 +309,5 @@
 
 ## Git Result
 
-- Refactor commit hash：待 commit 后回填。
-- Push result：待 push 后回填。
+- Refactor commit hash：`17f072bdee6e00cbf7f821ae1d2589ccc3feb4d5`。
+- Push result：待最终 push 后确认。

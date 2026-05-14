@@ -95,7 +95,7 @@ Verification on 2026-05-14:
 - `npm.cmd run verify`: passed.
 - `npm.cmd run test:electron-smoke`: passed; Electron shell rendered the new workspace route.
 - `lint`: no script exists in `package.json`.
-- `git diff --check`: pending final pre-commit check.
+- `git diff --cached --check`: passed before commit.
 
 Desktop shortcut result:
 
@@ -103,8 +103,8 @@ Desktop shortcut result:
 
 Git result:
 
-- Refactor commit hash: pending commit.
-- Push result: pending push.
+- Refactor commit hash: `17f072bdee6e00cbf7f821ae1d2589ccc3feb4d5`.
+- Push result: pending push confirmation after final documentation hash recording.
 
 ## Parallel Work Requirement
 

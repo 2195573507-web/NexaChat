@@ -74,7 +74,7 @@ This closure records the 0.2 operation logic and navigation architecture refacto
 - `npm.cmd run verify`: passed.
 - `npm.cmd run test:electron-smoke`: passed.
 - `lint`: no script exists in `package.json`.
-- `git diff --check`: pending final pre-commit check.
+- `git diff --cached --check`: passed before commit.
 
 ## Desktop Shortcut
 
@@ -89,7 +89,7 @@ No shortcut regeneration was required.
 
 ## Git
 
-- Commit hash: pending final commit.
+- Refactor commit hash: `17f072bdee6e00cbf7f821ae1d2589ccc3feb4d5`.
 - Push result: pending final push.
 
 ## Next Round
