@@ -1,5 +1,16 @@
 # NexaChat Build Findings
 
+## Full App Round 0 Findings
+
+- `using-superpowers` is available and was read; `using-superpower` is not available as a skill path.
+- `gh` is not on PATH, so GitHub delivery must use normal Git commands and remote ref confirmation.
+- `src/main/services/store.ts` is the largest responsibility hotspot and currently owns Provider, Model, Chat, Gateway Key, Knowledge, MCP, Agent, Import/Export, Audit, and preferences.
+- IPC channel names are duplicated as raw string literals in `src/main/ipc.ts` and `src/preload/index.ts`; Round 1 should add a shared IPC registry and payload schema.
+- `src/renderer/mockApi.ts` is useful for browser smoke, but it duplicates core behavior and must be explicitly test/browser-only before production release.
+- `src/shared/navigation.ts` is the navigation authority, but labels/descriptions are hardcoded and `routeAliases` lacks owner/deletion milestones.
+- `src/renderer/styles.css` has token-like CSS variables, but local hardcoded colors and radii remain and must be addressed in the design/theme rounds.
+- The desktop shortcut is valid for the current local Electron launch model, but there is no project-owned shortcut check/create script yet.
+
 ## Initial Repository State
 
 - Repository root: `D:\NexaChat`.

@@ -1,5 +1,22 @@
 # NexaChat Build Progress
 
+## 2026-05-14 Full App Round 0 Execution
+
+- Confirmed real project root with `git rev-parse --show-toplevel`: `D:/NexaChat`.
+- Probed requested skill names: `using-superpowers` is available; `using-superpower` is not present under the Codex skills path.
+- Tooling check: Git, Node, `npm.cmd`, PowerShell, local Electron binary, and Playwright config are available; `gh` is unavailable and closeout must use `git push` plus `git ls-remote`.
+- Desktop shortcut COM readback confirms `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and uses `D:\NexaChat\assets\app-icon.ico,0`.
+- Started three parallel read-only audit lanes for source architecture/IPC/data, UI/i18n/theme/navigation, and tests/scripts/desktop/Git closeout.
+- Added the Round 0 execution matrix at `docs/implementation/full-app-round-execution-matrix.md`.
+- Added the Round 0 authority inventory at `docs/implementation/round-00-health-check-authority-inventory.md`.
+- Round 0 business/runtime code changes: none.
+- Ran `npm.cmd run typecheck`: passed.
+- Ran `npm.cmd run test`: passed, 1 file / 3 tests.
+- Ran `npm.cmd run build`: passed.
+- Ran `npm.cmd run test:ui-smoke`: passed, 10 Playwright tests.
+- Ran `npm.cmd run test:electron-smoke`: passed.
+- Ran `git diff --check`: passed with LF/CRLF warnings only.
+
 ## 2026-05-13
 
 - Created active goal for full NexaChat app construction.

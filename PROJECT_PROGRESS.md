@@ -1,5 +1,49 @@
 # NexaChat Project Progress
 
+## 2026-05-14 Full App Round 0 Health Check
+
+Round 0 of `docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md` is completed as an inventory-only implementation round.
+
+Parallel execution lanes:
+
+- Lane A: source architecture, IPC, preload, store, SQLite, gateway, audit/log chain.
+- Lane B: renderer UI, navigation, i18n, theme, hardcoded text, smoke coverage.
+- Lane C: package scripts, tests, desktop shortcut, Git/GitHub delivery, closeout gates.
+
+Deliverables:
+
+- Added `docs/implementation/full-app-round-execution-matrix.md`.
+- Added `docs/implementation/round-00-health-check-authority-inventory.md`.
+- Updated `task_plan.md`, `progress.md`, and `findings.md`.
+
+Key findings:
+
+- `src/main/services/store.ts` is the main responsibility hotspot and should be split behind service/repository boundaries in Round 1.
+- IPC channel strings are duplicated in `src/main/ipc.ts` and `src/preload/index.ts` and need a shared channel/payload authority.
+- `src/renderer/mockApi.ts` is useful for browser smoke but is a duplicate app path that must become explicitly test/browser-only.
+- i18n and theme authority sources do not exist yet; language and system theme settings are persisted but not fully functional UI behavior.
+- `routeAliases` needs owner/deletion milestone metadata before cleanup.
+- Current desktop shortcut is valid for the local Electron launch model.
+
+Verification:
+
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test`: passed, 1 file / 3 tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run test:ui-smoke`: passed, 10 Playwright tests.
+- `npm.cmd run test:electron-smoke`: passed.
+- `git diff --check`: passed with LF/CRLF warnings only.
+
+Desktop shortcut status:
+
+- `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"` as the app argument, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`.
+- No shortcut was modified in Round 0.
+
+Git:
+
+- Round 0 delivery commit hash: pending post-commit backfill.
+- Push result: pending post-commit backfill.
+
 ## 2026-05-14 Full App Multi-Round Iteration Roadmap
 
 This docs-only round created a new authoritative full-app roadmap for future NexaChat work:

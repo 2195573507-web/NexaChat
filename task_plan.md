@@ -40,6 +40,7 @@ At least three agents were launched concurrently before implementation work cont
 
 ## Current Status
 
+- Full App Round 0 health check and authority inventory: in progress.
 - Phase 1: complete.
 - Phase 2: complete.
 - Phase 3: complete.
@@ -68,6 +69,8 @@ At least three agents were launched concurrently before implementation work cont
 
 ## Completion Gates
 
+- Full-app blueprint Round 0-15 execution matrix exists and is kept in sync with the authoritative blueprint.
+- Each full-app round updates the blueprint original file, `PROJECT_PROGRESS.md`, and the implementation closeout document before commit.
 - `npm.cmd install` succeeds.
 - TypeScript typecheck passes.
 - Unit tests pass.
