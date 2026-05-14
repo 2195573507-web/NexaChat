@@ -96,7 +96,7 @@ function App() {
   }
 
   const page = {
-    dashboard: (
+    workspace: (
       <DashboardPage
         activeTab={activeTab}
         snapshot={snapshot}
@@ -121,7 +121,7 @@ function App() {
       activeTab={activeTab}
       activeRoute={navigationState.route}
       onModuleChange={(moduleId) => navigateTo(moduleId)}
-      onTabChange={(tabId) => navigateTo(activeModuleId, tabId)}
+      onTabChange={(tabId, moduleId = activeModuleId) => navigateTo(moduleId, tabId)}
       snapshot={snapshot}
       rightRail={<RightRail activeModuleId={activeModuleId} activeTab={activeTab} snapshot={snapshot} busy={busy} notice={notice} api={api} onOpenModule={openModule} />}
     >
@@ -172,7 +172,7 @@ function RightRail({
       <section>
         <h2>最近操作</h2>
         {latestRequest ? (
-          <button type="button" className="rail-link" onClick={() => onOpenModule({ moduleId: 'settings', tabId: 'request-logs' })}>
+          <button type="button" className="rail-link" onClick={() => onOpenModule({ moduleId: 'gateway', tabId: 'logs' })}>
             {latestRequest.status} · {latestRequest.endpoint}
           </button>
         ) : (

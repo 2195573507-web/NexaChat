@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 interface EmptyStateProps {
   title: string;
   reason: string;
-  actionLabel: string;
+  actionLabel?: string;
   onAction?: () => void;
   secondary?: ReactNode;
 }
@@ -15,9 +15,11 @@ export function EmptyState({ title, reason, actionLabel, onAction, secondary }: 
         <h3>{title}</h3>
         <p>{reason}</p>
       </div>
-      <button type="button" className="primary-button" onClick={onAction}>
-        {actionLabel}
-      </button>
+      {actionLabel && onAction ? (
+        <button type="button" className="primary-button" onClick={onAction}>
+          {actionLabel}
+        </button>
+      ) : null}
       {secondary ? <div className="empty-secondary">{secondary}</div> : null}
     </section>
   );

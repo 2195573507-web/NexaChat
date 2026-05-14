@@ -1,206 +1,425 @@
-import type { NavModule } from './types.js';
+import type { ModuleId, ModuleStage, NavModule, NavTab } from './types.js';
 
-type TabOptions = {
+type ChildOptions = {
   default?: boolean;
-  labelKey?: string;
-  descriptionKey?: string;
   permission?: string;
   icon?: string;
+  status?: ModuleStage;
+  featureBoundary: string;
 };
 
-function tab(moduleId: NavModule['id'], id: string, label: string, stage: NavModule['stage'], description: string, options: TabOptions = {}) {
+type ModuleDefinition = {
+  id: ModuleId;
+  label: string;
+  shortLabel: string;
+  description: string;
+  icon: string;
+  children: Array<{
+    id: string;
+    label: string;
+    description: string;
+    icon: string;
+    featureBoundary: string;
+    default?: boolean;
+    permission?: string;
+    status?: ModuleStage;
+  }>;
+};
+
+export function getTabRoute(moduleId: ModuleId, tabId: string) {
+  return `/${moduleId}/${tabId}`;
+}
+
+function child(moduleId: ModuleId, id: string, label: string, description: string, options: ChildOptions): NavTab {
+  const status = options.status ?? 'implemented';
   return {
     id,
     label,
-    stage,
+    title: label,
+    stage: status,
+    status,
     description,
     default: options.default,
     route: getTabRoute(moduleId, id),
     permission: options.permission,
     icon: options.icon,
-    labelKey: options.labelKey ?? `nav.${moduleId}.${id}.label`,
-    descriptionKey: options.descriptionKey ?? `nav.${moduleId}.${id}.description`,
+    featureBoundary: options.featureBoundary,
+    labelKey: `nav.${moduleId}.${id}.label`,
+    descriptionKey: `nav.${moduleId}.${id}.description`,
   };
 }
-function moduleRoute(moduleId: NavModule['id'], defaultTabId: string) {
-  return `/${moduleId}/${defaultTabId}`;
+
+function defineModule(definition: ModuleDefinition): NavModule {
+  const tabs = definition.children.map((item) =>
+    child(definition.id, item.id, item.label, item.description, {
+      default: item.default,
+      permission: item.permission,
+      icon: item.icon,
+      status: item.status,
+      featureBoundary: item.featureBoundary,
+    }),
+  );
+  const defaultRoute = (tabs.find((candidate) => candidate.default) ?? tabs[0]).route ?? getTabRoute(definition.id, tabs[0].id);
+  return {
+    id: definition.id,
+    moduleId: definition.id,
+    label: definition.label,
+    moduleName: definition.label,
+    shortLabel: definition.shortLabel,
+    description: definition.description,
+    moduleDescription: definition.description,
+    labelKey: `module.${definition.id}.label`,
+    shortLabelKey: `module.${definition.id}.shortLabel`,
+    descriptionKey: `module.${definition.id}.description`,
+    icon: definition.icon,
+    route: defaultRoute,
+    defaultRoute,
+    stage: 'implemented',
+    status: 'implemented',
+    tabs,
+    children: tabs,
+  };
 }
 
 export const navModules: NavModule[] = [
-  {
-    id: 'dashboard',
+  defineModule({
+    id: 'workspace',
     label: '工作台',
     shortLabel: '工作台',
-    description: '关键指标、待办、最近活动和常用入口。',
-    labelKey: 'module.dashboard.label',
-    shortLabelKey: 'module.dashboard.shortLabel',
-    descriptionKey: 'module.dashboard.description',
+    description: '总览、最近活动、本地状态、快速入口和待处理事项；不承载具体配置表单。',
     icon: 'gauge',
-    route: moduleRoute('dashboard', 'overview'),
-    stage: 'implemented',
-    tabs: [
-      tab('dashboard', 'overview', '总览', 'implemented', '启动缺口、默认工作区/模型、网关状态与今日用量。', { default: true, icon: 'layout-dashboard' }),
-      tab('dashboard', 'workspaces', '待办', 'implemented', '待处理任务、异常提醒、构建进度和工作区默认值。', { icon: 'list-checks' }),
-      tab('dashboard', 'activity', '最近活动', 'implemented', '最近会话、请求日志、审计事件和网关事件。', { icon: 'history' }),
-      tab('dashboard', 'quick-actions', '快捷操作', 'implemented', '新会话、添加 Provider、导入配置、上传文件和诊断入口。', { icon: 'zap' }),
+    children: [
+      {
+        id: 'overview',
+        label: '系统总览',
+        description: '工作区、默认模型、网关状态、今日用量、待处理事项和真实快速入口。',
+        icon: 'layout-dashboard',
+        default: true,
+        featureBoundary: '只汇总状态和提供跳转入口，不直接编辑 Provider、Gateway Key、知识文件或安全设置。',
+      },
+      {
+        id: 'activity',
+        label: '最近活动',
+        description: '最近会话、请求日志、审计事件和网关事件的只读聚合。',
+        icon: 'history',
+        featureBoundary: '只展示近期活动，不执行配置、导入或清理动作。',
+      },
+      {
+        id: 'health',
+        label: '本地状态',
+        description: '本地应用、SQLite 数据、网关、Provider、Model 和知识索引状态。',
+        icon: 'activity',
+        featureBoundary: '只展示健康状态和缺口，不替代模型、网关或数据模块的配置页面。',
+      },
     ],
-  },
-  {
+  }),
+  defineModule({
     id: 'chat',
     label: '对话',
     shortLabel: '对话',
-    description: '会话、助手、Prompt Lab、本地历史和对比/Artifacts 预留。',
-    labelKey: 'module.chat.label',
-    shortLabelKey: 'module.chat.shortLabel',
-    descriptionKey: 'module.chat.description',
+    description: '会话、消息、模型选择、上下文策略和聊天运行状态。',
     icon: 'message-square-text',
-    route: moduleRoute('chat', 'conversations'),
-    stage: 'implemented',
-    tabs: [
-      tab('chat', 'conversations', '会话', 'implemented', '三栏聊天、消息时间线、模型和上下文控制。', { default: true, icon: 'messages-square' }),
-      tab('chat', 'assistants', '助手', 'implemented', '助手定义、默认模型、允许的工具/知识和审批策略。', { icon: 'bot' }),
-      tab('chat', 'prompt-lab', 'Prompt Lab', 'implemented', 'Prompt 模板预览和现有模型路由测试入口。', { icon: 'braces' }),
-      tab('chat', 'comparison', '多模型对比', 'planned', '等待多请求 fan-out、并发取消和对比记录落库。', { icon: 'columns-3' }),
-      tab('chat', 'artifacts', 'Artifacts', 'planned', '等待生成文件、预览和编辑器数据模型。', { icon: 'file-box' }),
-      tab('chat', 'local-history', '本地历史', 'implemented', '本地会话搜索、收藏/归档筛选和导出说明。', { icon: 'archive' }),
+    children: [
+      {
+        id: 'conversations',
+        label: '会话管理',
+        description: '会话列表、置顶、收藏、归档和本地历史状态。',
+        icon: 'messages-square',
+        default: true,
+        featureBoundary: '只管理会话和本地历史，不配置 Provider、Gateway Key 或知识文件。',
+      },
+      {
+        id: 'playground',
+        label: '聊天运行',
+        description: '聊天主界面、消息发送、模型选择和本地持久化。',
+        icon: 'send',
+        featureBoundary: '只运行 Chat -> Router -> 本地响应闭环，不编辑 Provider 密钥或网关 Key。',
+      },
+      {
+        id: 'context',
+        label: '上下文策略',
+        description: '当前会话上下文策略、消息范围、知识引用线索和运行状态。',
+        icon: 'braces',
+        featureBoundary: '只说明和选择上下文策略，不伪装完整 RAG、Artifacts 或多模型对比。',
+      },
     ],
-  },
-  {
+  }),
+  defineModule({
     id: 'models',
     label: '模型',
     shortLabel: '模型',
-    description: 'Provider、模型列表、密钥、路由规则和健康检查。',
-    labelKey: 'module.models.label',
-    shortLabelKey: 'module.models.shortLabel',
-    descriptionKey: 'module.models.description',
+    description: 'Provider、Model、Router、健康测试、模型能力和默认模型策略。',
     icon: 'server-cog',
-    route: moduleRoute('models', 'providers'),
-    stage: 'implemented',
-    tabs: [
-      tab('models', 'providers', '提供商', 'implemented', 'OpenAI、DeepSeek、本地模型等提供商配置。', { default: true, icon: 'server' }),
-      tab('models', 'models', '模型列表', 'implemented', '模型能力、上下文、价格/倍率和可用状态。', { icon: 'boxes' }),
-      tab('models', 'capabilities', '密钥管理', 'implemented', 'API Key、secret_ref、本地加密边界和连接测试入口。', { permission: 'secret:read', icon: 'key-round' }),
-      tab('models', 'templates', '路由规则', 'environment-limited', '默认模型、备用模型和按任务分流的当前边界。', { icon: 'route' }),
-      tab('models', 'health', '健康检查', 'implemented', 'Provider/Model 连通性、延迟、错误率和可用性。', { icon: 'activity' }),
+    children: [
+      {
+        id: 'providers',
+        label: 'Provider 管理',
+        description: 'Provider 创建、API Key 保存、secret_ref、Base URL 和连接测试。',
+        icon: 'server',
+        default: true,
+        permission: 'secret:write',
+        featureBoundary: '只管理 Provider 和 Provider API Key，不管理 Gateway API Key。',
+      },
+      {
+        id: 'catalog',
+        label: '模型目录',
+        description: '模型创建、模型列表、能力展示、上下文窗口和健康状态。',
+        icon: 'boxes',
+        featureBoundary: '只管理模型元数据和能力，不展示聊天记录或网关请求日志。',
+      },
+      {
+        id: 'router',
+        label: 'Router 策略',
+        description: 'Router 决策、默认模型、fallback 边界和模型健康测试入口。',
+        icon: 'route',
+        featureBoundary: '只展示当前可用路由和默认策略；规则编辑器尚未作为可执行功能开放。',
+      },
     ],
-  },
-  {
+  }),
+  defineModule({
     id: 'knowledge',
     label: '知识库',
     shortLabel: '知识',
-    description: '知识库、提示词、共享记忆、导入导出、检索测试和维护。',
-    labelKey: 'module.knowledge.label',
-    shortLabelKey: 'module.knowledge.shortLabel',
-    descriptionKey: 'module.knowledge.description',
+    description: '知识文件、chunk、索引状态、检索预览和引用来源。',
     icon: 'brain-circuit',
-    route: moduleRoute('knowledge', 'files'),
-    stage: 'implemented',
-    tabs: [
-      tab('knowledge', 'files', '知识库', 'implemented', '文档、索引、检索状态和重试。', { default: true, icon: 'book-open' }),
-      tab('knowledge', 'bases', '提示词库', 'planned', '等待提示词模板、分类和版本数据模型。', { icon: 'file-text' }),
-      tab('knowledge', 'retrieval', '检索测试', 'planned', '测试问题、召回结果、评分和 embedding/rerank 真实链路。', { icon: 'search-check' }),
-      tab('knowledge', 'context', '导入导出', 'implemented', 'JSON/Markdown/配置导入导出和当前上下文策略说明。', { icon: 'import' }),
-      tab('knowledge', 'memory', '共享记忆', 'planned', '等待长期记忆、项目记忆、模块记忆和审计链路。', { icon: 'brain' }),
-      tab('knowledge', 'maintenance', '清理维护', 'planned', '等待失效内容清理、重复内容合并和维护审计。', { icon: 'wrench' }),
+    children: [
+      {
+        id: 'files',
+        label: '知识文件',
+        description: '知识文件记录、文本类文件写入、解析状态和重试。',
+        icon: 'book-open',
+        default: true,
+        featureBoundary: '只处理知识文件记录和文本 lexical fallback，不执行 PDF/OCR/vector 假导入。',
+      },
+      {
+        id: 'chunks',
+        label: 'Chunk 状态',
+        description: 'chunk 数量、lexical fallback、失败原因和重试结果。',
+        icon: 'file-text',
+        featureBoundary: '只展示已有 chunk/fallback 状态，不伪装向量索引或 rerank。',
+      },
+      {
+        id: 'retrieval',
+        label: '检索预览',
+        description: '检索预览、引用来源说明和 embedding/vector/rerank 限制。',
+        icon: 'search-check',
+        status: 'environment-limited',
+        featureBoundary: '当前仅展示 lexical fallback 来源，不提供未接入的向量检索执行按钮。',
+      },
     ],
-  },
-  {
+  }),
+  defineModule({
     id: 'tools',
     label: '工具与 Agent',
     shortLabel: '工具',
-    description: 'Agent、工作流、编排、MCP 工具、运行记录和调试回放。',
-    labelKey: 'module.tools.label',
-    shortLabelKey: 'module.tools.shortLabel',
-    descriptionKey: 'module.tools.description',
+    description: 'MCP Server、Agent 定义、dry-run 和执行状态边界。',
     icon: 'bot',
-    route: moduleRoute('tools', 'mcp'),
-    stage: 'implemented',
-    tabs: [
-      tab('tools', 'tools', '工作流列表', 'reserved', '工作流模板、搜索和分类预留，不提供假执行。', { icon: 'workflow' }),
-      tab('tools', 'mcp', 'MCP 工具', 'implemented', 'MCP server 注册、transport、连接状态和授权审批。', { default: true, permission: 'mcp:manage', icon: 'plug-zap' }),
-      tab('tools', 'agents', 'Agent 列表', 'implemented', 'Agent 创建、编辑、启用/禁用和审批策略。', { icon: 'bot' }),
-      tab('tools', 'runs', '运行记录', 'planned', '执行历史、trace、输入输出和人工确认队列。', { icon: 'history' }),
-      tab('tools', 'workflow', '编排画布', 'reserved', '节点、连线、参数配置和工作流画布预留。', { icon: 'git-branch' }),
-      tab('tools', 'debug', '调试与回放', 'planned', '失败重试、步骤回放和日志查看。', { icon: 'bug' }),
+    children: [
+      {
+        id: 'mcp',
+        label: 'MCP Server',
+        description: 'MCP Server 注册、transport、授权、拒绝和状态。',
+        icon: 'plug-zap',
+        default: true,
+        permission: 'mcp:manage',
+        featureBoundary: '只注册和授权 MCP，不执行未授权工具或危险动作。',
+      },
+      {
+        id: 'agents',
+        label: 'Agent 定义',
+        description: 'Agent 定义保存、目标、审批策略和 dry-run 入口。',
+        icon: 'bot',
+        featureBoundary: '只保存 Agent 定义并生成 dry-run，不启动自治后台任务。',
+      },
+      {
+        id: 'runs',
+        label: '执行预览',
+        description: 'Agent dry-run 记录和未来执行记录边界说明。',
+        icon: 'history',
+        status: 'environment-limited',
+        featureBoundary: '只显示 dry-run 和执行边界，不提供假执行、trace replay 或 workflow canvas。',
+      },
     ],
-  },
-  {
+  }),
+  defineModule({
     id: 'gateway',
     label: '本地网关',
     shortLabel: '网关',
-    description: '网关总览、API Key、兼容接口、导入、调用日志和安全策略。',
-    labelKey: 'module.gateway.label',
-    shortLabelKey: 'module.gateway.shortLabel',
-    descriptionKey: 'module.gateway.description',
+    description: 'OpenAI-compatible 网关状态、Gateway API Key、端点、请求日志和安全说明。',
     icon: 'key-round',
-    route: moduleRoute('gateway', 'status'),
-    stage: 'implemented',
-    tabs: [
-      tab('gateway', 'status', '网关总览', 'implemented', '网关状态、地址、运行端口、调用量和启停控制。', { default: true, icon: 'gauge' }),
-      tab('gateway', 'keys', 'API Key 管理', 'implemented', '生成、禁用、权限、备注、过期时间和配额。', { permission: 'gateway:key:manage', icon: 'key-round' }),
-      tab('gateway', 'virtual-models', '兼容接口', 'implemented', 'OpenAI-compatible endpoint、/v1/chat/completions、/v1/responses 等。', { icon: 'brackets' }),
-      tab('gateway', 'routes', '安全策略', 'implemented', '限流、IP 限制、敏感信息过滤、审计和路由边界。', { permission: 'security:read', icon: 'shield-check' }),
-      tab('gateway', 'integrations', 'CCS/sub2api 导入', 'implemented', '一键导入配置、解析、校验和预览。', { icon: 'import' }),
-      tab('gateway', 'logs', '调用日志', 'implemented', '请求、响应、错误、耗时、token 和 request log 关联。', { icon: 'scroll-text' }),
+    children: [
+      {
+        id: 'overview',
+        label: '网关总览',
+        description: '监听地址、端点状态、启停控制和 OpenAI-compatible 说明。',
+        icon: 'gauge',
+        default: true,
+        featureBoundary: '只管理本地网关状态和端点，不编辑模型 Provider 密钥。',
+      },
+      {
+        id: 'keys',
+        label: 'Gateway Keys',
+        description: 'Gateway API Key 生成、一次性显示、撤销、scope 和配额状态。',
+        icon: 'key-round',
+        permission: 'gateway:key:manage',
+        featureBoundary: '只管理外部调用网关 Key，不管理 Provider API Key。',
+      },
+      {
+        id: 'logs',
+        label: '请求日志',
+        description: '请求日志、错误、用量、网关事件和脱敏详情。',
+        icon: 'scroll-text',
+        featureBoundary: '只展示网关和请求观测数据，不混入模型配置表单。',
+      },
+      {
+        id: 'docs',
+        label: '调用说明',
+        description: '本地调用示例、端点说明、scope 校验和安全说明。',
+        icon: 'brackets',
+        featureBoundary: '只说明如何调用本地 Gateway，不提供 CCS/sub2api 假导入按钮。',
+      },
     ],
-  },
-  {
+  }),
+  defineModule({
     id: 'data',
     label: '数据配置',
     shortLabel: '数据',
-    description: '智能导入、导入导出、备份恢复、快照和数据清理。',
-    labelKey: 'module.data.label',
-    shortLabelKey: 'module.data.shortLabel',
-    descriptionKey: 'module.data.description',
+    description: '导入、快照、恢复预检、诊断导出和安全清理说明。',
     icon: 'database',
-    route: moduleRoute('data', 'import'),
-    stage: 'implemented',
-    tabs: [
-      tab('data', 'import', '智能导入预检', 'implemented', '导入清单编辑、检测、预览、冲突和确认步骤。', { default: true, icon: 'file-check' }),
-      tab('data', 'import-export', '导入导出', 'planned', '等待冲突解决器后开放 provider/model/assistant/prompt/chat 导入导出。', { icon: 'import' }),
-      tab('data', 'backup', '备份恢复', 'planned', '等待脱敏备份、加密完整备份和恢复确认链路。', { icon: 'hard-drive-download' }),
-      tab('data', 'snapshots', '配置快照', 'implemented', '快照列表、创建快照、恢复预检和脱敏状态。', { icon: 'camera' }),
-      tab('data', 'cleanup', '数据清理', 'planned', '等待已审计的破坏性清理预览和确认流程。', { permission: 'data:cleanup', icon: 'trash-2' }),
+    children: [
+      {
+        id: 'import',
+        label: '导入预检',
+        description: '导入清单预检、无效导入拒绝、ready 计划确认。',
+        icon: 'file-check',
+        default: true,
+        featureBoundary: '只执行 manifest 预检和确认记录，不静默覆盖 Provider、Model 或 secrets。',
+      },
+      {
+        id: 'snapshots',
+        label: '快照恢复',
+        description: '脱敏快照、快照列表和恢复预检。',
+        icon: 'camera',
+        featureBoundary: '只创建快照和恢复预检，不直接覆盖本地数据。',
+      },
+      {
+        id: 'diagnostics',
+        label: '诊断导出',
+        description: '脱敏诊断导出预览、日志路径和故障排查入口。',
+        icon: 'triangle-alert',
+        featureBoundary: '只生成诊断预览和打开日志，不泄露 secrets。',
+      },
+      {
+        id: 'cleanup',
+        label: '安全清理',
+        description: '数据清理风险说明、预检依赖和禁用的危险动作。',
+        icon: 'trash-2',
+        status: 'environment-limited',
+        featureBoundary: '只显示安全说明；破坏性清理未实现前不显示可执行按钮。',
+      },
     ],
-  },
-  {
+  }),
+  defineModule({
     id: 'settings',
     label: '设置与安全',
     shortLabel: '设置',
-    description: '用户、权限、审计、安全中心、系统设置、数据维护和桌面入口。',
-    labelKey: 'module.settings.label',
-    shortLabelKey: 'module.settings.shortLabel',
-    descriptionKey: 'module.settings.description',
+    description: '主题、语言、密度、字体、减少动效、安全存储、审计日志和运行说明。',
     icon: 'settings',
-    route: moduleRoute('settings', 'request-logs'),
-    stage: 'implemented',
-    tabs: [
-      tab('settings', 'request-logs', '运行监控', 'implemented', '请求量、成功率、延迟和请求日志。', { default: true, icon: 'activity' }),
-      tab('settings', 'usage', 'Token 统计', 'implemented', '输入/输出 token、成本和模型占比。', { icon: 'chart-no-axes-column' }),
-      tab('settings', 'evals', '评测任务', 'planned', '等待 eval set、评分器和模型对比测试链路。', { icon: 'clipboard-check' }),
-      tab('settings', 'diagnostics', '错误中心', 'implemented', '异常聚合、错误详情和修复建议。', { icon: 'triangle-alert' }),
-      tab('settings', 'feedback', '用户反馈', 'planned', '反馈列表、标记和处理状态待接入。', { icon: 'message-square-text' }),
-      tab('settings', 'users', '用户管理', 'planned', '用户列表、角色、启用/禁用和重置密码待接入。', { permission: 'admin:users', icon: 'users' }),
-      tab('settings', 'permissions', '权限管理', 'planned', 'RBAC、资源 ACL 和模块权限待接入。', { permission: 'admin:permissions', icon: 'shield-check' }),
-      tab('settings', 'keys', '安全中心', 'implemented', '密钥保护、会话策略、敏感数据检查和 redaction。', { permission: 'security:read', icon: 'shield-check' }),
-      tab('settings', 'audit', '审计日志', 'implemented', '登录、权限变更、敏感操作、导出和 MCP 权限审计。', { permission: 'audit:read', icon: 'scroll-text' }),
-      tab('settings', 'ui', '系统设置', 'implemented', '语言、主题、字体、启动项和界面偏好。', { icon: 'sliders-horizontal' }),
-      tab('settings', 'system', '数据维护', 'implemented', '备份、恢复、清理、迁移和诊断导出。', { permission: 'system:maintain', icon: 'settings' }),
-      tab('settings', 'desktop', '桌面入口', 'environment-limited', '快捷方式状态、图标、启动目标检查和重新关联记录。', { permission: 'system:shortcut', icon: 'hard-drive-download' }),
+    children: [
+      {
+        id: 'preferences',
+        label: '界面偏好',
+        description: '主题、语言、密度、字体和减少动效。',
+        icon: 'sliders-horizontal',
+        default: true,
+        featureBoundary: '只管理 UI 偏好，不混入业务功能管理。',
+      },
+      {
+        id: 'security',
+        label: '安全说明',
+        description: 'secret 存储、preload 隔离、IPC 边界、脱敏和 Key 状态。',
+        icon: 'shield-check',
+        permission: 'security:read',
+        featureBoundary: '只说明安全边界和查看脱敏状态，不编辑 Provider 或 Gateway 业务配置。',
+      },
+      {
+        id: 'audit',
+        label: '审计日志',
+        description: '审计日志、敏感操作、MCP 权限和导入/诊断事件。',
+        icon: 'scroll-text',
+        permission: 'audit:read',
+        featureBoundary: '只展示审计事件，不执行业务动作。',
+      },
+      {
+        id: 'about',
+        label: '关于环境',
+        description: '版本、路径、运行环境、快捷方式状态和本地限制。',
+        icon: 'settings',
+        status: 'environment-limited',
+        featureBoundary: '只展示当前运行环境和桌面入口状态，不提供不可验证的快捷方式修复按钮。',
+      },
     ],
-  },
+  }),
 ];
+
+export const moduleRegistry = navModules;
+
+const routeAliases: Record<string, string> = {
+  '/': '/workspace/overview',
+  '/dashboard': '/workspace/overview',
+  '/dashboard/overview': '/workspace/overview',
+  '/dashboard/workspaces': '/workspace/overview',
+  '/dashboard/activity': '/workspace/activity',
+  '/dashboard/quick-actions': '/workspace/overview',
+  '/chat/assistants': '/tools/agents',
+  '/chat/prompt-lab': '/chat/playground',
+  '/chat/comparison': '/chat/context',
+  '/chat/artifacts': '/chat/context',
+  '/chat/local-history': '/chat/conversations',
+  '/models/models': '/models/catalog',
+  '/models/capabilities': '/models/providers',
+  '/models/templates': '/models/router',
+  '/models/health': '/models/router',
+  '/knowledge/bases': '/knowledge/files',
+  '/knowledge/context': '/knowledge/retrieval',
+  '/knowledge/memory': '/knowledge/retrieval',
+  '/knowledge/maintenance': '/knowledge/chunks',
+  '/tools/tools': '/tools/runs',
+  '/tools/workflow': '/tools/runs',
+  '/tools/debug': '/tools/runs',
+  '/gateway/status': '/gateway/overview',
+  '/gateway/virtual-models': '/gateway/docs',
+  '/gateway/routes': '/gateway/docs',
+  '/gateway/integrations': '/data/import',
+  '/data/import-export': '/data/import',
+  '/data/backup': '/data/snapshots',
+  '/settings/request-logs': '/gateway/logs',
+  '/settings/usage': '/gateway/logs',
+  '/settings/evals': '/models/router',
+  '/settings/diagnostics': '/data/diagnostics',
+  '/settings/feedback': '/settings/audit',
+  '/settings/users': '/settings/security',
+  '/settings/permissions': '/settings/security',
+  '/settings/keys': '/settings/security',
+  '/settings/ui': '/settings/preferences',
+  '/settings/system': '/settings/about',
+  '/settings/desktop': '/settings/about',
+};
+
+function cleanPath(pathname: string) {
+  const pathOnly = pathname.split(/[?#]/)[0] || '/';
+  const normalized = pathOnly === '/' ? '/' : `/${pathOnly.replace(/^\/+/, '').replace(/\/+$/, '')}`;
+  return routeAliases[normalized] ?? normalized;
+}
 
 export function getDefaultTab(module: NavModule) {
   return module.tabs.find((candidate) => candidate.default) ?? module.tabs[0];
 }
 
-export function getTabRoute(moduleId: NavModule['id'], tabId: string) {
-  return `/${moduleId}/${tabId}`;
-}
-
 export function resolveNavigation(pathname: string) {
-  const [moduleSegment, tabSegment] = pathname.replace(/^\/+/, '').split('/');
+  const originalPath = pathname.split(/[?#]/)[0] || '/';
+  const normalizedPath = cleanPath(pathname);
+  const [moduleSegment, tabSegment] = normalizedPath.replace(/^\/+/, '').split('/');
   const module = navModules.find((candidate) => candidate.id === moduleSegment) ?? navModules[0];
   const defaultTab = getDefaultTab(module);
   const tab = module.tabs.find((candidate) => candidate.id === tabSegment) ?? defaultTab;
@@ -209,6 +428,6 @@ export function resolveNavigation(pathname: string) {
     module,
     tab,
     route,
-    replaced: moduleSegment !== module.id || pathname !== route,
+    replaced: originalPath !== route || normalizedPath !== route,
   };
 }

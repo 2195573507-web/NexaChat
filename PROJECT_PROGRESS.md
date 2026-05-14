@@ -44,6 +44,68 @@ Current verified results:
 - `lint`: no script exists in `package.json`.
 - Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"` as the app argument, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico`. No project shortcut creation script exists under `scripts/`, so no shortcut was regenerated.
 
+## 2026-05-14 Operation Logic And Navigation Refactor
+
+This round rebuilt NexaChat's operation logic and navigation architecture for the 0.2 boundary while preserving the existing local-first feature set. The source of truth is now the shared navigation registry in `src/shared/navigation.ts`, with eight expandable first-level modules and route-aligned child features.
+
+New first-level sidebar structure:
+
+- 工作台: `/workspace/overview`, `/workspace/activity`, `/workspace/health`.
+- 对话: `/chat/conversations`, `/chat/playground`, `/chat/context`.
+- 模型: `/models/providers`, `/models/catalog`, `/models/router`.
+- 知识库: `/knowledge/files`, `/knowledge/chunks`, `/knowledge/retrieval`.
+- 工具与 Agent: `/tools/mcp`, `/tools/agents`, `/tools/runs`.
+- 本地网关: `/gateway/overview`, `/gateway/keys`, `/gateway/logs`, `/gateway/docs`.
+- 数据配置: `/data/import`, `/data/snapshots`, `/data/diagnostics`, `/data/cleanup`.
+- 设置与安全: `/settings/preferences`, `/settings/security`, `/settings/audit`, `/settings/about`.
+
+What changed:
+
+- Replaced the flat/ambiguous sidebar with expandable module groups and route-highlighted child entries.
+- Moved from `dashboard` to `workspace` as the canonical workbench module while preserving legacy route aliases.
+- Rewrote module page boundaries so each route owns one primary job instead of mixing configuration, logs, future placeholders, and execution controls.
+- Kept Provider API keys under 模型, Gateway API keys under 本地网关, Knowledge records under 知识库, Agent dry-run under 工具与 Agent, and UI/security preferences under 设置与安全.
+- Removed planned/reserved items from the main action path; environment-limited surfaces now explain the missing dependency without exposing fake execution buttons.
+- Updated `EmptyState` so it only renders an action when a real handler exists.
+- Updated unit, Playwright UI smoke, and Electron smoke checks to assert the new IA and routing contract.
+
+Preserved capabilities:
+
+- Provider creation, API key storage, and health testing.
+- Model creation, model catalog, and router/default-model surfaces.
+- Chat conversations, message persistence, model selection, and context state.
+- Local gateway `/v1/models`, `/v1/chat/completions`, and `/v1/embeddings`.
+- Gateway API key generation, one-time reveal, revocation, and scoped logs.
+- Knowledge file records and lexical fallback chunks.
+- MCP server registration and grant/deny state.
+- Agent definition storage and dry-run preview.
+- Import manifest preflight, snapshots, restore preview, diagnostics export, UI preferences, audit logs, usage/request log visibility.
+
+Advanced capabilities kept out of the main flow:
+
+- Vector RAG, rerank, PDF/OCR parsing, full MCP execution, Agent run center execution, workflow canvas, destructive cleanup, encrypted backup, complete conflict-aware import/export, and production packaging remain documented as roadmap or environment-limited work.
+
+Verification on 2026-05-14:
+
+- `npm.cmd install`: passed, up to date, 0 vulnerabilities.
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test`: passed, 1 file / 3 tests.
+- `npm.cmd run test:ui-smoke`: passed, 7 Playwright tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run verify`: passed.
+- `npm.cmd run test:electron-smoke`: passed; Electron shell rendered the new workspace route.
+- `lint`: no script exists in `package.json`.
+- `git diff --check`: pending final pre-commit check.
+
+Desktop shortcut result:
+
+- `C:\Users\至亲\Desktop\NexaChat.lnk` is valid for the current project. It targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, uses arguments `"D:\NexaChat"`, working directory `D:\NexaChat`, and icon `D:\NexaChat\assets\app-icon.ico,0`.
+
+Git result:
+
+- Refactor commit hash: pending commit.
+- Push result: pending push.
+
 ## Parallel Work Requirement
 
 The user required agent assistance with at least three agents running and at least three tasks progressing concurrently. This was satisfied in two waves:

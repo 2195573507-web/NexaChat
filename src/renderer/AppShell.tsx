@@ -2,6 +2,9 @@ import {
   Activity,
   Bot,
   BrainCircuit,
+  Braces,
+  ChevronDown,
+  ChevronRight,
   Database,
   Gauge,
   KeyRound,
@@ -10,13 +13,14 @@ import {
   Settings,
 } from 'lucide-react';
 import type { ComponentType, ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { navModules } from '../shared/navigation';
 import type { AppSnapshot, ModuleId, NavModule, NavTab } from '../shared/types';
 import { ModulePageFrame } from './components/ModulePageFrame';
 import { stageLabel } from './components/StatusPill';
 
 const icons: Record<ModuleId, ComponentType<{ size?: number }>> = {
-  dashboard: Gauge,
+  workspace: Gauge,
   chat: MessageSquareText,
   models: ServerCog,
   knowledge: BrainCircuit,
@@ -32,7 +36,7 @@ interface AppShellProps {
   activeTab: NavTab;
   activeRoute: string;
   onModuleChange: (moduleId: ModuleId) => void;
-  onTabChange: (tabId: string) => void;
+  onTabChange: (tabId: string, moduleId?: ModuleId) => void;
   snapshot: AppSnapshot;
   children: ReactNode;
   rightRail?: ReactNode;
@@ -50,6 +54,18 @@ export function AppShell({
   rightRail,
 }: AppShellProps) {
   const themeClass = snapshot.uiPreferences.theme === 'dark' ? 'theme-dark' : 'theme-light';
+  const [expandedModuleIds, setExpandedModuleIds] = useState<ModuleId[]>(() => [activeModuleId]);
+
+  useEffect(() => {
+    setExpandedModuleIds((current) => (current.includes(activeModuleId) ? current : [...current, activeModuleId]));
+  }, [activeModuleId]);
+
+  const toggleModule = (moduleId: ModuleId) => {
+    setExpandedModuleIds((current) =>
+      current.includes(moduleId) ? current.filter((candidate) => candidate !== moduleId) : [...current, moduleId],
+    );
+  };
+
   return (
     <div className={`app-shell ${themeClass} density-${snapshot.uiPreferences.density} font-${snapshot.uiPreferences.fontMode}`}>
       <aside className="sidebar" aria-label="一级模块导航">
@@ -60,21 +76,57 @@ export function AppShell({
             <span>本地优先 AI 中枢</span>
           </div>
         </div>
-        <nav className="module-nav">
+        <nav className="module-nav" aria-label="八个一级模块">
           {navModules.map((module) => {
             const Icon = icons[module.id] ?? Activity;
+            const isActive = activeModuleId === module.id;
+            const isExpanded = expandedModuleIds.includes(module.id);
             return (
-              <button
-                type="button"
-                key={module.id}
-                className={`module-nav-item ${activeModuleId === module.id ? 'is-active' : ''}`}
-                onClick={() => onModuleChange(module.id)}
-              >
-                <Icon size={18} />
-                <span className="module-label-full">{module.label}</span>
-                <span className="module-label-short">{module.shortLabel}</span>
-                <span className={`stage-dot stage-${module.stage}`} title={stageLabel(module.stage)} aria-label={stageLabel(module.stage)} />
-              </button>
+              <section className={`module-nav-group ${isActive ? 'is-active' : ''}`} key={module.id}>
+                <div className="module-nav-heading">
+                  <button
+                    type="button"
+                    className="module-expand-button"
+                    aria-label={`${isExpanded ? '收起' : '展开'}${module.label}`}
+                    aria-expanded={isExpanded}
+                    aria-controls={`sidebar-children-${module.id}`}
+                    onClick={() => toggleModule(module.id)}
+                  >
+                    {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  </button>
+                  <button
+                    type="button"
+                    className={`module-nav-item ${isActive ? 'is-active' : ''}`}
+                    onClick={() => onModuleChange(module.id)}
+                  >
+                    <Icon size={18} />
+                    <span className="module-label-full">{module.label}</span>
+                    <span className="module-label-short">{module.shortLabel}</span>
+                    <span className={`stage-dot stage-${module.stage}`} title={stageLabel(module.stage)} aria-label={stageLabel(module.stage)} />
+                  </button>
+                </div>
+                {isExpanded ? (
+                  <div className="module-child-list" id={`sidebar-children-${module.id}`}>
+                    {module.tabs.map((tab) => {
+                      const isChildActive = activeModuleId === module.id && activeTab.id === tab.id;
+                      return (
+                        <button
+                          type="button"
+                          key={tab.id}
+                          className={`module-child-link ${isChildActive ? 'is-active' : ''}`}
+                          aria-current={isChildActive ? 'page' : undefined}
+                          title={tab.featureBoundary ?? tab.description}
+                          onClick={() => onTabChange(tab.id, module.id)}
+                        >
+                          <Braces size={14} />
+                          <span>{tab.label}</span>
+                          <small>{tab.route}</small>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </section>
             );
           })}
         </nav>
@@ -92,11 +144,11 @@ export function AppShell({
             </span>
           </div>
           <div className="topbar-actions">
-            <button type="button" onClick={() => onModuleChange('chat')}>
-              新会话
+            <button type="button" onClick={() => onTabChange('playground', 'chat')}>
+              打开聊天
             </button>
-            <button type="button" onClick={() => onModuleChange('models')}>
-              添加 Provider
+            <button type="button" onClick={() => onTabChange('providers', 'models')}>
+              Provider 管理
             </button>
             <span className={snapshot.dashboard.gatewayStatus.running ? 'gateway-running' : 'gateway-stopped'}>
               网关 {snapshot.dashboard.gatewayStatus.running ? '运行中' : '未启用'}

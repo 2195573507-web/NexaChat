@@ -20,38 +20,46 @@ async function expectHorizontalScrollContainer(page: Page, selector: string) {
 }
 
 async function clickModule(page: Page, module: NavModule) {
-  await page.locator('.module-nav').getByRole('button', { name: new RegExp(module.label) }).click();
+  await page.locator('.module-nav-item').filter({ hasText: module.label }).first().click();
 }
 
-async function clickTab(page: Page, tab: NavTab) {
-  await page.locator(`#tab-${tab.route?.split('/')[1] ?? ''}-${tab.id}`).click();
+async function clickFeature(page: Page, tab: NavTab) {
+  await page.locator('.module-child-link').getByRole('button', { name: new RegExp(tab.label) }).first().click();
+}
+
+async function openFeature(page: Page, module: NavModule, tab: NavTab) {
+  const expandButton = page.getByRole('button', { name: new RegExp(`展开${module.label}|收起${module.label}`) });
+  if ((await expandButton.getAttribute('aria-expanded')) === 'false') {
+    await expandButton.click();
+  }
+  await page.locator(`#sidebar-children-${module.id}`).getByRole('button', { name: new RegExp(tab.label) }).click();
+}
+
+async function clickTab(page: Page, module: NavModule, tab: NavTab) {
+  await page.locator(`#tab-${module.id}-${tab.id}`).click();
 }
 
 async function expectActiveRouteAndPanel(page: Page, module: NavModule, tab: NavTab) {
   await expect(page.locator(`#tab-${module.id}-${tab.id}`)).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.module-subnav-panel')).toContainText('二级导航');
   await expect(page.locator('.module-subnav-summary')).toContainText(tab.label);
+  await expect(page.locator('.module-child-link.is-active')).toContainText(tab.label);
   await expect(page).toHaveURL(new RegExp(`${getTabRoute(module.id, tab.id)}$`));
   const panel = page.locator(`main [role="tabpanel"][data-module="${module.id}"][data-tab="${tab.id}"]`);
   await expect(panel).toBeVisible();
   await expect(panel.getByRole('heading', { name: tab.label }).first()).toBeVisible();
 }
 
-async function expectPlaceholderIsNonExecutable(page: Page, module: NavModule, tab: NavTab) {
-  const panel = page.locator(`main [role="tabpanel"][data-module="${module.id}"][data-tab="${tab.id}"]`);
-  await expect(panel.getByText(/当前阶段/)).toBeVisible();
-  await expect(panel.getByText(/下一实现依赖/)).toBeVisible();
-  await expect(panel.getByRole('button')).toHaveCount(0);
-}
-
-test('browser renderer exposes modules and can send chat through fallback API', async ({ page }) => {
+test('browser renderer exposes eight expandable modules and can send chat through fallback API', async ({ page }) => {
   await page.goto('/');
+  await expect(page).toHaveURL(/\/workspace\/overview$/);
 
   for (const module of navModules) {
-    await expect(page.locator('.module-nav').getByRole('button', { name: new RegExp(module.label) })).toBeVisible();
+    await expect(page.locator('.module-nav').getByRole('button', { name: new RegExp(module.label) }).first()).toBeVisible();
   }
 
-  await clickModule(page, navModules.find((module) => module.id === 'chat')!);
+  const chat = navModules.find((module) => module.id === 'chat')!;
+  await openFeature(page, chat, chat.tabs.find((tab) => tab.id === 'playground')!);
   await page.getByPlaceholder('输入消息，本地保存后再路由到模型...').fill('浏览器模式发送测试');
   await page.getByRole('button', { name: /发送/ }).click();
 
@@ -62,34 +70,35 @@ test('browser renderer exposes modules and can send chat through fallback API', 
   await expectNoHorizontalOverflow(page, '.chat-layout');
 });
 
-test('browser renderer shows model gateway and settings key areas', async ({ page }) => {
+test('model gateway data and settings key flows stay real on new routes', async ({ page }) => {
   await page.goto('/');
+
   const models = navModules.find((module) => module.id === 'models')!;
   const gateway = navModules.find((module) => module.id === 'gateway')!;
+  const data = navModules.find((module) => module.id === 'data')!;
   const settings = navModules.find((module) => module.id === 'settings')!;
 
-  await clickModule(page, models);
-  await expect(page.getByRole('heading', { name: 'Provider Hub' })).toBeVisible();
-  await clickTab(page, models.tabs.find((tab) => tab.id === 'capabilities')!);
-  await expect(page.locator('main [data-tab="capabilities"]').getByRole('heading', { name: '密钥管理' }).first()).toBeVisible();
+  await openFeature(page, models, models.tabs.find((tab) => tab.id === 'providers')!);
+  await expect(page.locator('main [data-tab="providers"]').getByRole('heading', { name: 'Provider 管理' }).first()).toBeVisible();
+  await clickTab(page, models, models.tabs.find((tab) => tab.id === 'catalog')!);
+  await expect(page.locator('main [data-tab="catalog"]').getByRole('heading', { name: '模型创建' }).first()).toBeVisible();
 
-  await clickModule(page, gateway);
-  await expect(page.getByRole('heading', { name: '本地 OpenAI-compatible 网关' })).toBeVisible();
-  await clickTab(page, gateway.tabs.find((tab) => tab.id === 'integrations')!);
-  await expect(page.getByRole('heading', { name: '导入配置预览' })).toBeVisible();
-  await clickTab(page, gateway.tabs.find((tab) => tab.id === 'keys')!);
+  await openFeature(page, gateway, gateway.tabs.find((tab) => tab.id === 'keys')!);
+  await expect(page.locator('main [data-tab="keys"]').getByRole('heading', { name: 'Gateway API Key' }).first()).toBeVisible();
   await page.getByRole('button', { name: /生成 Key/ }).click();
   await expect(page.getByText('一次性完整 Key')).toBeVisible();
   await page.getByRole('button', { name: /撤销/ }).first().click();
   await expect(page.getByText('已撤销').first()).toBeVisible();
 
-  await clickModule(page, settings);
-  await expect(page.locator('main [data-tab="request-logs"]').getByRole('heading', { name: '运行监控' }).first()).toBeVisible();
-  await clickTab(page, settings.tabs.find((tab) => tab.id === 'ui')!);
-  await expect(page.locator('main [data-tab="ui"]').getByRole('heading', { name: '系统设置' }).first()).toBeVisible();
+  await openFeature(page, data, data.tabs.find((tab) => tab.id === 'diagnostics')!);
+  await page.getByRole('button', { name: /导出诊断预览/ }).click();
+  await expect(page.locator('main [data-tab="diagnostics"]').getByRole('cell', { name: /Exported browser mock diagnostics/ })).toBeVisible();
+
+  await openFeature(page, settings, settings.tabs.find((tab) => tab.id === 'security')!);
+  await expect(page.locator('main [data-tab="security"]').getByRole('heading', { name: '安全存储与 IPC 边界' }).first()).toBeVisible();
 });
 
-test('all modules and secondary tabs sync active state route and panel', async ({ page }) => {
+test('all modules and feature routes sync sidebar subnav route and panel', async ({ page }) => {
   await page.goto('/');
 
   for (const module of navModules) {
@@ -97,24 +106,26 @@ test('all modules and secondary tabs sync active state route and panel', async (
     await expectActiveRouteAndPanel(page, module, getDefaultTab(module));
 
     for (const tab of module.tabs) {
-      await clickTab(page, tab);
+      await clickTab(page, module, tab);
       await expectActiveRouteAndPanel(page, module, tab);
-
-      if (tab.stage === 'planned' || tab.stage === 'reserved') {
-        await expectPlaceholderIsNonExecutable(page, module, tab);
-      }
     }
   }
 });
 
-test('unknown tab routes fall back to module defaults', async ({ page }) => {
+test('legacy routes fall back to new canonical routes', async ({ page }) => {
+  await page.goto('/dashboard/overview');
+  await expectActiveRouteAndPanel(page, navModules.find((module) => module.id === 'workspace')!, navModules.find((module) => module.id === 'workspace')!.tabs[0]);
+
+  await page.goto('/settings/request-logs');
+  await expectActiveRouteAndPanel(page, navModules.find((module) => module.id === 'gateway')!, navModules.find((module) => module.id === 'gateway')!.tabs.find((tab) => tab.id === 'logs')!);
+
   await page.goto('/models/not-real');
   await expectActiveRouteAndPanel(page, navModules.find((module) => module.id === 'models')!, navModules.find((module) => module.id === 'models')!.tabs[0]);
 });
 
 test('renderer keeps the 1040x680 desktop floor usable without horizontal overflow', async ({ page }) => {
   await page.setViewportSize({ width: 1040, height: 680 });
-  for (const path of ['/chat/conversations', '/models/capabilities', '/gateway/keys', '/settings/request-logs']) {
+  for (const path of ['/chat/playground', '/models/providers', '/gateway/keys', '/settings/preferences']) {
     await page.goto(path);
     await expect(page.locator('.right-rail')).toBeHidden();
     await expectNoHorizontalOverflow(page, '.app-shell');
@@ -122,29 +133,28 @@ test('renderer keeps the 1040x680 desktop floor usable without horizontal overfl
     await expectHorizontalScrollContainer(page, '.module-tabs');
   }
 
-  await page.goto('/chat/conversations');
+  await page.goto('/chat/playground');
   await expect(page.getByPlaceholder('输入消息，本地保存后再路由到模型...')).toBeVisible();
   await expect(page.locator('.chat-context')).toBeHidden();
   await expectNoHorizontalOverflow(page, '.chat-layout');
 });
 
 test('data import rejects invalid manifests and records the failure visibly', async ({ page }) => {
-  await page.goto('/');
-  await clickModule(page, navModules.find((module) => module.id === 'data')!);
+  await page.goto('/data/import');
   await page.getByLabel('导入清单 JSON').fill('{"bad":true}');
   await page.getByRole('button', { name: /预检清单/ }).click();
   await expect(page.getByText(/导入清单被拒绝/)).toBeVisible();
 });
 
 test('theme and language preferences can change without breaking the shell', async ({ page }) => {
-  await page.goto('/settings/ui');
+  await page.goto('/settings/preferences');
 
   await page.getByLabel('Theme').selectOption('dark');
   await page.getByLabel('Language').selectOption('en-US');
   await page.getByLabel('Motion').selectOption('reduced');
-  await page.getByRole('button', { name: /保存系统设置/ }).click();
+  await page.getByRole('button', { name: /保存界面偏好/ }).click();
 
   await expect(page.locator('.app-shell')).toHaveClass(/theme-dark/);
-  await expect(page.locator('.module-tabs').getByRole('tab', { name: /系统设置/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.module-tabs').getByRole('tab', { name: /界面偏好/ })).toHaveAttribute('aria-selected', 'true');
   await expectNoHorizontalOverflow(page, '.app-shell');
 });

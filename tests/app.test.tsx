@@ -1,35 +1,58 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import App from '../src/renderer/App';
 import { createMockApi } from '../src/renderer/mockApi';
 import { navModules } from '../src/shared/navigation';
+import type { NavModule, NavTab } from '../src/shared/types';
 
 beforeEach(() => {
+  window.history.replaceState(null, '', '/');
   window.nexachat = createMockApi();
 });
 
 async function renderApp() {
   render(<App />);
-  await screen.findByRole('button', { name: /工作台/ });
+  await screen.findByText('NexaChat');
 }
 
 function activePanel() {
   return document.querySelector('main [role="tabpanel"]') as HTMLElement;
 }
 
+function openFeature(module: NavModule, tab: NavTab) {
+  const expandButton = screen.getByRole('button', { name: new RegExp(`展开${module.label}|收起${module.label}`) });
+  if (expandButton.getAttribute('aria-expanded') === 'false') {
+    fireEvent.click(expandButton);
+  }
+  const childList = document.getElementById(`sidebar-children-${module.id}`);
+  if (!childList) {
+    throw new Error(`Missing child list for ${module.id}`);
+  }
+  fireEvent.click(within(childList).getByRole('button', { name: new RegExp(tab.label) }));
+}
+
 describe('NexaChat renderer', () => {
-  it('renders all eight first-level modules', async () => {
+  it('renders all eight first-level modules with expandable feature links', async () => {
     await renderApp();
 
+    expect(document.querySelectorAll('.module-nav-group')).toHaveLength(navModules.length);
+    expect(document.querySelectorAll('.module-nav-item')).toHaveLength(navModules.length);
+
     for (const module of navModules) {
-      expect(screen.getByRole('button', { name: new RegExp(module.label) })).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: new RegExp(module.label) }).length).toBeGreaterThan(0);
+      const expandButton = screen.getByRole('button', { name: new RegExp(`展开${module.label}|收起${module.label}`) });
+      if (expandButton.getAttribute('aria-expanded') === 'false') {
+        fireEvent.click(expandButton);
+      }
+      expect(screen.getAllByRole('button', { name: new RegExp(`${module.tabs[0].label}`) }).length).toBeGreaterThan(0);
     }
   });
 
   it('can input and send a chat message through the browser fallback API', async () => {
     await renderApp();
 
-    fireEvent.click(screen.getByRole('button', { name: /对话/ }));
+    const chat = navModules.find((module) => module.id === 'chat')!;
+    openFeature(chat, chat.tabs.find((tab) => tab.id === 'playground')!);
     const input = screen.getByPlaceholderText('输入消息，本地保存后再路由到模型...');
     fireEvent.change(input, { target: { value: '测试本地 fallback 发送' } });
     fireEvent.click(screen.getByRole('button', { name: /发送/ }));
@@ -40,33 +63,29 @@ describe('NexaChat renderer', () => {
     expect(screen.getByText(/Mock response from nexachat-mock/)).toBeInTheDocument();
   });
 
-  it('shows model, gateway, and settings key areas', async () => {
+  it('shows model gateway and settings key areas on new canonical routes', async () => {
     await renderApp();
 
-    fireEvent.click(screen.getByRole('button', { name: /模型/ }));
-    expect(screen.getByRole('heading', { name: 'Provider Hub' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: /模型列表/ }));
-    expect(screen.getByRole('heading', { name: 'Model Hub' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: /密钥管理/ }));
-    expect(activePanel()).toHaveAttribute('data-tab', 'capabilities');
-    expect(activePanel()).toHaveTextContent('密钥管理');
+    const models = navModules.find((module) => module.id === 'models')!;
+    const gateway = navModules.find((module) => module.id === 'gateway')!;
+    const settings = navModules.find((module) => module.id === 'settings')!;
 
-    fireEvent.click(screen.getByRole('button', { name: /本地网关/ }));
-    expect(screen.getByRole('heading', { name: '本地 OpenAI-compatible 网关' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: /API Key 管理/ }));
-    expect(activePanel()).toHaveAttribute('data-tab', 'keys');
-    expect(activePanel()).toHaveTextContent('API Key');
-    fireEvent.click(screen.getByRole('tab', { name: /CCS\/sub2api 导入/ }));
-    expect(screen.getByRole('heading', { name: '导入配置预览' })).toBeInTheDocument();
+    openFeature(models, models.tabs.find((tab) => tab.id === 'providers')!);
+    expect(activePanel()).toHaveAttribute('data-tab', 'providers');
+    expect(activePanel()).toHaveTextContent('Provider 管理');
+    openFeature(models, models.tabs.find((tab) => tab.id === 'catalog')!);
+    expect(activePanel()).toHaveAttribute('data-tab', 'catalog');
+    expect(activePanel()).toHaveTextContent('模型创建');
 
-    fireEvent.click(screen.getByRole('button', { name: /设置与安全/ }));
-    expect(activePanel()).toHaveAttribute('data-tab', 'request-logs');
-    expect(activePanel()).toHaveTextContent('运行监控');
-    fireEvent.click(screen.getByRole('tab', { name: /安全中心/ }));
+    openFeature(gateway, gateway.tabs.find((tab) => tab.id === 'keys')!);
     expect(activePanel()).toHaveAttribute('data-tab', 'keys');
-    expect(activePanel()).toHaveTextContent('安全中心');
-    fireEvent.click(screen.getByRole('tab', { name: /系统设置/ }));
-    expect(activePanel()).toHaveAttribute('data-tab', 'ui');
-    expect(activePanel()).toHaveTextContent('系统设置');
+    expect(activePanel()).toHaveTextContent('Gateway API Key');
+
+    openFeature(settings, settings.tabs.find((tab) => tab.id === 'preferences')!);
+    expect(activePanel()).toHaveAttribute('data-tab', 'preferences');
+    expect(activePanel()).toHaveTextContent('界面偏好');
+    openFeature(settings, settings.tabs.find((tab) => tab.id === 'security')!);
+    expect(activePanel()).toHaveAttribute('data-tab', 'security');
+    expect(activePanel()).toHaveTextContent('安全存储与 IPC 边界');
   });
 });

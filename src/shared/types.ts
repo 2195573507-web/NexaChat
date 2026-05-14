@@ -3,7 +3,9 @@ export type ModuleStage = 'ready' | 'implemented' | 'planned' | 'reserved' | 'en
 export interface NavTab {
   id: string;
   label: string;
+  title?: string;
   stage: ModuleStage;
+  status?: ModuleStage;
   route?: string;
   description?: string;
   default?: boolean;
@@ -11,16 +13,23 @@ export interface NavTab {
   labelKey?: string;
   descriptionKey?: string;
   icon?: string;
+  featureBoundary?: string;
 }
 
 export interface NavModule {
   id: ModuleId;
+  moduleId?: ModuleId;
   label: string;
+  moduleName?: string;
   shortLabel: string;
   route: string;
+  defaultRoute?: string;
   stage: ModuleStage;
+  status?: ModuleStage;
   tabs: NavTab[];
+  children?: NavTab[];
   description?: string;
+  moduleDescription?: string;
   permission?: string;
   labelKey?: string;
   shortLabelKey?: string;
@@ -29,7 +38,7 @@ export interface NavModule {
 }
 
 export type ModuleId =
-  | 'dashboard'
+  | 'workspace'
   | 'chat'
   | 'models'
   | 'knowledge'
