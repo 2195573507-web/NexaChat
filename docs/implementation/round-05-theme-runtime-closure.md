@@ -66,6 +66,6 @@ Passed. Round 5 establishes a real runtime theme resolver, keeps Settings persis
 
 ## Commit
 
-- Commit hash: Pending.
-- Push result: Pending.
+- Delivery commit hash: `6cc6b641ddb57a2e269485bd6b0c5159f2fb3947`.
+- Push result: `origin/main` confirmed at `6cc6b641ddb57a2e269485bd6b0c5159f2fb3947`.
 - Remaining issues: Round 6 still owns the real Provider/model invocation chain. Round 14 still owns production packaging and packaged shortcut migration.

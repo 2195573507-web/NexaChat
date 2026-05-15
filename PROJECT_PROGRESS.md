@@ -257,6 +257,11 @@ Desktop shortcut status:
 - `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`.
 - No shortcut was modified in Round 5.
 
+Git:
+
+- Round 5 delivery commit hash: `6cc6b641ddb57a2e269485bd6b0c5159f2fb3947`.
+- Push result: `origin/main` confirmed at `6cc6b641ddb57a2e269485bd6b0c5159f2fb3947`.
+
 ## 2026-05-14 UI Shell Redesign
 
 This round rebuilt the visible desktop shell, sidebar hierarchy, topbar, workbench home, and visual system so NexaChat reads as a formal compact desktop tool instead of a crowded prototype/debug panel.

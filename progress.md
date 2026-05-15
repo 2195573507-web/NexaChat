@@ -241,7 +241,9 @@
 - Re-ran `npm.cmd run test -- tests/theme-token-authority.test.ts`: passed, 1 file / 5 tests.
 - Ran `git diff --check`: passed with CRLF conversion warnings only.
 - Checked `C:\Users\至亲\Desktop\NexaChat.lnk`: target, arguments, working directory, and icon still point to the current local Electron launch entry.
+- Committed Round 5 delivery as `6cc6b641ddb57a2e269485bd6b0c5159f2fb3947`.
+- Pushed Round 5 delivery and confirmed `origin/main` at `6cc6b641ddb57a2e269485bd6b0c5159f2fb3947`.
 
 ## Pending Round 5 Closeout
 
-- Commit and push Round 5, then confirm remote ref if network allows.
+- Record final closeout hash in docs and keep the worktree clean.
