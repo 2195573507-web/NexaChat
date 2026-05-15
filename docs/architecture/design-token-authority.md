@@ -21,13 +21,15 @@ Renderer components should consume semantic CSS variables such as `--color-prima
 
 ## Chain Review
 
-The Round 3 UI chain is:
+The current UI/theme chain is:
 
 1. `src/shared/theme.ts` defines allowed token names and modes.
-2. `src/renderer/styles.css` assigns light and dark CSS variables.
-3. Shared primitives and module pages use only variables.
-4. `tests/theme-token-authority.test.ts` scans CSS for literal color and radius regressions.
-5. `tests/ui-smoke.spec.ts` verifies responsive shell readability and captures screenshots at 1040, 1280, 1440, and 1920 widths.
+2. `src/shared/theme.ts` normalizes stored theme values and resolves `system` against `prefers-color-scheme`.
+3. `src/renderer/AppShell.tsx` applies the resolved `theme-light` or `theme-dark` class and exposes `data-theme-mode` plus `data-resolved-theme`.
+4. `src/renderer/styles.css` assigns light variables in `:root` and dark overrides in `.theme-dark`.
+5. Shared primitives and module pages use only variables.
+6. `tests/theme-token-authority.test.ts` scans CSS for literal color and radius regressions, verifies light/dark color-token parity, and covers theme resolver behavior.
+7. `tests/ui-smoke.spec.ts` verifies responsive shell readability, theme switching, system-theme changes, and captures ignored screenshots under `test-results/`.
 
 ## Deletion Rule
 

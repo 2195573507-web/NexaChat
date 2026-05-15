@@ -23,6 +23,7 @@ import { redactSensitive } from '../security/redaction.js';
 import { createId, estimateTokens, now, previewSecret } from '../utils/ids.js';
 import { diagnoses } from '../../shared/errors.js';
 import { translate } from '../../shared/i18n.js';
+import { normalizeThemeMode } from '../../shared/theme.js';
 import type {
   AgentDefinition,
   AppSnapshot,
@@ -593,6 +594,10 @@ export class NexaStore {
 
   saveUiPreferences(preferences: UiPreferences): UiPreferences {
     const timestamp = now();
+    const normalizedPreferences: UiPreferences = {
+      ...preferences,
+      theme: normalizeThemeMode(preferences.theme),
+    };
     this.db
       .prepare(
         `INSERT INTO ui_preferences (id, theme, density, font_mode, language, reduced_motion, updated_at)
@@ -601,14 +606,14 @@ export class NexaStore {
       )
       .run(
         DEFAULT_PREFS_ID,
-        preferences.theme,
-        preferences.density,
-        preferences.fontMode,
-        preferences.language,
-        preferences.reducedMotion ? 1 : 0,
+        normalizedPreferences.theme,
+        normalizedPreferences.density,
+        normalizedPreferences.fontMode,
+        normalizedPreferences.language,
+        normalizedPreferences.reducedMotion ? 1 : 0,
         timestamp,
       );
-    this.audit('ui.preferences.updated', 'ui_preferences', DEFAULT_PREFS_ID, preferences);
+    this.audit('ui.preferences.updated', 'ui_preferences', DEFAULT_PREFS_ID, normalizedPreferences);
     return this.getUiPreferences();
   }
 

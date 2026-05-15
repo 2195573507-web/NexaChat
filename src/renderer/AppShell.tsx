@@ -34,12 +34,14 @@ import {
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { navModules } from '../shared/navigation';
+import { getThemeClass, resolveThemeMode } from '../shared/theme';
 import type { AppSnapshot, ModuleId, NavModule, NavTab } from '../shared/types';
 import { ModulePageFrame } from './components/ModulePageFrame';
 import { stageLabel } from './components/StatusPill';
 import { translateModule, useI18n } from './i18n';
 
 const SIDEBAR_EXPANDED_KEY = 'nexachat.sidebar.expandedModuleIds';
+const SYSTEM_DARK_QUERY = '(prefers-color-scheme: dark)';
 
 const moduleIcons: Record<ModuleId, LucideIcon> = {
   workspace: Gauge,
@@ -127,6 +129,10 @@ function getDefaultModelLabel(snapshot: AppSnapshot, fallback: string) {
   );
 }
 
+function getInitialSystemPrefersDark(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia?.(SYSTEM_DARK_QUERY).matches === true;
+}
+
 export function AppShell({
   activeModule,
   activeModuleId,
@@ -138,9 +144,22 @@ export function AppShell({
   rightRail,
 }: AppShellProps) {
   const { t } = useI18n();
-  const themeClass = snapshot.uiPreferences.theme === 'dark' ? 'theme-dark' : 'theme-light';
+  const [systemPrefersDark, setSystemPrefersDark] = useState(getInitialSystemPrefersDark);
   const [expandedModuleIds, setExpandedModuleIds] = useState<ModuleId[]>(() => getStoredExpandedModules(activeModuleId));
   const translatedModules = navModules.map((module) => translateModule(module, t));
+  const resolvedTheme = resolveThemeMode(snapshot.uiPreferences.theme, systemPrefersDark);
+  const themeClass = getThemeClass(snapshot.uiPreferences.theme, systemPrefersDark);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) {
+      return undefined;
+    }
+    const media = window.matchMedia(SYSTEM_DARK_QUERY);
+    const handleChange = () => setSystemPrefersDark(media.matches);
+    handleChange();
+    media.addEventListener('change', handleChange);
+    return () => media.removeEventListener('change', handleChange);
+  }, []);
 
   useEffect(() => {
     setExpandedModuleIds((current) => {
@@ -162,7 +181,11 @@ export function AppShell({
   };
 
   return (
-    <div className={`app-shell ${themeClass} density-${snapshot.uiPreferences.density} font-${snapshot.uiPreferences.fontMode}`}>
+    <div
+      className={`app-shell ${themeClass} density-${snapshot.uiPreferences.density} font-${snapshot.uiPreferences.fontMode}`}
+      data-theme-mode={snapshot.uiPreferences.theme}
+      data-resolved-theme={resolvedTheme}
+    >
       <aside className="sidebar" aria-label={t('shell.sidebar.aria')}>
         <div className="brand">
           <div className="brand-mark" aria-hidden="true">

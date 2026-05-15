@@ -214,3 +214,34 @@
 - Ran `git diff --check`: passed with LF/CRLF warnings only.
 - Checked `C:\Users\至亲\Desktop\NexaChat.lnk`: target, arguments, working directory, and icon still point to the current local Electron launch entry.
 - Round 4 delivery commit `4e32be97af796c0b008393ed77b7dab5b67af25f` was pushed with `git push origin main`; `git ls-remote` remote confirmation failed afterward because GitHub HTTPS was unreachable from the current host.
+
+## 2026-05-15 Full App Round 5 Execution
+
+- Reconfirmed the active Round 5 target from `docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md`: real light/dark/system theme runtime with unified persistence and immediate switching.
+- Used the prior read-only explorer result from the interrupted thread: the root cause was that `UiPreferences.theme` could store `system`, but `AppShell` treated every non-`dark` value as light and had no `prefers-color-scheme` listener.
+- Added shared theme runtime helpers in `src/shared/theme.ts`: theme normalization, resolved theme mode, and class mapping.
+- Updated `src/shared/types.ts` so `UiPreferences.theme` uses the shared `ThemeMode`.
+- Updated main-process persistence mapping and saving in `src/main/repositories/mappers.ts` and `src/main/services/store.ts` so stale/invalid values normalize to `system`.
+- Updated `src/renderer/mockApi.ts` to normalize saved theme preferences the same way as the real store.
+- Updated `src/renderer/AppShell.tsx` to listen for system color-scheme changes, resolve `system` live, and expose `data-theme-mode` / `data-resolved-theme`.
+- Strengthened `tests/theme-token-authority.test.ts` for resolver behavior and light/dark color-token parity.
+- Extended `tests/ui-smoke.spec.ts` to verify dark, light, and follow-system changes, including simulated OS preference changes and screenshot capture under ignored `test-results/round-05-theme-runtime/`.
+- Updated `docs/architecture/design-token-authority.md`, `docs/implementation/full-app-round-execution-matrix.md`, `docs/implementation/round-05-theme-runtime-closure.md`, `PROJECT_PROGRESS.md`, and `task_plan.md`.
+- Ran `npm.cmd run typecheck`: passed.
+- Ran `npm.cmd run test -- tests/theme-token-authority.test.ts`: passed, 1 file / 5 tests.
+- First `npm.cmd run build` after adding the shared theme type failed because `src/shared/types.ts` used an extensionless type import under NodeNext main-process compilation.
+- Fixed the type-only import to `./theme.js`.
+- Ran `npm.cmd run test`: passed, 5 files / 20 tests.
+- Ran `npm.cmd run build`: passed.
+- Ran `npm.cmd run verify`: passed.
+- Ran `npm.cmd run test:electron-smoke`: passed.
+- First `npm.cmd run test:ui-smoke` after adding the system-theme test failed because the test `matchMedia` mock returned a fixed `matches` value.
+- Fixed the mock to expose `matches` as a getter.
+- Re-ran `npm.cmd run test:ui-smoke`: passed, 11 Playwright tests.
+- Re-ran `npm.cmd run test -- tests/theme-token-authority.test.ts`: passed, 1 file / 5 tests.
+- Ran `git diff --check`: passed with CRLF conversion warnings only.
+- Checked `C:\Users\至亲\Desktop\NexaChat.lnk`: target, arguments, working directory, and icon still point to the current local Electron launch entry.
+
+## Pending Round 5 Closeout
+
+- Commit and push Round 5, then confirm remote ref if network allows.

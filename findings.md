@@ -41,6 +41,14 @@
 - The current Windows smoke host can fail Electron startup when GPU/cache state is locked. The Electron smoke script now uses smoke-only user data and disables hardware GPU while preserving software rendering.
 - Playwright's built-in webServer lifecycle could leave `test:ui-smoke` hanging after all tests passed on this host. `scripts/ui-smoke.mjs` now owns the Vite process lifecycle and exits with the Playwright result.
 
+## Full App Round 5 Findings
+
+- `UiPreferences.theme` already supported `system`, but before Round 5 the renderer shell resolved only exact `dark` to `theme-dark`; every other value became `theme-light`.
+- The durable fix is a shared theme resolver plus an OS `prefers-color-scheme` listener in the shell, not a new CSS mode or database schema.
+- `:root` remains the light-token source and `.theme-dark` remains the dark-token override source; `.theme-light` does not need a duplicate token block.
+- Tests need a visible state surface for theme resolution. `data-theme-mode` records the saved preference, while `data-resolved-theme` records the current light/dark rendering.
+- Browser mock and main-process store must normalize theme values the same way, otherwise Playwright UI smoke can pass a behavior that differs from Electron.
+
 ## Initial Repository State
 
 - Repository root: `D:\NexaChat`.

@@ -545,6 +545,40 @@ These references guide product and engineering decisions. They are not permissio
 25. **Deliverables**: Theme authority, settings switch, migrated CSS, tests, screenshots, docs.
 26. **Next Round Input**: UI foundation ready for real Provider and model chain.
 
+### Round 5 Execution Status
+
+- Status: Completed.
+- Completion date: 2026-05-15.
+- Main changed files:
+  - `src/shared/theme.ts`
+  - `src/shared/types.ts`
+  - `src/main/repositories/mappers.ts`
+  - `src/main/services/store.ts`
+  - `src/renderer/AppShell.tsx`
+  - `src/renderer/mockApi.ts`
+  - `tests/theme-token-authority.test.ts`
+  - `tests/ui-smoke.spec.ts`
+  - `docs/architecture/design-token-authority.md`
+  - `docs/implementation/round-05-theme-runtime-closure.md`
+  - `docs/implementation/full-app-round-execution-matrix.md`
+  - `PROJECT_PROGRESS.md`
+  - `task_plan.md`
+  - `progress.md`
+  - `findings.md`
+- Added/modified functionality: added shared theme normalization and resolver helpers, normalized stored and mock theme preferences, resolved `system` against `prefers-color-scheme`, updated shell DOM state with stored/resolved theme attributes, and expanded theme regression tests and screenshots.
+- Verification:
+  - `npm.cmd run typecheck`: passed.
+  - `npm.cmd run test -- tests/theme-token-authority.test.ts`: passed, 1 file / 5 tests.
+  - `npm.cmd run test`: passed, 5 files / 20 tests.
+  - `npm.cmd run build`: passed.
+  - `npm.cmd run verify`: passed.
+  - `npm.cmd run test:ui-smoke`: passed, 11 Playwright tests.
+  - `npm.cmd run test:electron-smoke`: passed.
+  - `git diff --check`: passed with CRLF conversion warnings only.
+- Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` still targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and uses `D:\NexaChat\assets\app-icon.ico,0`.
+- Acceptance result: Passed. Light, dark, and system theme modes now share one resolver; system follows OS preference changes live; Settings preserves language, density, font, and motion while switching theme.
+- Remaining issues: None for Round 5. Round 6 owns real Provider/model invocation and removal/isolation of the production mock chain.
+
 ## 12. Round 6: Provider, Model And Real Invocation Chain
 
 1. **Round Name**: Provider, Model And Real Invocation Chain.

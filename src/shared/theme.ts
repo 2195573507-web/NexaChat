@@ -1,6 +1,8 @@
 export const THEME_MODES = ['light', 'dark', 'system'] as const;
+export const RESOLVED_THEME_MODES = ['light', 'dark'] as const;
 
 export type ThemeMode = (typeof THEME_MODES)[number];
+export type ResolvedThemeMode = (typeof RESOLVED_THEME_MODES)[number];
 
 export const THEME_TOKEN_CATEGORIES = {
   color: [
@@ -43,3 +45,18 @@ export const THEME_CLASS_BY_MODE: Record<Exclude<ThemeMode, 'system'>, string> =
   light: 'theme-light',
   dark: 'theme-dark'
 };
+
+export function normalizeThemeMode(value: string | null | undefined): ThemeMode {
+  return THEME_MODES.includes(value as ThemeMode) ? (value as ThemeMode) : 'system';
+}
+
+export function resolveThemeMode(mode: ThemeMode, prefersDark: boolean): ResolvedThemeMode {
+  if (mode === 'system') {
+    return prefersDark ? 'dark' : 'light';
+  }
+  return mode;
+}
+
+export function getThemeClass(mode: ThemeMode, prefersDark: boolean): string {
+  return THEME_CLASS_BY_MODE[resolveThemeMode(mode, prefersDark)];
+}

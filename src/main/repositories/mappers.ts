@@ -15,6 +15,7 @@ import type {
   UsageRecord,
   Workspace,
 } from '../../shared/types.js';
+import { normalizeThemeMode } from '../../shared/theme.js';
 
 type Row = Record<string, unknown>;
 
@@ -268,7 +269,7 @@ export function mapAuditLog(row: Row): AuditLog {
 
 export function mapUiPreferences(row: Row): UiPreferences {
   return {
-    theme: String(row.theme) as UiPreferences['theme'],
+    theme: normalizeThemeMode(nullableString(row.theme)),
     density: String(row.density) as UiPreferences['density'],
     fontMode: String(row.font_mode) as UiPreferences['fontMode'],
     language: String(row.language) as UiPreferences['language'],

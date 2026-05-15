@@ -3,6 +3,12 @@ import { translate } from '../src/shared/i18n';
 import { getDefaultTab, getTabRoute, navModules } from '../src/shared/navigation';
 import type { NavModule, NavTab } from '../src/shared/types';
 
+declare global {
+  interface Window {
+    __setNexaChatSystemDark(nextDark: boolean): void;
+  }
+}
+
 async function expectNoHorizontalOverflow(page: Page, selector: string) {
   const box = await page.locator(selector).first().evaluate((element) => ({
     scrollWidth: element.scrollWidth,
@@ -14,6 +20,37 @@ async function expectNoHorizontalOverflow(page: Page, selector: string) {
 async function expectNoVisibleRouteLeak(page: Page) {
   const bodyText = await page.locator('body').innerText();
   expect(bodyText).not.toMatch(/(^|\s)\/(workspace|chat|models|knowledge|tools|gateway|data|settings)\//);
+}
+
+async function mockSystemTheme(page: Page, initialDark: boolean) {
+  await page.addInitScript((dark) => {
+    type Listener = (event: MediaQueryListEvent) => void;
+    let matches = dark;
+    const listeners = new Set<Listener>();
+    window.matchMedia = (query: string) => ({
+      get matches() {
+        return matches;
+      },
+      media: query,
+      onchange: null,
+      addEventListener: (_type: string, listener: EventListenerOrEventListenerObject) => {
+        listeners.add(listener as Listener);
+      },
+      removeEventListener: (_type: string, listener: EventListenerOrEventListenerObject) => {
+        listeners.delete(listener as Listener);
+      },
+      addListener: (listener: Listener) => listeners.add(listener),
+      removeListener: (listener: Listener) => listeners.delete(listener),
+      dispatchEvent: () => true,
+    });
+    window.__setNexaChatSystemDark = (nextDark: boolean) => {
+      matches = nextDark;
+      const event = { matches, media: '(prefers-color-scheme: dark)' } as MediaQueryListEvent;
+      for (const listener of listeners) {
+        listener(event);
+      }
+    };
+  }, initialDark);
 }
 
 async function clickModule(page: Page, module: NavModule) {
@@ -222,4 +259,37 @@ test('theme and language preferences can change without breaking the shell', asy
   await expect(page.locator('.topbar-actions')).toContainText(translate('en-US', 'shell.openChat'));
   await expect(page.locator('main [data-tab="preferences"]').getByRole('heading', { name: translate('en-US', 'settings.preferences.title') }).first()).toBeVisible();
   await expectNoHorizontalOverflow(page, '.app-shell');
+  await page.screenshot({ path: 'test-results/round-05-theme-runtime/dark-en-preferences.png', fullPage: true });
+
+  await page.getByLabel(translate('en-US', 'settings.preferences.theme')).selectOption('light');
+  await page.getByRole('button', { name: new RegExp(translate('en-US', 'settings.preferences.save')) }).click();
+  await expect(page.locator('.app-shell')).toHaveClass(/theme-light/);
+  await expect(page.locator('.app-shell')).toHaveAttribute('data-theme-mode', 'light');
+  await expect(page.locator('.app-shell')).toHaveAttribute('data-resolved-theme', 'light');
+  await expectNoHorizontalOverflow(page, '.app-shell');
+  await page.screenshot({ path: 'test-results/round-05-theme-runtime/light-en-preferences.png', fullPage: true });
+});
+
+test('system theme follows OS preference changes without resetting saved preferences', async ({ page }) => {
+  await mockSystemTheme(page, true);
+  await page.goto('/settings/preferences');
+
+  await expect(page.locator('.app-shell')).toHaveClass(/theme-dark/);
+  await expect(page.locator('.app-shell')).toHaveAttribute('data-theme-mode', 'system');
+  await expect(page.locator('.app-shell')).toHaveAttribute('data-resolved-theme', 'dark');
+
+  await page.getByLabel(translate('zh-CN', 'settings.preferences.language')).selectOption('en-US');
+  await page.getByLabel(translate('zh-CN', 'settings.preferences.density')).selectOption('compact');
+  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'settings.preferences.save')) }).click();
+  await expect(page.locator('.app-shell')).toHaveClass(/density-compact/);
+  await expect(page.locator('.topbar-actions')).toContainText(translate('en-US', 'shell.openChat'));
+  await expect(page.locator('.app-shell')).toHaveAttribute('data-theme-mode', 'system');
+  await expect(page.locator('.app-shell')).toHaveAttribute('data-resolved-theme', 'dark');
+
+  await page.evaluate(() => window.__setNexaChatSystemDark(false));
+  await expect(page.locator('.app-shell')).toHaveClass(/theme-light/);
+  await expect(page.locator('.app-shell')).toHaveAttribute('data-resolved-theme', 'light');
+  await expect(page.locator('.app-shell')).toHaveClass(/density-compact/);
+  await expect(page.locator('.topbar-actions')).toContainText(translate('en-US', 'shell.openChat'));
+  await page.screenshot({ path: 'test-results/round-05-theme-runtime/system-light-en-preferences.png', fullPage: true });
 });

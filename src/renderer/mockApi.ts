@@ -27,6 +27,7 @@ import type {
 } from '../shared/types';
 import type { AppApi } from '../shared/api';
 import { translate } from '../shared/i18n';
+import { normalizeThemeMode } from '../shared/theme';
 
 const t = (key: Parameters<typeof translate>[1], params?: Parameters<typeof translate>[2]) => translate('zh-CN', key, params);
 
@@ -751,8 +752,8 @@ export function createMockApi(): AppApi {
     },
 
     async saveUiPreferences(preferences: UiPreferences) {
-      state.uiPreferences = { ...preferences };
-      pushAudit('settings.saveUiPreferences', 'settings', 'uiPreferences', preferences);
+      state.uiPreferences = { ...preferences, theme: normalizeThemeMode(preferences.theme) };
+      pushAudit('settings.saveUiPreferences', 'settings', 'uiPreferences', state.uiPreferences);
       return clone(state.uiPreferences);
     },
 

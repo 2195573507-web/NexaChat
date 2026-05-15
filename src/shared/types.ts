@@ -1,3 +1,5 @@
+import type { ThemeMode } from './theme.js';
+
 export type ModuleStage = 'ready' | 'implemented' | 'planned' | 'reserved' | 'environment-limited';
 
 export interface NavTab {
@@ -332,7 +334,7 @@ export interface AuditLog {
 }
 
 export interface UiPreferences {
-  theme: 'light' | 'dark' | 'system';
+  theme: ThemeMode;
   density: 'comfortable' | 'compact';
   fontMode: 'system' | 'kaiti';
   language: 'zh-CN' | 'en-US';

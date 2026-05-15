@@ -221,6 +221,42 @@ Verification on 2026-05-15:
 
 Round 4 delivery commit: `4e32be97af796c0b008393ed77b7dab5b67af25f`. Push returned success (`36c6d8c..4e32be9 main -> main`); follow-up `git ls-remote` confirmation was blocked by GitHub HTTPS connectivity from the current host. Round 5 owns full light/dark/system theme resolution and visual regression coverage.
 
+## 2026-05-15 Full App Round 5 Theme Runtime
+
+Round 5 of the authoritative full-app blueprint is complete. It turns the existing `system` theme preference from a saved value into live runtime behavior.
+
+Parallel execution lanes:
+
+- Lane A: theme resolver, system preference listener, shell class/attribute state, and preference normalization.
+- Lane B: token authority tests, mock/runtime consistency, and UI smoke theme coverage.
+- Lane C: closeout docs, screenshot evidence, desktop shortcut readback, and Git closure.
+
+Key changes:
+
+- `src/shared/theme.ts` now owns theme normalization and `system` resolution against `prefers-color-scheme`.
+- `src/renderer/AppShell.tsx` now applies `theme-light` or `theme-dark` from the resolved mode, updates when the OS color scheme changes, and exposes `data-theme-mode` plus `data-resolved-theme`.
+- `src/main/repositories/mappers.ts`, `src/main/services/store.ts`, and `src/renderer/mockApi.ts` now normalize stale or invalid theme values to `system`.
+- `src/shared/types.ts` uses the shared `ThemeMode` type for UI preferences.
+- `tests/theme-token-authority.test.ts` now covers theme resolver behavior and light/dark color-token parity.
+- `tests/ui-smoke.spec.ts` now verifies dark, light, and follow-system behavior and saves ignored screenshots under `test-results/round-05-theme-runtime/`.
+- `docs/architecture/design-token-authority.md`, `docs/implementation/full-app-round-execution-matrix.md`, and `docs/implementation/round-05-theme-runtime-closure.md` record the Round 5 chain.
+
+Verification on 2026-05-15:
+
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test -- tests/theme-token-authority.test.ts`: passed, 1 file / 5 tests.
+- `npm.cmd run test`: passed, 5 files / 20 tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run verify`: passed.
+- `npm.cmd run test:ui-smoke`: passed, 11 Playwright tests.
+- `npm.cmd run test:electron-smoke`: passed.
+- `git diff --check`: passed with CRLF conversion warnings only.
+
+Desktop shortcut status:
+
+- `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`.
+- No shortcut was modified in Round 5.
+
 ## 2026-05-14 UI Shell Redesign
 
 This round rebuilt the visible desktop shell, sidebar hierarchy, topbar, workbench home, and visual system so NexaChat reads as a formal compact desktop tool instead of a crowded prototype/debug panel.
