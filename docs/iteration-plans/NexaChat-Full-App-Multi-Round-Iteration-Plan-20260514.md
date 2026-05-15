@@ -657,8 +657,8 @@ These references guide product and engineering decisions. They are not permissio
   - `npm.cmd run test:electron-smoke`: passed.
 - Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` still targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and uses `D:\NexaChat\assets\app-icon.ico,0`.
 - Acceptance result: Passed. OpenAI-compatible Provider invocation now has one production chain shared by Chat and Gateway; streaming/cancel/retry/timeout/fallback/error policy is defined and tested; the production mock chain is removed.
-- Commit hash: pending Round 6 commit.
-- Push result: pending Round 6 push.
+- Commit hash: `45054a81190638e209d06d9373ff83e38763a9fd`.
+- Push result: pending closeout push confirmation.
 - Remaining issues: None for Round 6. Round 7 owns richer conversation lifecycle state, retry/regenerate UI, chunks, attachments, export, and multi-model fan-out.
 
 ## 13. Round 7: Conversation System And Multi-Model Experience
