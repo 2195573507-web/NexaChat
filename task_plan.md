@@ -46,6 +46,7 @@ At least three agents were launched concurrently before implementation work cont
 - Full App Round 3 global UI and design system refactor: complete as implementation, verification, commit, and push.
 - Full App Round 4 Chinese / English switching and i18n authority: complete as implementation, verification, commit, and push.
 - Full App Round 5 dark/light/system theme runtime: complete as implementation, verification, commit, and push.
+- Full App Round 6 Provider/model real invocation chain: complete as implementation and verification; commit and push pending.
 - Phase 1: complete.
 - Phase 2: complete.
 - Phase 3: complete.
@@ -64,7 +65,7 @@ At least three agents were launched concurrently before implementation work cont
 - Implemented SQLite schema and main-process store for core local data.
 - Implemented Provider, Model, Router, Chat, request log, usage, audit, gateway key, Knowledge file, MCP registry, Agent definition, snapshot, diagnostics, and UI preferences actions.
 - Implemented safe preload IPC bridge.
-- Implemented local gateway endpoints `/v1/models`, `/v1/chat/completions`, `/v1/embeddings`, and reserved `/v1/responses`.
+- Implemented local gateway endpoints `/v1/models`, `/v1/chat/completions`, `/v1/embeddings`, and reserved `/v1/responses`; `/v1/chat/completions` now reuses the real Provider adapter chain instead of local response generation.
 - Implemented renderer shell, dashboard, chat, model center, knowledge, tools/MCP/Agent, gateway, data config, and settings/security pages.
 - Implemented browser fallback API for Vite/Playwright tests.
 - Added Vitest and Playwright smoke tests.

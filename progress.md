@@ -244,3 +244,31 @@
 - Committed Round 5 delivery as `6cc6b641ddb57a2e269485bd6b0c5159f2fb3947`.
 - Pushed Round 5 delivery and confirmed `origin/main` at `6cc6b641ddb57a2e269485bd6b0c5159f2fb3947`.
 - Recorded Round 5 closeout as `220bceca31c77949b8d27272be41125a0d6dc58d` and confirmed `origin/main` at that hash.
+
+## 2026-05-15 Full App Round 6 Execution
+
+- Reconfirmed real project root with `git rev-parse --show-toplevel`: `D:/NexaChat`.
+- Probed requested skill paths again: `using-superpower` is unavailable; `using-superpowers` is available.
+- Used parallel lanes:
+  - Lane A: Provider adapter, shared runtime authority, and main-process secret boundary.
+  - Lane B: Store/Router request lifecycle, Provider health test, streaming/cancel/retry/timeout, logs, usage, and audit.
+  - Lane C: Gateway provider forwarding smoke, UI smoke, Electron smoke, docs, shortcut, and Git closure.
+  - Lane D: read-only Round 7 risk audit for conversation lifecycle dependencies.
+- Added `src/shared/providerRuntime.ts`.
+- Added `src/main/services/openAiCompatibleAdapter.ts`.
+- Updated `src/main/services/store.ts` so Provider tests call upstream `/models` and Chat sends call real OpenAI-compatible `/chat/completions`.
+- Deleted production `generateLocalAssistantReply()`.
+- Removed seed-time fake Provider/Model/key and seed-time fake assistant generation.
+- Updated `src/main/services/localGateway.ts` so Gateway chat completions reuse the same Store/provider runtime chain and return 502 on provider failures.
+- Added `tests/provider-adapter.test.ts`, `tests/provider-store-integration.test.ts`, and `tests/gateway-provider-chain.test.ts`.
+- Updated stale i18n text that described Chat as a local response loop.
+- Added `docs/implementation/round-06-provider-runtime-closure.md`.
+- Ran `npm.cmd run test -- tests/provider-adapter.test.ts tests/provider-store-integration.test.ts`: passed, 2 files / 7 tests.
+- First adapter cancellation test failed because an already-aborted signal was not checked before fetch; fixed adapter to reject before starting.
+- Ran `npm.cmd run test -- tests/provider-adapter.test.ts tests/provider-store-integration.test.ts tests/gateway-provider-chain.test.ts`: passed, 3 files / 9 tests.
+- Ran `npm.cmd run typecheck`: passed.
+- Ran `npm.cmd run test`: passed, 8 files / 29 tests.
+- Ran `npm.cmd run test:ui-smoke`: passed, 11 Playwright tests.
+- Ran `npm.cmd run build`: passed.
+- Ran `npm.cmd run verify`: passed.
+- Ran `npm.cmd run test:electron-smoke`: passed.

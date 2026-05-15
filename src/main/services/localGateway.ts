@@ -9,7 +9,17 @@ export async function startLocalGateway(): Promise<void> {
     return;
   }
 
-  server = createServer(async (request, response) => {
+  server = createLocalGatewayServer();
+
+  await new Promise<void>((resolve, reject) => {
+    server?.once('error', reject);
+    server?.listen(8787, '127.0.0.1', () => resolve());
+  });
+  store.setGatewayRuntime(true);
+}
+
+export function createLocalGatewayServer(): Server {
+  return createServer(async (request, response) => {
     const path = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
     try {
       if (request.method === 'GET' && path === '/v1/models') {
@@ -38,12 +48,6 @@ export async function startLocalGateway(): Promise<void> {
       store.recordGatewayLog(request.method ?? 'GET', path, 500, null, headersToObject(request));
     }
   });
-
-  await new Promise<void>((resolve, reject) => {
-    server?.once('error', reject);
-    server?.listen(8787, '127.0.0.1', () => resolve());
-  });
-  store.setGatewayRuntime(true);
 }
 
 export async function stopLocalGateway(): Promise<void> {
@@ -94,7 +98,7 @@ async function handleChatCompletions(request: IncomingMessage, response: ServerR
   const lastUser = [...messages].reverse().find((message) => message?.role === 'user');
   const content = typeof lastUser?.content === 'string' ? lastUser.content : JSON.stringify(lastUser?.content ?? '');
   const modelId = store.resolveGatewayModelId(typeof body.model === 'string' ? body.model : undefined);
-  const result = store.sendMessage({
+  const result = await store.sendMessage({
     content: content || 'External gateway request',
     modelId,
     contextStrategy: 'recent_n',
@@ -125,6 +129,21 @@ async function handleChatCompletions(request: IncomingMessage, response: ServerR
       routeDecision: result.routeDecision,
     },
   };
+  if (result.requestLog.status === 'failed') {
+    writeJson(response, 502, {
+      error: {
+        message: result.requestLog.errorMessage ?? 'Provider invocation failed.',
+        type: result.requestLog.errorCode ?? 'provider_error',
+      },
+      nexachat: {
+        conversationId: result.conversation.id,
+        requestLogId: result.requestLog.id,
+        routeDecision: result.routeDecision,
+      },
+    });
+    store.recordGatewayLog('POST', '/v1/chat/completions', 502, result.requestLog.id, headersToObject(request));
+    return;
+  }
   writeJson(response, 200, payload);
   store.recordGatewayLog('POST', '/v1/chat/completions', 200, result.requestLog.id, headersToObject(request));
 }

@@ -16,7 +16,7 @@ export function getDatabase(): DatabaseContext {
     return context;
   }
 
-  const userDataPath = app?.getPath ? app.getPath('userData') : join(process.cwd(), 'NexaChatData');
+  const userDataPath = process.env.NEXACHAT_DATA_DIR || (app?.getPath ? app.getPath('userData') : join(process.cwd(), 'NexaChatData'));
   mkdirSync(userDataPath, { recursive: true });
   const databasePath = join(userDataPath, 'nexachat.sqlite');
   const db = new DatabaseSync(databasePath);

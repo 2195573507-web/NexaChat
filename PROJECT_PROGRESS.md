@@ -262,6 +262,49 @@ Git:
 - Round 5 delivery commit hash: `6cc6b641ddb57a2e269485bd6b0c5159f2fb3947`.
 - Push result: delivery commit `6cc6b641ddb57a2e269485bd6b0c5159f2fb3947` and closeout commit `220bceca31c77949b8d27272be41125a0d6dc58d` are both pushed; `origin/main` is confirmed at `220bceca31c77949b8d27272be41125a0d6dc58d`.
 
+## 2026-05-15 Full App Round 6 Provider Runtime
+
+Round 6 of the authoritative full-app blueprint is complete as an implementation and verification round. It replaced the production local/demo response path with a real OpenAI-compatible Provider invocation chain shared by Chat and the local Gateway.
+
+Parallel execution lanes:
+
+- Lane A: Provider adapter, shared runtime policy/error authority, and main-process secret boundary.
+- Lane B: Router/request lifecycle, provider health test, streaming parser, cancellation, retry, timeout, request logs, usage, and audit.
+- Lane C: Gateway forwarding smoke, UI smoke, Electron smoke, docs, and desktop shortcut verification.
+- Lane D: read-only Round 7 risk review for conversation lifecycle dependencies.
+
+Key changes:
+
+- Added `src/shared/providerRuntime.ts` for adapter names, endpoint constants, timeout/retry policy, and runtime error codes.
+- Added `src/main/services/openAiCompatibleAdapter.ts` for real `/models` health checks and `/chat/completions` calls.
+- Changed `src/main/services/store.ts` so `testProvider()` performs real upstream health checks and `sendMessage()` calls the provider adapter.
+- Deleted production `generateLocalAssistantReply()`.
+- Removed seed-time fake Provider/Model/API key creation and seed-time fake assistant message generation.
+- Updated `src/main/services/localGateway.ts` so `/v1/chat/completions` awaits the same provider runtime chain and returns 502 on provider failure.
+- Added deterministic tests for adapter behavior, Store integration, and Gateway forwarding through local mock upstreams.
+- Updated stale i18n wording that described Chat as a local response loop.
+
+Verification on 2026-05-15:
+
+- `npm.cmd run test -- tests/provider-adapter.test.ts tests/provider-store-integration.test.ts`: passed, 2 files / 7 tests.
+- `npm.cmd run test -- tests/provider-adapter.test.ts tests/provider-store-integration.test.ts tests/gateway-provider-chain.test.ts`: passed, 3 files / 9 tests.
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test`: passed, 8 files / 29 tests.
+- `npm.cmd run test:ui-smoke`: passed, 11 Playwright tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run verify`: passed.
+- `npm.cmd run test:electron-smoke`: passed.
+
+Desktop shortcut status:
+
+- `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`.
+- No shortcut was modified in Round 6.
+
+Git:
+
+- Round 6 commit hash: pending.
+- Push result: pending.
+
 ## 2026-05-14 UI Shell Redesign
 
 This round rebuilt the visible desktop shell, sidebar hierarchy, topbar, workbench home, and visual system so NexaChat reads as a formal compact desktop tool instead of a crowded prototype/debug panel.

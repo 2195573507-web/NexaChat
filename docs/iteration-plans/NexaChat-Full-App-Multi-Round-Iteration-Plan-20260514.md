@@ -610,6 +610,57 @@ These references guide product and engineering decisions. They are not permissio
 25. **Deliverables**: Provider adapter system, router/runtime chain, updated UI, tests, docs, progress update.
 26. **Next Round Input**: Real model invocation ready for richer conversation features.
 
+### Round 6 Execution Status
+
+- Status: Completed.
+- Completion date: 2026-05-15.
+- Parallel lanes:
+  - Lane A: Provider adapter, endpoint/error/policy authority, and main-process secret boundary.
+  - Lane B: `store.sendMessage`, provider health test, request lifecycle, retry/timeout/cancel/stream parser, logs, usage, and audit.
+  - Lane C: Gateway forwarding smoke, UI smoke, Electron smoke, documentation, and desktop shortcut verification.
+  - Lane D: read-only Round 7 risk review for conversation lifecycle dependencies.
+- Root-cause result: Chat UI and local Gateway both terminated in `store.sendMessage()`, but that method generated local assistant text and `testProvider()` did not call the upstream. Seed data also created a fake demo Provider/model/key, which made the fake path look production-ready.
+- Chain review result: UI model selection -> preload IPC -> `store.sendMessage` -> router -> provider adapter -> main-process secret lookup -> OpenAI-compatible HTTP call -> retry/timeout/cancel/stream parser -> request log -> usage -> audit -> assistant message. Gateway `/v1/chat/completions` now reuses the same chain.
+- Main changed files:
+  - `src/shared/providerRuntime.ts`
+  - `src/main/services/openAiCompatibleAdapter.ts`
+  - `src/main/services/store.ts`
+  - `src/main/services/localGateway.ts`
+  - `src/main/database/connection.ts`
+  - `src/shared/i18n.ts`
+  - `tests/provider-adapter.test.ts`
+  - `tests/provider-store-integration.test.ts`
+  - `tests/gateway-provider-chain.test.ts`
+  - `docs/implementation/round-06-provider-runtime-closure.md`
+  - `docs/implementation/full-app-round-execution-matrix.md`
+- Added/modified functionality:
+  - Added a shared Provider runtime authority for adapter names, endpoints, timeout/retry policy, and normalized runtime errors.
+  - Added a real OpenAI-compatible adapter for `/models` health checks and `/chat/completions` calls.
+  - Added streaming response parsing, AbortController cancellation handling, timeout handling, and retry on retryable upstream failures.
+  - Kept raw Provider API keys inside main-process secret storage and redacted request/gateway logs.
+  - Converted Provider connection testing into a real upstream `/models` call.
+  - Converted Chat and Gateway from local response generation to one shared provider invocation chain.
+  - Added deterministic local mocked-upstream tests for adapter, Store, and Gateway behavior.
+- Deleted old links:
+  - Deleted production `generateLocalAssistantReply()`.
+  - Removed seed-time fake Provider/Model/API key creation.
+  - Removed seed-time fake assistant message generation.
+  - Browser `Mock response from nexachat-mock` remains explicit UI-smoke/browser fallback only.
+- Test commands and results:
+  - `npm.cmd run test -- tests/provider-adapter.test.ts tests/provider-store-integration.test.ts`: passed, 2 files / 7 tests.
+  - `npm.cmd run test -- tests/provider-adapter.test.ts tests/provider-store-integration.test.ts tests/gateway-provider-chain.test.ts`: passed, 3 files / 9 tests.
+  - `npm.cmd run typecheck`: passed.
+  - `npm.cmd run test`: passed, 8 files / 29 tests.
+  - `npm.cmd run test:ui-smoke`: passed, 11 Playwright tests.
+  - `npm.cmd run build`: passed.
+  - `npm.cmd run verify`: passed.
+  - `npm.cmd run test:electron-smoke`: passed.
+- Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` still targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and uses `D:\NexaChat\assets\app-icon.ico,0`.
+- Acceptance result: Passed. OpenAI-compatible Provider invocation now has one production chain shared by Chat and Gateway; streaming/cancel/retry/timeout/fallback/error policy is defined and tested; the production mock chain is removed.
+- Commit hash: pending Round 6 commit.
+- Push result: pending Round 6 push.
+- Remaining issues: None for Round 6. Round 7 owns richer conversation lifecycle state, retry/regenerate UI, chunks, attachments, export, and multi-model fan-out.
+
 ## 13. Round 7: Conversation System And Multi-Model Experience
 
 1. **Round Name**: Conversation System And Multi-Model Experience.

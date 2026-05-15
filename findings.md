@@ -49,6 +49,15 @@
 - Tests need a visible state surface for theme resolution. `data-theme-mode` records the saved preference, while `data-resolved-theme` records the current light/dark rendering.
 - Browser mock and main-process store must normalize theme values the same way, otherwise Playwright UI smoke can pass a behavior that differs from Electron.
 
+## Full App Round 6 Findings
+
+- `store.sendMessage()` and Gateway `/v1/chat/completions` already shared one entry point, so replacing the fake production response there fixes both UI Chat and external Gateway callers without a second provider chain.
+- `testProvider()` was a shape check before Round 6; the durable health signal is a real OpenAI-compatible `/models` request with request-log evidence.
+- Seed data must not create a fake Provider, fake API key, fake model, or seed-time assistant response because those records make a demo path look production-ready.
+- Streaming, cancellation, timeout, and retry can be defined at the adapter contract now; Round 7 should build richer UI lifecycle controls on top of that instead of creating another message append path.
+- Local Gateway smoke should use dynamic ports and a local mocked upstream in tests; binding the real `127.0.0.1:8787` port is better left to Electron/runtime smoke.
+- Request and Gateway logs need header-key-based redaction, not only value-pattern redaction, because custom sensitive headers can use arbitrary values.
+
 ## Initial Repository State
 
 - Repository root: `D:\NexaChat`.

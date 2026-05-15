@@ -19,10 +19,15 @@ import {
   mapUsageRecord,
   mapWorkspace,
 } from '../repositories/mappers.js';
-import { redactSensitive } from '../security/redaction.js';
+import { redactHeaders, redactSensitive } from '../security/redaction.js';
 import { createId, estimateTokens, now, previewSecret } from '../utils/ids.js';
 import { diagnoses } from '../../shared/errors.js';
 import { translate } from '../../shared/i18n.js';
+import {
+  PROVIDER_RUNTIME_ERROR_CODES,
+  PROVIDER_RUNTIME_POLICY,
+  getProviderAdapterName,
+} from '../../shared/providerRuntime.js';
 import { normalizeThemeMode } from '../../shared/theme.js';
 import type {
   AgentDefinition,
@@ -50,6 +55,13 @@ import type {
   UsageRecord,
   Workspace,
 } from '../../shared/types.js';
+import {
+  ProviderRuntimeError,
+  getProviderRequestSummary,
+  invokeOpenAiCompatibleChat,
+  testOpenAiCompatibleProvider,
+  type ChatMessageInput,
+} from './openAiCompatibleAdapter.js';
 
 const DEFAULT_WORKSPACE_ID = 'ws_default';
 const DEFAULT_PREFS_ID = 'ui_default';
@@ -301,38 +313,61 @@ export class NexaStore {
     return this.requireModel(id);
   }
 
-  testProvider(providerId: string): Provider {
+  async testProvider(providerId: string): Promise<Provider> {
     const provider = this.requireProvider(providerId);
     const start = now();
-    const urlOk = provider.baseUrl.startsWith('http://') || provider.baseUrl.startsWith('https://');
-    const hasKeyWhenRequired = provider.authType !== 'api-key' || Boolean(provider.secretRef);
-    const healthy = urlOk && hasKeyWhenRequired;
-    const status = healthy ? 'healthy' : 'error';
+    const adapterName = getProviderAdapterName(provider.type);
+    const apiKey = this.getProviderSecret(provider);
+    const health = adapterName === 'openai-compatible'
+      ? await testOpenAiCompatibleProvider(provider, apiKey)
+      : {
+          ok: false,
+          latencyMs: Math.max(1, now() - start),
+          status: null,
+          errorCode: PROVIDER_RUNTIME_ERROR_CODES.unsupportedProvider,
+          errorMessage: t('models.errors.unsupportedProvider'),
+          modelNames: [],
+        };
+    const status = health.ok ? 'healthy' : 'error';
     this.db
       .prepare('UPDATE providers SET health_status = ?, last_checked_at = ?, updated_at = ? WHERE id = ?')
       .run(status, start, start, providerId);
-    if (!healthy) {
-      this.db
-        .prepare(
-          `INSERT INTO request_logs (id, conversation_id, message_id, provider_id, model_id, model_name_snapshot, route_id, gateway_request_id, status, endpoint, request_summary_json, response_summary_json, input_tokens, output_tokens, latency_ms, finish_reason, error_code, error_message, started_at, completed_at, created_at)
-           VALUES (?, NULL, NULL, ?, NULL, NULL, NULL, NULL, 'failed', '/provider/test', ?, NULL, NULL, NULL, ?, NULL, ?, ?, ?, ?, ?)`,
-        )
-        .run(
-          createId('req'),
-          providerId,
-          JSON.stringify({ baseUrl: provider.baseUrl, authType: provider.authType }),
-          Math.max(1, now() - start),
-          urlOk ? 'api_key_missing' : 'invalid_base_url',
-          urlOk ? t('models.errors.providerKeyMissing') : t('models.errors.invalidBaseUrl'),
-          start,
-          now(),
-          start,
-        );
-    }
+    this.db
+      .prepare('UPDATE models SET health_status = ?, latency_ms = ?, updated_at = ? WHERE provider_id = ?')
+      .run(status, health.ok ? health.latencyMs : null, now(), providerId);
+    this.db
+      .prepare(
+        `INSERT INTO request_logs (id, conversation_id, message_id, provider_id, model_id, model_name_snapshot, route_id, gateway_request_id, status, endpoint, request_summary_json, response_summary_json, input_tokens, output_tokens, latency_ms, finish_reason, error_code, error_message, started_at, completed_at, created_at)
+         VALUES (?, NULL, NULL, ?, NULL, NULL, NULL, NULL, ?, '/provider/test', ?, ?, NULL, NULL, ?, NULL, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        createId('req'),
+        providerId,
+        health.ok ? 'completed' : 'failed',
+        JSON.stringify({
+          adapter: adapterName,
+          baseUrl: provider.baseUrl,
+          authType: provider.authType,
+          timeoutMs: PROVIDER_RUNTIME_POLICY.healthTimeoutMs,
+        }),
+        JSON.stringify({
+          status: health.status,
+          modelCount: health.modelNames.length,
+          models: health.modelNames.slice(0, 20),
+        }),
+        health.latencyMs,
+        health.errorCode,
+        health.errorMessage ? redactSensitive(health.errorMessage) : null,
+        start,
+        now(),
+        start,
+      );
     this.audit('provider.tested', 'provider', providerId, {
       status,
       baseUrl: provider.baseUrl,
-      nextStep: healthy ? 'provider is ready for local routing' : 'fix Base URL or API key, then test again',
+      adapter: adapterName,
+      modelCount: health.modelNames.length,
+      errorCode: health.errorCode,
     });
     return this.requireProvider(providerId);
   }
@@ -369,7 +404,7 @@ export class NexaStore {
     return this.requireConversation(conversationId);
   }
 
-  sendMessage(input: SendMessageInput): ChatResponse {
+  async sendMessage(input: SendMessageInput): Promise<ChatResponse> {
     if (!input.content.trim()) {
       throw new Error('Message content is required.');
     }
@@ -430,69 +465,169 @@ export class NexaStore {
         timestamp,
       );
 
-    const responseStart = now();
-    const assistantContent = this.generateLocalAssistantReply(input.content.trim(), routeDecision);
-    const latencyMs = Math.max(12, now() - responseStart + 42);
-    const outputTokens = estimateTokens(assistantContent);
-    const metadata = {
-      localHistoryRetained: true,
-      contextStrategy: input.contextStrategy ?? 'recent_n',
-      citations: this.getLightweightCitations(input.content),
-    };
+    try {
+      const provider = this.requireProvider(routeDecision.providerId);
+      const model = this.requireModel(routeDecision.modelId);
+      const adapterName = getProviderAdapterName(provider.type);
+      if (adapterName !== 'openai-compatible') {
+        throw new ProviderRuntimeError(t('models.errors.unsupportedProvider'), PROVIDER_RUNTIME_ERROR_CODES.unsupportedProvider);
+      }
+      const apiKey = this.getProviderSecret(provider);
+      const providerInput = {
+        provider,
+        model,
+        apiKey,
+        messages: this.buildChatMessages(conversation.id, input.content.trim()),
+        stream: model.supportsStreaming,
+      };
+      this.db
+        .prepare('UPDATE request_logs SET request_summary_json = ? WHERE id = ?')
+        .run(JSON.stringify({
+          ...getProviderRequestSummary(providerInput),
+          contextStrategy: input.contextStrategy ?? 'recent_n',
+          routeReason: routeDecision.reason,
+        }), requestLogId);
+      const result = await invokeOpenAiCompatibleChat(providerInput);
+      const assistantContent = result.content;
+      const outputTokens = result.outputTokens ?? estimateTokens(assistantContent);
+      const metadata = {
+        localHistoryRetained: true,
+        contextStrategy: input.contextStrategy ?? 'recent_n',
+        citations: this.getLightweightCitations(input.content),
+        adapter: adapterName,
+        streamed: result.streamed,
+        retryCount: result.retryCount,
+        routeReason: routeDecision.reason,
+        fallbackUsed: routeDecision.fallbackUsed,
+      };
 
-    this.db
-      .prepare(
-        `INSERT INTO messages (id, conversation_id, workspace_id, parent_message_id, role, content, provider_id, model_id, model_name_snapshot, request_id, request_log_id, input_tokens, output_tokens, latency_ms, finish_reason, error_message, status, content_format, context_strategy, context_message_ids_json, summary_id, artifact_ids_json, error_code, metadata_json, created_at, updated_at, deleted_at)
-         VALUES (?, ?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'stop', NULL, 'completed', 'markdown', ?, NULL, NULL, NULL, NULL, ?, ?, ?, NULL)`,
-      )
-      .run(
-        assistantMessageId,
-        conversation.id,
-        conversation.workspaceId,
-        userMessageId,
-        assistantContent,
-        routeDecision.providerId,
-        routeDecision.modelId,
-        routeDecision.modelNameSnapshot,
-        requestId,
+      this.db
+        .prepare(
+          `INSERT INTO messages (id, conversation_id, workspace_id, parent_message_id, role, content, provider_id, model_id, model_name_snapshot, request_id, request_log_id, input_tokens, output_tokens, latency_ms, finish_reason, error_message, status, content_format, context_strategy, context_message_ids_json, summary_id, artifact_ids_json, error_code, metadata_json, created_at, updated_at, deleted_at)
+           VALUES (?, ?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'completed', 'markdown', ?, NULL, NULL, NULL, NULL, ?, ?, ?, NULL)`,
+        )
+        .run(
+          assistantMessageId,
+          conversation.id,
+          conversation.workspaceId,
+          userMessageId,
+          assistantContent,
+          routeDecision.providerId,
+          routeDecision.modelId,
+          routeDecision.modelNameSnapshot,
+          requestId,
+          requestLogId,
+          result.inputTokens ?? inputTokens,
+          outputTokens,
+          result.latencyMs,
+          result.finishReason ?? 'stop',
+          input.contextStrategy ?? 'recent_n',
+          JSON.stringify(metadata),
+          now(),
+          now(),
+        );
+
+      this.db
+        .prepare(
+          `UPDATE request_logs
+           SET status = 'completed', response_summary_json = ?, input_tokens = ?, output_tokens = ?, latency_ms = ?, finish_reason = ?, completed_at = ?, message_id = ?
+           WHERE id = ?`,
+        )
+        .run(
+          JSON.stringify({ ...result.responseSummary, redactedPreview: redactSensitive(assistantContent).slice(0, 280) }),
+          result.inputTokens ?? inputTokens,
+          outputTokens,
+          result.latencyMs,
+          result.finishReason ?? 'stop',
+          now(),
+          assistantMessageId,
+          requestLogId,
+        );
+
+      this.db
+        .prepare(
+          `INSERT INTO usage_records (id, workspace_id, provider_id, model_id, request_log_id, input_tokens, output_tokens, cost_estimate, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          createId('usage'),
+          conversation.workspaceId,
+          routeDecision.providerId,
+          routeDecision.modelId,
+          requestLogId,
+          result.inputTokens ?? inputTokens,
+          outputTokens,
+          this.estimateCost(routeDecision.modelId, result.inputTokens ?? inputTokens, outputTokens),
+          now(),
+        );
+
+      this.db
+        .prepare('UPDATE conversations SET title = ?, last_message_at = ?, message_count = message_count + 2, updated_at = ? WHERE id = ?')
+        .run(inferTitle(conversation.title, input.content), now(), now(), conversation.id);
+      this.audit('chat.completed', 'conversation', conversation.id, {
         requestLogId,
-        inputTokens,
-        outputTokens,
-        latencyMs,
-        input.contextStrategy ?? 'recent_n',
-        JSON.stringify(metadata),
-        now(),
-        now(),
-      );
-
-    this.db
-      .prepare(
-        `UPDATE request_logs
-         SET status = 'completed', response_summary_json = ?, output_tokens = ?, latency_ms = ?, finish_reason = 'stop', completed_at = ?
-         WHERE id = ?`,
-      )
-      .run(JSON.stringify({ redactedPreview: redactSensitive(assistantContent).slice(0, 280) }), outputTokens, latencyMs, now(), requestLogId);
-
-    this.db
-      .prepare(
-        `INSERT INTO usage_records (id, workspace_id, provider_id, model_id, request_log_id, input_tokens, output_tokens, cost_estimate, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        createId('usage'),
-        conversation.workspaceId,
-        routeDecision.providerId,
-        routeDecision.modelId,
+        providerId: routeDecision.providerId,
+        modelId: routeDecision.modelId,
+        streamed: result.streamed,
+        retryCount: result.retryCount,
+      });
+    } catch (error) {
+      const normalized = this.normalizeProviderError(error);
+      this.db
+        .prepare(
+          `INSERT INTO messages (id, conversation_id, workspace_id, parent_message_id, role, content, provider_id, model_id, model_name_snapshot, request_id, request_log_id, input_tokens, output_tokens, latency_ms, finish_reason, error_message, status, content_format, context_strategy, context_message_ids_json, summary_id, artifact_ids_json, error_code, metadata_json, created_at, updated_at, deleted_at)
+           VALUES (?, ?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?, 'failed', 'markdown', ?, NULL, NULL, NULL, ?, ?, ?, ?, NULL)`,
+        )
+        .run(
+          assistantMessageId,
+          conversation.id,
+          conversation.workspaceId,
+          userMessageId,
+          t('chat.assistant.upstreamFailed'),
+          routeDecision.providerId,
+          routeDecision.modelId,
+          routeDecision.modelNameSnapshot,
+          requestId,
+          requestLogId,
+          inputTokens,
+          Math.max(1, now() - timestamp),
+          normalized.message,
+          input.contextStrategy ?? 'recent_n',
+          normalized.code,
+          JSON.stringify({
+            adapter: getProviderAdapterName(this.requireProvider(routeDecision.providerId).type),
+            routeReason: routeDecision.reason,
+            fallbackUsed: routeDecision.fallbackUsed,
+            retryable: normalized.retryable,
+          }),
+          now(),
+          now(),
+        );
+      this.db
+        .prepare(
+          `UPDATE request_logs
+           SET status = 'failed', response_summary_json = ?, latency_ms = ?, error_code = ?, error_message = ?, completed_at = ?, message_id = ?
+           WHERE id = ?`,
+        )
+        .run(
+          JSON.stringify({ errorCode: normalized.code, retryable: normalized.retryable }),
+          Math.max(1, now() - timestamp),
+          normalized.code,
+          normalized.message,
+          now(),
+          assistantMessageId,
+          requestLogId,
+        );
+      this.db
+        .prepare('UPDATE conversations SET title = ?, last_message_at = ?, message_count = message_count + 2, updated_at = ? WHERE id = ?')
+        .run(inferTitle(conversation.title, input.content), now(), now(), conversation.id);
+      this.audit('chat.failed', 'conversation', conversation.id, {
         requestLogId,
-        inputTokens,
-        outputTokens,
-        this.estimateCost(routeDecision.modelId, inputTokens, outputTokens),
-        now(),
-      );
-
-    this.db
-      .prepare('UPDATE conversations SET title = ?, last_message_at = ?, message_count = message_count + 2, updated_at = ? WHERE id = ?')
-      .run(inferTitle(conversation.title, input.content), now(), now(), conversation.id);
+        providerId: routeDecision.providerId,
+        modelId: routeDecision.modelId,
+        errorCode: normalized.code,
+      });
+    }
 
     const updatedConversation = this.requireConversation(conversation.id);
     return {
@@ -589,7 +724,7 @@ export class NexaStore {
         `INSERT INTO gateway_logs (id, request_log_id, method, path, status_code, redacted_headers_json, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(createId('gwlog'), requestLogId, method, path, statusCode, redactSensitive(headers), now());
+      .run(createId('gwlog'), requestLogId, method, path, statusCode, JSON.stringify(redactHeaders(headers)), now());
   }
 
   saveUiPreferences(preferences: UiPreferences): UiPreferences {
@@ -863,36 +998,9 @@ export class NexaStore {
         .run(DEFAULT_WORKSPACE_ID, t('dashboard.workspace'), timestamp, timestamp);
     }
 
-    const providerCount = Number((this.db.prepare('SELECT COUNT(*) AS count FROM providers').get() as { count: number }).count);
-    if (providerCount === 0) {
-      const provider = this.createProvider({
-        name: 'Local Demo OpenAI-compatible',
-        type: 'openai-compatible',
-        baseUrl: 'https://api.openai.com/v1',
-        apiKey: 'demo-key-not-used',
-      });
-      const model = this.createModel({
-        providerId: provider.id,
-        name: 'demo-chat-model',
-        displayName: 'Demo Chat Model',
-        contextWindow: 128000,
-        supportsStreaming: true,
-        supportsEmbeddings: true,
-      });
-      this.db
-        .prepare('UPDATE workspaces SET default_provider_id = ?, default_model_id = ?, updated_at = ? WHERE id = ?')
-        .run(provider.id, model.id, timestamp, DEFAULT_WORKSPACE_ID);
-      this.testProvider(provider.id);
-    }
-
     const conversationCount = Number((this.db.prepare('SELECT COUNT(*) AS count FROM conversations').get() as { count: number }).count);
     if (conversationCount === 0) {
-      const conversation = this.createConversation(t('chat.seed.welcomeConversation'));
-      this.sendMessage({
-        conversationId: conversation.id,
-        content: t('chat.seed.welcomePrompt'),
-        contextStrategy: 'recent_n',
-      });
+      this.createConversation(t('chat.seed.welcomeConversation'));
     }
 
     const fileCount = Number((this.db.prepare('SELECT COUNT(*) AS count FROM files').get() as { count: number }).count);
@@ -978,16 +1086,6 @@ export class NexaStore {
     };
   }
 
-  private generateLocalAssistantReply(content: string, routeDecision: RouteDecision): string {
-    return [
-      t('chat.assistant.processed', { model: routeDecision.modelNameSnapshot }),
-      '',
-      t('chat.assistant.localHistory'),
-      t('chat.assistant.routeReason', { reason: routeDecision.reason }),
-      t('chat.assistant.inputSummary', { summary: `${content.slice(0, 180)}${content.length > 180 ? '...' : ''}` }),
-    ].join('\n');
-  }
-
   private getLightweightCitations(content: string): Array<{ fileId: string; citation: string; snippet: string }> {
     const firstChunk = this.db
       .prepare('SELECT knowledge_chunks.file_id, knowledge_chunks.citation, knowledge_chunks.content FROM knowledge_chunks ORDER BY created_at DESC LIMIT 1')
@@ -1021,6 +1119,41 @@ export class NexaStore {
       .prepare('INSERT INTO secrets (id, label, encrypted_value, preview, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
       .run(id, label, encoded, previewSecret(value), timestamp, timestamp);
     return id;
+  }
+
+  private getProviderSecret(provider: Provider): string | null {
+    if (provider.authType !== 'api-key') {
+      return null;
+    }
+    if (!provider.secretRef) {
+      return null;
+    }
+    const row = this.db.prepare('SELECT encrypted_value FROM secrets WHERE id = ?').get(provider.secretRef) as { encrypted_value: string } | undefined;
+    return row ? decodeSecretValue(row.encrypted_value) : null;
+  }
+
+  private buildChatMessages(conversationId: string, content: string): ChatMessageInput[] {
+    const previous = this.getMessages()
+      .filter((message) => message.conversationId === conversationId && message.status === 'completed')
+      .slice(-8)
+      .map((message): ChatMessageInput | null => {
+        if (message.role !== 'user' && message.role !== 'assistant' && message.role !== 'system' && message.role !== 'tool') {
+          return null;
+        }
+        return { role: message.role, content: message.content };
+      })
+      .filter((message): message is ChatMessageInput => Boolean(message));
+    return [...previous, { role: 'user', content }];
+  }
+
+  private normalizeProviderError(error: unknown): { code: string; message: string; retryable: boolean } {
+    if (error instanceof ProviderRuntimeError) {
+      return { code: error.code, message: redactSensitive(error.message), retryable: error.retryable };
+    }
+    if (error instanceof Error) {
+      return { code: PROVIDER_RUNTIME_ERROR_CODES.upstreamError, message: redactSensitive(error.message), retryable: false };
+    }
+    return { code: PROVIDER_RUNTIME_ERROR_CODES.upstreamError, message: redactSensitive(String(error)), retryable: false };
   }
 
   private audit(action: string, targetType: string, targetId: string | null, details: unknown): void {
