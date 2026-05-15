@@ -219,7 +219,7 @@ Verification on 2026-05-15:
 - `git diff --check`: passed with LF/CRLF warnings only.
 - Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`.
 
-Round 4 delivery commit: pending. Round 5 owns full light/dark/system theme resolution and visual regression coverage.
+Round 4 delivery commit: `4e32be97af796c0b008393ed77b7dab5b67af25f`. Push returned success (`36c6d8c..4e32be9 main -> main`); follow-up `git ls-remote` confirmation was blocked by GitHub HTTPS connectivity from the current host. Round 5 owns full light/dark/system theme resolution and visual regression coverage.
 
 ## 2026-05-14 UI Shell Redesign
 

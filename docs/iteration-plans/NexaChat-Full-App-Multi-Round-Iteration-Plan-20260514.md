@@ -512,7 +512,8 @@ These references guide product and engineering decisions. They are not permissio
   - `git diff --check`: passed with LF/CRLF warnings only.
 - Desktop shortcut result: `C:\Users\至亲\Desktop\NexaChat.lnk` still targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"` as the app argument, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`. No shortcut was modified.
 - Acceptance result: Passed. UI/navigation/status/error/settings copy now comes from the i18n authority, zh-CN and en-US dictionaries stay in parity, language switching is live and persisted, theme/density/font/motion are not reset by the language switch, and tests catch missing keys plus new CJK literals in migrated files.
-- Commit hash: pending Round 4 delivery commit.
+- Commit hash: `4e32be97af796c0b008393ed77b7dab5b67af25f`.
+- Push result: `git push origin main` succeeded (`36c6d8c..4e32be9 main -> main`). `git ls-remote origin refs/heads/main` and a one-time proxy retry both failed because GitHub HTTPS was unreachable from the current host after the push.
 - Remaining issues: None for Round 4. Round 5 owns full system-theme resolution and screenshot regression coverage.
 
 ## 11. Round 5: Dark / Light / System Theme
