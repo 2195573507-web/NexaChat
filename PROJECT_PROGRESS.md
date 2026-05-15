@@ -346,9 +346,9 @@ Desktop shortcut:
 - Icon remains `D:\NexaChat\assets\app-icon.ico,0`.
 - No shortcut was modified in Round 7.
 
-Pending before Round 7 Git closeout:
+Git:
 
-- Delivery commit hash backfill into blueprint, matrix, progress, and closure docs.
+- Round 7 delivery commit hash: `d1b9bb66470cb133be892a09a963b0d7a99c3c7f`.
 - Push confirmation after hash backfill commit.
 
 ## 2026-05-14 UI Shell Redesign
