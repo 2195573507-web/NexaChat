@@ -747,8 +747,8 @@ These references guide product and engineering decisions. They are not permissio
   - `git diff --check`: passed with LF/CRLF conversion warnings only.
 - Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` still targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and uses `D:\NexaChat\assets\app-icon.ico,0`.
 - Acceptance result: Passed. A user can continue a conversation across models, context IDs and chunks are persisted, retry/regenerate/copy/export controls are available, and multi-model comparison honestly fans out through the real Provider chain with independent logs.
-- Commit hash: `d1b9bb66470cb133be892a09a963b0d7a99c3c7f`.
-- Push result: pending closeout push confirmation.
+- Commit hash: `d1b9bb66470cb133be892a09a963b0d7a99c3c7f` for Round 7 delivery; `14d8d42da4fccd7063e4a321c2235a57206ed397` records closeout and remote confirmation.
+- Push result: delivery and closeout commits pushed; `origin/main` confirmed at `14d8d42da4fccd7063e4a321c2235a57206ed397`.
 - Remaining issues: None for Round 7. Round 8 owns Gateway API Key lifecycle, scopes, limits, config import, snapshots, and rollback.
 
 ## 14. Round 8: Local Gateway And API Key

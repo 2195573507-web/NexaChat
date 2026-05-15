@@ -349,7 +349,8 @@ Desktop shortcut:
 Git:
 
 - Round 7 delivery commit hash: `d1b9bb66470cb133be892a09a963b0d7a99c3c7f`.
-- Push confirmation after hash backfill commit.
+- Round 7 closeout commit hash: `14d8d42da4fccd7063e4a321c2235a57206ed397`.
+- Push result: delivery and closeout commits pushed; `origin/main` confirmed at `14d8d42da4fccd7063e4a321c2235a57206ed397`.
 
 ## 2026-05-14 UI Shell Redesign
 
