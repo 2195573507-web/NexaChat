@@ -260,7 +260,7 @@ Desktop shortcut status:
 Git:
 
 - Round 5 delivery commit hash: `6cc6b641ddb57a2e269485bd6b0c5159f2fb3947`.
-- Push result: `origin/main` confirmed at `6cc6b641ddb57a2e269485bd6b0c5159f2fb3947`.
+- Push result: delivery commit `6cc6b641ddb57a2e269485bd6b0c5159f2fb3947` and closeout commit `220bceca31c77949b8d27272be41125a0d6dc58d` are both pushed; `origin/main` is confirmed at `220bceca31c77949b8d27272be41125a0d6dc58d`.
 
 ## 2026-05-14 UI Shell Redesign
 

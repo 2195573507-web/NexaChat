@@ -243,7 +243,4 @@
 - Checked `C:\Users\至亲\Desktop\NexaChat.lnk`: target, arguments, working directory, and icon still point to the current local Electron launch entry.
 - Committed Round 5 delivery as `6cc6b641ddb57a2e269485bd6b0c5159f2fb3947`.
 - Pushed Round 5 delivery and confirmed `origin/main` at `6cc6b641ddb57a2e269485bd6b0c5159f2fb3947`.
-
-## Pending Round 5 Closeout
-
-- Record final closeout hash in docs and keep the worktree clean.
+- Recorded Round 5 closeout as `220bceca31c77949b8d27272be41125a0d6dc58d` and confirmed `origin/main` at that hash.

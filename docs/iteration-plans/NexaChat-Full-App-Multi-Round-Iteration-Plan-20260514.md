@@ -577,6 +577,8 @@ These references guide product and engineering decisions. They are not permissio
   - `git diff --check`: passed with CRLF conversion warnings only.
 - Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` still targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and uses `D:\NexaChat\assets\app-icon.ico,0`.
 - Acceptance result: Passed. Light, dark, and system theme modes now share one resolver; system follows OS preference changes live; Settings preserves language, density, font, and motion while switching theme.
+- Commit hash: `6cc6b641ddb57a2e269485bd6b0c5159f2fb3947` for Round 5 delivery; `220bceca31c77949b8d27272be41125a0d6dc58d` records final closeout and remote confirmation.
+- Push result: `origin/main` confirmed at `220bceca31c77949b8d27272be41125a0d6dc58d`.
 - Remaining issues: None for Round 5. Round 6 owns real Provider/model invocation and removal/isolation of the production mock chain.
 
 ## 12. Round 6: Provider, Model And Real Invocation Chain
