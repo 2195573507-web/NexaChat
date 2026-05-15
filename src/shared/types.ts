@@ -1,4 +1,14 @@
 import type { ThemeMode } from './theme.js';
+import type {
+  ConversationExportFormat,
+  ConversationStatus,
+  MessageChunkStatus,
+  MessageChunkType,
+  MessageContentFormat,
+  MessageRole,
+  MessageStatus,
+  PromptTemplateScope,
+} from './conversationRuntime.js';
 
 export type ModuleStage = 'ready' | 'implemented' | 'planned' | 'reserved' | 'environment-limited';
 
@@ -139,7 +149,7 @@ export interface Conversation {
   groupName: string | null;
   isPinned: boolean;
   isFavorite: boolean;
-  status: 'active' | 'archived' | 'deleted';
+  status: ConversationStatus;
   summary: string | null;
   lastMessageAt: number | null;
   messageCount: number;
@@ -152,7 +162,7 @@ export interface Message {
   conversationId: string;
   workspaceId: string;
   parentMessageId: string | null;
-  role: 'system' | 'user' | 'assistant' | 'tool' | 'error';
+  role: MessageRole;
   content: string;
   providerId: string | null;
   modelId: string | null;
@@ -164,8 +174,8 @@ export interface Message {
   latencyMs: number | null;
   finishReason: string | null;
   errorMessage: string | null;
-  status: 'draft' | 'streaming' | 'completed' | 'failed' | 'cancelled' | 'deleted';
-  contentFormat: 'markdown' | 'plain_text' | 'json' | 'tool_result';
+  status: MessageStatus;
+  contentFormat: MessageContentFormat;
   contextStrategy: ContextStrategy;
   contextMessageIdsJson: string | null;
   summaryId: string | null;
@@ -178,12 +188,98 @@ export interface Message {
 
 export type ContextStrategy = 'recent_n' | 'summary_recent_n' | 'manual' | 'token_trim';
 
+export interface MessageChunk {
+  id: string;
+  messageId: string;
+  conversationId: string;
+  requestLogId: string | null;
+  sequence: number;
+  chunkType: MessageChunkType;
+  content: string;
+  tokenCount: number | null;
+  status: MessageChunkStatus;
+  createdAt: number;
+}
+
+export interface MessageAttachment {
+  id: string;
+  messageId: string | null;
+  conversationId: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  status: 'accepted' | 'rejected' | 'deleted';
+  storageRef: string | null;
+  errorMessage: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface MessageAttachmentInput {
+  name: string;
+  mimeType: string;
+  size: number;
+}
+
+export interface PromptTemplate {
+  id: string;
+  scope: PromptTemplateScope;
+  name: string;
+  content: string;
+  enabled: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ConversationExport {
+  id: string;
+  conversationId: string;
+  format: ConversationExportFormat;
+  redacted: boolean;
+  status: 'completed' | 'failed';
+  content: string;
+  summaryJson: string | null;
+  createdAt: number;
+}
+
+export interface RetryMessageInput {
+  messageId: string;
+  modelId?: string;
+  contextStrategy?: ContextStrategy;
+}
+
+export interface RegenerateMessageInput {
+  assistantMessageId: string;
+  modelId?: string;
+  contextStrategy?: ContextStrategy;
+}
+
+export interface CancelMessageInput {
+  requestLogId: string;
+}
+
+export interface CompareModelsInput {
+  conversationId?: string;
+  content: string;
+  modelIds: string[];
+  contextStrategy?: ContextStrategy;
+}
+
+export interface ExportConversationInput {
+  conversationId: string;
+  format: ConversationExportFormat;
+  redacted?: boolean;
+}
+
 export interface SendMessageInput {
   conversationId?: string;
   content: string;
   providerId?: string;
   modelId?: string;
   contextStrategy?: ContextStrategy;
+  parentMessageId?: string;
+  attachments?: MessageAttachmentInput[];
+  metadata?: Record<string, unknown>;
 }
 
 export interface ChatResponse {
@@ -192,6 +288,12 @@ export interface ChatResponse {
   assistantMessage: Message;
   requestLog: RequestLog;
   routeDecision: RouteDecision;
+  chunks?: MessageChunk[];
+}
+
+export interface CompareModelsResponse {
+  conversation: Conversation;
+  responses: ChatResponse[];
 }
 
 export interface RouteDecision {
@@ -360,6 +462,10 @@ export interface AppSnapshot {
   dashboard: DashboardSummary;
   conversations: Conversation[];
   messages: Message[];
+  messageChunks: MessageChunk[];
+  messageAttachments: MessageAttachment[];
+  promptTemplates: PromptTemplate[];
+  conversationExports: ConversationExport[];
   providers: Provider[];
   models: Model[];
   requestLogs: RequestLog[];

@@ -2,7 +2,11 @@ import type {
   AgentDefinition,
   AppSnapshot,
   ChatResponse,
+  CompareModelsInput,
+  CompareModelsResponse,
   Conversation,
+  ConversationExport,
+  ExportConversationInput,
   GatewayApiKey,
   GatewayKeyCreated,
   GatewayStatus,
@@ -15,6 +19,9 @@ import type {
   ProviderInput,
   SendMessageInput,
   UiPreferences,
+  CancelMessageInput,
+  RegenerateMessageInput,
+  RetryMessageInput,
 } from './types.js';
 
 export interface AppApi {
@@ -23,6 +30,11 @@ export interface AppApi {
   createModel(input: ModelInput): Promise<Model>;
   testProvider(providerId: string): Promise<Provider>;
   sendMessage(input: SendMessageInput): Promise<ChatResponse>;
+  retryMessage(input: RetryMessageInput): Promise<ChatResponse>;
+  regenerateMessage(input: RegenerateMessageInput): Promise<ChatResponse>;
+  cancelMessage(input: CancelMessageInput): Promise<ChatResponse>;
+  compareModels(input: CompareModelsInput): Promise<CompareModelsResponse>;
+  exportConversation(input: ExportConversationInput): Promise<ConversationExport>;
   createConversation(title?: string): Promise<Conversation>;
   updateConversationFlags(
     conversationId: string,
@@ -52,6 +64,11 @@ export const APP_API_METHODS = [
   'createModel',
   'testProvider',
   'sendMessage',
+  'retryMessage',
+  'regenerateMessage',
+  'cancelMessage',
+  'compareModels',
+  'exportConversation',
   'createConversation',
   'updateConversationFlags',
   'createGatewayKey',

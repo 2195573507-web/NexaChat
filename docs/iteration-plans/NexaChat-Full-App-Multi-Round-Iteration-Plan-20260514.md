@@ -690,6 +690,67 @@ These references guide product and engineering decisions. They are not permissio
 25. **Deliverables**: Conversation service enhancements, chat UI, tests, docs.
 26. **Next Round Input**: Chat and provider chain ready for external local gateway and API key maturity.
 
+### Round 7 Execution Status
+
+- Status: Completed.
+- Completion date: 2026-05-16.
+- Parallel lanes:
+  - Lane A: schema, Store conversation lifecycle, context builder, attachment policy, prompt metadata, chunks, and exports.
+  - Lane B: Chat UI lifecycle controls, multi-model comparison UX, i18n, theme-tokened states, and browser mock contract parity.
+  - Lane C: unit/integration/UI/Electron tests, documentation, desktop shortcut verification, and Git closeout.
+  - Lane D: read-only Round 8 Gateway/API Key risk review for the next implementation boundary.
+- Root-cause result: Conversation state had been computed as a one-shot send/display path. `store.sendMessage()` did not persist selected context IDs from a central builder, stream chunks, prompt metadata, export records, retry/regenerate/cancel semantics, attachment policy, or multi-model fan-out state.
+- Chain review result: Composer -> preload IPC -> shared `AppApi` and `IPC_CHANNELS` -> main-process Store method -> context builder -> router -> Provider adapter -> provider response/chunks -> message/request log/usage/audit persistence -> snapshot refresh -> Chat UI lifecycle actions -> redacted conversation export. Multi-model comparison now fans out through the same `sendMessage` chain with independent request logs and usage records.
+- Main changed files:
+  - `src/shared/conversationRuntime.ts`
+  - `src/shared/types.ts`
+  - `src/shared/api.ts`
+  - `src/shared/ipc.ts`
+  - `src/preload/index.ts`
+  - `src/main/ipc.ts`
+  - `src/main/database/schema.ts`
+  - `src/main/repositories/mappers.ts`
+  - `src/main/services/openAiCompatibleAdapter.ts`
+  - `src/main/services/store.ts`
+  - `src/renderer/modules/ChatPage.tsx`
+  - `src/renderer/mockApi.ts`
+  - `src/renderer/styles.css`
+  - `src/shared/i18n.ts`
+  - `tests/conversation-runtime.test.ts`
+  - `tests/app.test.tsx`
+  - `tests/ui-smoke.spec.ts`
+  - `docs/implementation/round-07-conversation-system-closure.md`
+  - `docs/implementation/full-app-round-execution-matrix.md`
+- Added/modified functionality:
+  - Added `src/shared/conversationRuntime.ts` as the authority for message roles, message status, chunk status/type, export formats, attachment policy, and context limits.
+  - Added `message_chunks`, `message_attachments`, `prompt_templates`, and `conversation_exports` schema records while preserving existing messages.
+  - Extended shared API, IPC registry, preload bridge, and main IPC handlers for `retryMessage`, `regenerateMessage`, `cancelMessage`, `compareModels`, and `exportConversation`.
+  - Updated Store to record selected context message IDs, validate attachment metadata, persist provider chunks, seed a default prompt template, export redacted conversations, and run multi-model comparison through the same Provider chain.
+  - Extended the OpenAI-compatible adapter to return normalized chunk arrays for JSON and streaming responses.
+  - Updated Chat UI with lifecycle status labels, copy, retry, regenerate, cancel, redacted export, and compact multi-model comparison controls without cluttering the default composer.
+  - Updated browser mock to keep explicit UI-smoke parity with the production `AppApi` contract.
+  - Added zh-CN/en-US i18n keys for all new lifecycle, export, compare, prompt, and error labels.
+- Deleted old links:
+  - Removed the unrecorded last-8-message context selection path.
+  - Removed the UI-only conversation lifecycle assumption where Chat only had send and display states.
+  - Did not add provider-specific chat forks; retry, regenerate, compare, and Gateway continue to use the same Store/provider invocation chain.
+  - Browser mock remains explicit browser/UI-smoke fallback only, not a production conversation path.
+- Test commands and results:
+  - `npm.cmd run typecheck`: passed.
+  - `npm.cmd run test -- tests/conversation-runtime.test.ts tests/provider-store-integration.test.ts tests/gateway-provider-chain.test.ts`: passed, 3 files / 6 tests.
+  - `npm.cmd run test -- tests/app.test.tsx tests/ipc-contract.test.ts tests/i18n-authority.test.ts`: passed, 3 files / 12 tests.
+  - `npm.cmd run test`: passed, 9 files / 31 tests.
+  - `npm.cmd run test:ui-smoke`: passed, 11 Playwright tests.
+  - `npm.cmd run build`: passed.
+  - `npm.cmd run verify`: passed, including typecheck, full unit test suite, and build.
+  - `npm.cmd run test:electron-smoke`: passed.
+  - `git diff --check`: passed with LF/CRLF conversion warnings only.
+- Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` still targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and uses `D:\NexaChat\assets\app-icon.ico,0`.
+- Acceptance result: Passed. A user can continue a conversation across models, context IDs and chunks are persisted, retry/regenerate/copy/export controls are available, and multi-model comparison honestly fans out through the real Provider chain with independent logs.
+- Commit hash: pending delivery commit.
+- Push result: pending.
+- Remaining issues: None for Round 7. Round 8 owns Gateway API Key lifecycle, scopes, limits, config import, snapshots, and rollback.
+
 ## 14. Round 8: Local Gateway And API Key
 
 1. **Round Name**: Local Gateway And API Key.

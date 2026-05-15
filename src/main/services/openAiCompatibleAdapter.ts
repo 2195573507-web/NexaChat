@@ -27,6 +27,7 @@ export interface ProviderInvocationInput {
 
 export interface ProviderInvocationResult {
   content: string;
+  chunks: string[];
   inputTokens: number | null;
   outputTokens: number | null;
   totalTokens: number | null;
@@ -256,6 +257,7 @@ async function parseJsonResponse(response: Response): Promise<Omit<ProviderInvoc
   }
   return {
     content,
+    chunks: [content],
     inputTokens: toNullableNumber(body.usage?.prompt_tokens),
     outputTokens: toNullableNumber(body.usage?.completion_tokens),
     totalTokens: toNullableNumber(body.usage?.total_tokens),
@@ -278,6 +280,7 @@ async function parseStreamingResponse(response: Response): Promise<Omit<Provider
   const decoder = new TextDecoder();
   let buffer = '';
   let content = '';
+  const chunks: string[] = [];
   let finishReason: string | null = null;
   let usage: { prompt_tokens?: unknown; completion_tokens?: unknown; total_tokens?: unknown } | null = null;
 
@@ -300,6 +303,7 @@ async function parseStreamingResponse(response: Response): Promise<Omit<Provider
       };
       const choice = Array.isArray(chunk.choices) ? chunk.choices[0] : null;
       if (typeof choice?.delta?.content === 'string') {
+        chunks.push(choice.delta.content);
         content += choice.delta.content;
       }
       if (typeof choice?.finish_reason === 'string') {
@@ -316,6 +320,7 @@ async function parseStreamingResponse(response: Response): Promise<Omit<Provider
   }
   return {
     content,
+    chunks,
     inputTokens: toNullableNumber(usage?.prompt_tokens),
     outputTokens: toNullableNumber(usage?.completion_tokens),
     totalTokens: toNullableNumber(usage?.total_tokens),

@@ -58,6 +58,15 @@
 - Local Gateway smoke should use dynamic ports and a local mocked upstream in tests; binding the real `127.0.0.1:8787` port is better left to Electron/runtime smoke.
 - Request and Gateway logs need header-key-based redaction, not only value-pattern redaction, because custom sensitive headers can use arbitrary values.
 
+## Full App Round 7 Findings
+
+- The conversation lifecycle gap was not primarily a renderer problem. The durable fix was to centralize context selection, retry/regenerate/cancel/export/compare semantics, chunk records, prompt metadata, and attachment policy in shared types plus the main-process Store.
+- `messages.context_message_ids_json` existed before Round 7 but was not a real context-builder result. Round 7 now writes selected message IDs and a trim reason from a single context builder.
+- Multi-model comparison must fan out through the same Provider chain instead of assembling side-by-side UI results. Each branch now creates its own request log and usage record.
+- Conversation export should not reuse the broader import/export backup chain as a fake complete backup feature. Round 7 stores conversation-specific redacted markdown/JSON exports in `conversation_exports`; Round 12 still owns full backup/restore.
+- Browser mock must follow the `AppApi` contract whenever shared API methods are added, otherwise UI smoke can pass a stale behavior surface that production Electron cannot expose.
+- Cancel semantics are meaningful for in-flight or failed/recoverable records. A completed request should not be rewritten to cancelled merely because a test can call the method.
+
 ## Initial Repository State
 
 - Repository root: `D:\NexaChat`.

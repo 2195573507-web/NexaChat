@@ -6,13 +6,17 @@ import {
   mapAgent,
   mapAuditLog,
   mapConversation,
+  mapConversationExport,
   mapGatewayKey,
   mapGatewayLog,
   mapImportExportResult,
   mapKnowledgeFile,
   mapMcpServer,
   mapMessage,
+  mapMessageAttachment,
+  mapMessageChunk,
   mapModel,
+  mapPromptTemplate,
   mapProvider,
   mapRequestLog,
   mapUiPreferences,
@@ -29,13 +33,24 @@ import {
   getProviderAdapterName,
 } from '../../shared/providerRuntime.js';
 import { normalizeThemeMode } from '../../shared/theme.js';
+import {
+  CONTEXT_STRATEGY_LIMITS,
+  MESSAGE_ATTACHMENT_POLICY,
+  isAllowedAttachmentMimeType,
+  isConversationExportFormat,
+} from '../../shared/conversationRuntime.js';
 import type {
   AgentDefinition,
   AppSnapshot,
   AuditLog,
+  CancelMessageInput,
   ChatResponse,
+  CompareModelsInput,
+  CompareModelsResponse,
   Conversation,
+  ConversationExport,
   DashboardSummary,
+  ExportConversationInput,
   GatewayApiKey,
   GatewayKeyCreated,
   GatewayLog,
@@ -44,11 +59,17 @@ import type {
   KnowledgeFile,
   McpServer,
   Message,
+  MessageAttachment,
+  MessageAttachmentInput,
+  MessageChunk,
   Model,
   ModelInput,
+  PromptTemplate,
   Provider,
   ProviderInput,
+  RegenerateMessageInput,
   RequestLog,
+  RetryMessageInput,
   RouteDecision,
   SendMessageInput,
   UiPreferences,
@@ -86,6 +107,10 @@ export class NexaStore {
       dashboard: this.getDashboardSummary(),
       conversations: this.getConversations(),
       messages: this.getMessages(),
+      messageChunks: this.getMessageChunks(),
+      messageAttachments: this.getMessageAttachments(),
+      promptTemplates: this.getPromptTemplates(),
+      conversationExports: this.getConversationExports(),
       providers: this.getProviders(),
       models: this.getModels(),
       requestLogs: this.getRequestLogs(),
@@ -160,6 +185,37 @@ export class NexaStore {
       ? this.db.prepare(sql).all(conversationId, 'deleted')
       : this.db.prepare(sql).all('deleted');
     return rows.map((row) => mapMessage(row as Record<string, unknown>));
+  }
+
+  getMessageChunks(messageId?: string): MessageChunk[] {
+    const sql = messageId
+      ? 'SELECT * FROM message_chunks WHERE message_id = ? ORDER BY sequence ASC'
+      : 'SELECT * FROM message_chunks ORDER BY created_at ASC, sequence ASC LIMIT 500';
+    const rows = messageId ? this.db.prepare(sql).all(messageId) : this.db.prepare(sql).all();
+    return rows.map((row) => mapMessageChunk(row as Record<string, unknown>));
+  }
+
+  getMessageAttachments(conversationId?: string): MessageAttachment[] {
+    const sql = conversationId
+      ? "SELECT * FROM message_attachments WHERE conversation_id = ? AND status != 'deleted' ORDER BY created_at ASC"
+      : "SELECT * FROM message_attachments WHERE status != 'deleted' ORDER BY created_at ASC LIMIT 200";
+    const rows = conversationId ? this.db.prepare(sql).all(conversationId) : this.db.prepare(sql).all();
+    return rows.map((row) => mapMessageAttachment(row as Record<string, unknown>));
+  }
+
+  getPromptTemplates(): PromptTemplate[] {
+    return this.db
+      .prepare('SELECT * FROM prompt_templates ORDER BY scope ASC, updated_at DESC')
+      .all()
+      .map((row) => mapPromptTemplate(row as Record<string, unknown>));
+  }
+
+  getConversationExports(conversationId?: string): ConversationExport[] {
+    const sql = conversationId
+      ? 'SELECT * FROM conversation_exports WHERE conversation_id = ? ORDER BY created_at DESC'
+      : 'SELECT * FROM conversation_exports ORDER BY created_at DESC LIMIT 50';
+    const rows = conversationId ? this.db.prepare(sql).all(conversationId) : this.db.prepare(sql).all();
+    return rows.map((row) => mapConversationExport(row as Record<string, unknown>));
   }
 
   getRequestLogs(): RequestLog[] {
@@ -404,43 +460,207 @@ export class NexaStore {
     return this.requireConversation(conversationId);
   }
 
+  async retryMessage(input: RetryMessageInput): Promise<ChatResponse> {
+    const message = this.requireMessage(input.messageId);
+    const userMessage = message.role === 'user'
+      ? message
+      : message.parentMessageId
+        ? this.requireMessage(message.parentMessageId)
+        : this.findPreviousUserMessage(message.conversationId, message.createdAt);
+    if (!userMessage || userMessage.role !== 'user') {
+      throw new Error(t('chat.errors.retrySourceMissing'));
+    }
+    this.audit('chat.retry.requested', 'message', message.id, { sourceUserMessageId: userMessage.id });
+    return this.sendMessage({
+      conversationId: userMessage.conversationId,
+      content: userMessage.content,
+      modelId: input.modelId ?? message.modelId ?? undefined,
+      contextStrategy: input.contextStrategy ?? message.contextStrategy,
+      parentMessageId: userMessage.id,
+      metadata: {
+        action: 'retry',
+        sourceMessageId: message.id,
+        sourceUserMessageId: userMessage.id,
+      },
+    });
+  }
+
+  async regenerateMessage(input: RegenerateMessageInput): Promise<ChatResponse> {
+    const assistantMessage = this.requireMessage(input.assistantMessageId);
+    if (assistantMessage.role !== 'assistant') {
+      throw new Error(t('chat.errors.regenerateAssistantOnly'));
+    }
+    const userMessage = assistantMessage.parentMessageId
+      ? this.requireMessage(assistantMessage.parentMessageId)
+      : this.findPreviousUserMessage(assistantMessage.conversationId, assistantMessage.createdAt);
+    if (!userMessage || userMessage.role !== 'user') {
+      throw new Error(t('chat.errors.regenerateSourceMissing'));
+    }
+    this.audit('chat.regenerate.requested', 'message', assistantMessage.id, { sourceUserMessageId: userMessage.id });
+    return this.sendMessage({
+      conversationId: assistantMessage.conversationId,
+      content: userMessage.content,
+      modelId: input.modelId ?? assistantMessage.modelId ?? undefined,
+      contextStrategy: input.contextStrategy ?? assistantMessage.contextStrategy,
+      parentMessageId: userMessage.id,
+      metadata: {
+        action: 'regenerate',
+        sourceAssistantMessageId: assistantMessage.id,
+        sourceUserMessageId: userMessage.id,
+      },
+    });
+  }
+
+  cancelMessage(input: CancelMessageInput): ChatResponse {
+    const requestLog = this.requireRequestLog(input.requestLogId);
+    if (!requestLog.conversationId || !requestLog.messageId) {
+      throw new Error(t('chat.errors.cancelRequestMissing'));
+    }
+    const assistantMessage = this.requireMessage(requestLog.messageId);
+    const timestamp = now();
+    const normalizedRoute = this.route(assistantMessage.providerId ?? undefined, assistantMessage.modelId ?? undefined);
+    this.db
+      .prepare(
+        `UPDATE messages
+         SET status = 'cancelled', error_message = ?, error_code = ?, updated_at = ?
+         WHERE id = ? AND status IN ('draft', 'streaming', 'failed')`,
+      )
+      .run(t('chat.cancelled.message'), 'cancelled_by_user', timestamp, assistantMessage.id);
+    this.db
+      .prepare(
+        `UPDATE request_logs
+         SET status = 'cancelled', error_code = ?, error_message = ?, completed_at = ?
+         WHERE id = ? AND status IN ('started', 'streaming', 'failed')`,
+      )
+      .run('cancelled_by_user', t('chat.cancelled.message'), timestamp, requestLog.id);
+    this.db
+      .prepare(
+        `UPDATE message_chunks
+         SET status = 'cancelled'
+         WHERE request_log_id = ? AND status IN ('streaming', 'failed')`,
+      )
+      .run(requestLog.id);
+    this.audit('chat.cancelled', 'request_log', requestLog.id, { messageId: assistantMessage.id });
+    const conversation = this.requireConversation(requestLog.conversationId);
+    return {
+      conversation,
+      userMessage: assistantMessage.parentMessageId ? this.requireMessage(assistantMessage.parentMessageId) : assistantMessage,
+      assistantMessage: this.requireMessage(assistantMessage.id),
+      requestLog: this.requireRequestLog(requestLog.id),
+      routeDecision: normalizedRoute,
+      chunks: this.getMessageChunks(assistantMessage.id),
+    };
+  }
+
+  async compareModels(input: CompareModelsInput): Promise<CompareModelsResponse> {
+    const uniqueModelIds = Array.from(new Set(input.modelIds)).filter(Boolean).slice(0, 3);
+    if (uniqueModelIds.length < 2) {
+      throw new Error(t('chat.errors.compareNeedsModels'));
+    }
+    if (!input.content.trim()) {
+      throw new Error(t('models.errors.messageRequired'));
+    }
+    const conversation = input.conversationId ? this.requireConversation(input.conversationId) : this.createConversation();
+    const responses: ChatResponse[] = [];
+    for (const modelId of uniqueModelIds) {
+      const response = await this.sendMessage({
+        conversationId: conversation.id,
+        content: input.content,
+        modelId,
+        contextStrategy: input.contextStrategy ?? 'recent_n',
+        metadata: {
+          action: 'compare',
+          compareGroupSize: uniqueModelIds.length,
+          compareModelIds: uniqueModelIds,
+        },
+      });
+      responses.push(response);
+    }
+    this.audit('chat.compare.completed', 'conversation', conversation.id, {
+      modelIds: uniqueModelIds,
+      requestLogIds: responses.map((response) => response.requestLog.id),
+    });
+    return { conversation: this.requireConversation(conversation.id), responses };
+  }
+
+  exportConversation(input: ExportConversationInput): ConversationExport {
+    const conversation = this.requireConversation(input.conversationId);
+    const format = isConversationExportFormat(input.format) ? input.format : 'markdown';
+    const redacted = input.redacted !== false;
+    const messages = this.getMessages(conversation.id).filter((message) => message.status !== 'deleted');
+    const attachments = this.getMessageAttachments(conversation.id);
+    const content = format === 'json'
+      ? this.buildConversationJsonExport(conversation, messages, attachments, redacted)
+      : this.buildConversationMarkdownExport(conversation, messages, attachments, redacted);
+    const timestamp = now();
+    const id = createId('cexport');
+    const summary = {
+      conversationId: conversation.id,
+      title: conversation.title,
+      messageCount: messages.length,
+      attachmentCount: attachments.length,
+      redacted,
+    };
+    this.db
+      .prepare(
+        `INSERT INTO conversation_exports (id, conversation_id, format, redacted, status, content, summary_json, created_at)
+         VALUES (?, ?, ?, ?, 'completed', ?, ?, ?)`,
+      )
+      .run(id, conversation.id, format, redacted ? 1 : 0, content, JSON.stringify(summary), timestamp);
+    this.audit('chat.exported', 'conversation', conversation.id, { exportId: id, format, redacted });
+    return this.requireConversationExport(id);
+  }
+
   async sendMessage(input: SendMessageInput): Promise<ChatResponse> {
     if (!input.content.trim()) {
-      throw new Error('Message content is required.');
+      throw new Error(t('models.errors.messageRequired'));
     }
     const conversation = input.conversationId ? this.requireConversation(input.conversationId) : this.createConversation();
     const routeDecision = this.route(input.providerId, input.modelId);
+    const contextStrategy = input.contextStrategy ?? 'recent_n';
     const timestamp = now();
     const userMessageId = createId('msg');
     const assistantMessageId = createId('msg');
     const requestLogId = createId('req');
     const requestId = createId('gwreq');
-    const inputTokens = estimateTokens(input.content);
+    const trimmedContent = input.content.trim();
+    const inputTokens = estimateTokens(trimmedContent);
+    const modelForContext = this.requireModel(routeDecision.modelId);
+    const context = this.buildConversationContext(conversation.id, contextStrategy, trimmedContent, modelForContext.contextWindow);
+    const attachmentSummary = this.validateMessageAttachments(input.attachments ?? []);
+    const userMetadata = {
+      routeReason: routeDecision.reason,
+      fallbackUsed: routeDecision.fallbackUsed,
+      action: input.metadata?.action ?? 'send',
+      attachments: attachmentSummary.summary,
+      ...(input.metadata ?? {}),
+    };
 
     this.db
       .prepare(
         `INSERT INTO messages (id, conversation_id, workspace_id, parent_message_id, role, content, provider_id, model_id, model_name_snapshot, request_id, request_log_id, input_tokens, output_tokens, latency_ms, finish_reason, error_message, status, content_format, context_strategy, context_message_ids_json, summary_id, artifact_ids_json, error_code, metadata_json, created_at, updated_at, deleted_at)
-         VALUES (?, ?, ?, NULL, 'user', ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, 'completed', 'markdown', ?, NULL, NULL, NULL, NULL, ?, ?, ?, NULL)`,
+         VALUES (?, ?, ?, ?, 'user', ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, 'completed', 'markdown', ?, ?, NULL, ?, NULL, ?, ?, ?, NULL)`,
       )
       .run(
         userMessageId,
         conversation.id,
         conversation.workspaceId,
-        input.content.trim(),
+        input.parentMessageId ?? this.findLatestMessageId(conversation.id),
+        trimmedContent,
         routeDecision.providerId,
         routeDecision.modelId,
         routeDecision.modelNameSnapshot,
         requestId,
         requestLogId,
         inputTokens,
-        input.contextStrategy ?? 'recent_n',
-        JSON.stringify({
-          routeReason: routeDecision.reason,
-          fallbackUsed: routeDecision.fallbackUsed,
-        }),
+        contextStrategy,
+        JSON.stringify(context.contextMessageIds),
+        JSON.stringify(attachmentSummary.accepted.map((attachment) => attachment.id)),
+        JSON.stringify(userMetadata),
         timestamp,
         timestamp,
       );
+    this.insertMessageAttachments(userMessageId, conversation.id, attachmentSummary.accepted);
 
     this.db
       .prepare(
@@ -456,9 +676,13 @@ export class NexaStore {
         routeDecision.modelNameSnapshot,
         requestId,
         JSON.stringify({
-          message: input.content.trim(),
-          contextStrategy: input.contextStrategy ?? 'recent_n',
+          message: trimmedContent,
+          contextStrategy,
           routeReason: routeDecision.reason,
+          contextMessageIds: context.contextMessageIds,
+          contextTrimReason: context.trimReason,
+          attachments: attachmentSummary.summary,
+          action: input.metadata?.action ?? 'send',
         }),
         inputTokens,
         timestamp,
@@ -467,7 +691,7 @@ export class NexaStore {
 
     try {
       const provider = this.requireProvider(routeDecision.providerId);
-      const model = this.requireModel(routeDecision.modelId);
+      const model = modelForContext;
       const adapterName = getProviderAdapterName(provider.type);
       if (adapterName !== 'openai-compatible') {
         throw new ProviderRuntimeError(t('models.errors.unsupportedProvider'), PROVIDER_RUNTIME_ERROR_CODES.unsupportedProvider);
@@ -477,34 +701,41 @@ export class NexaStore {
         provider,
         model,
         apiKey,
-        messages: this.buildChatMessages(conversation.id, input.content.trim()),
+        messages: context.providerMessages,
         stream: model.supportsStreaming,
       };
       this.db
         .prepare('UPDATE request_logs SET request_summary_json = ? WHERE id = ?')
         .run(JSON.stringify({
           ...getProviderRequestSummary(providerInput),
-          contextStrategy: input.contextStrategy ?? 'recent_n',
+          contextStrategy,
           routeReason: routeDecision.reason,
+          contextMessageIds: context.contextMessageIds,
+          contextTrimReason: context.trimReason,
+          action: input.metadata?.action ?? 'send',
         }), requestLogId);
       const result = await invokeOpenAiCompatibleChat(providerInput);
       const assistantContent = result.content;
       const outputTokens = result.outputTokens ?? estimateTokens(assistantContent);
       const metadata = {
         localHistoryRetained: true,
-        contextStrategy: input.contextStrategy ?? 'recent_n',
-        citations: this.getLightweightCitations(input.content),
+        contextStrategy,
+        contextMessageIds: context.contextMessageIds,
+        contextTrimReason: context.trimReason,
+        citations: this.getLightweightCitations(trimmedContent),
         adapter: adapterName,
         streamed: result.streamed,
         retryCount: result.retryCount,
         routeReason: routeDecision.reason,
         fallbackUsed: routeDecision.fallbackUsed,
+        action: input.metadata?.action ?? 'send',
+        ...(input.metadata ?? {}),
       };
 
       this.db
         .prepare(
           `INSERT INTO messages (id, conversation_id, workspace_id, parent_message_id, role, content, provider_id, model_id, model_name_snapshot, request_id, request_log_id, input_tokens, output_tokens, latency_ms, finish_reason, error_message, status, content_format, context_strategy, context_message_ids_json, summary_id, artifact_ids_json, error_code, metadata_json, created_at, updated_at, deleted_at)
-           VALUES (?, ?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'completed', 'markdown', ?, NULL, NULL, NULL, NULL, ?, ?, ?, NULL)`,
+           VALUES (?, ?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'completed', 'markdown', ?, ?, NULL, NULL, NULL, ?, ?, ?, NULL)`,
         )
         .run(
           assistantMessageId,
@@ -521,11 +752,19 @@ export class NexaStore {
           outputTokens,
           result.latencyMs,
           result.finishReason ?? 'stop',
-          input.contextStrategy ?? 'recent_n',
+          contextStrategy,
+          JSON.stringify(context.contextMessageIds),
           JSON.stringify(metadata),
           now(),
           now(),
         );
+      this.insertMessageChunks({
+        messageId: assistantMessageId,
+        conversationId: conversation.id,
+        requestLogId,
+        chunks: result.chunks.length > 0 ? result.chunks : [assistantContent],
+        status: 'completed',
+      });
 
       this.db
         .prepare(
@@ -563,7 +802,7 @@ export class NexaStore {
 
       this.db
         .prepare('UPDATE conversations SET title = ?, last_message_at = ?, message_count = message_count + 2, updated_at = ? WHERE id = ?')
-        .run(inferTitle(conversation.title, input.content), now(), now(), conversation.id);
+        .run(inferTitle(conversation.title, trimmedContent), now(), now(), conversation.id);
       this.audit('chat.completed', 'conversation', conversation.id, {
         requestLogId,
         providerId: routeDecision.providerId,
@@ -576,7 +815,7 @@ export class NexaStore {
       this.db
         .prepare(
           `INSERT INTO messages (id, conversation_id, workspace_id, parent_message_id, role, content, provider_id, model_id, model_name_snapshot, request_id, request_log_id, input_tokens, output_tokens, latency_ms, finish_reason, error_message, status, content_format, context_strategy, context_message_ids_json, summary_id, artifact_ids_json, error_code, metadata_json, created_at, updated_at, deleted_at)
-           VALUES (?, ?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?, 'failed', 'markdown', ?, NULL, NULL, NULL, ?, ?, ?, ?, NULL)`,
+           VALUES (?, ?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?, 'failed', 'markdown', ?, ?, NULL, NULL, ?, ?, ?, ?, NULL)`,
         )
         .run(
           assistantMessageId,
@@ -592,17 +831,29 @@ export class NexaStore {
           inputTokens,
           Math.max(1, now() - timestamp),
           normalized.message,
-          input.contextStrategy ?? 'recent_n',
+          contextStrategy,
+          JSON.stringify(context.contextMessageIds),
           normalized.code,
           JSON.stringify({
             adapter: getProviderAdapterName(this.requireProvider(routeDecision.providerId).type),
             routeReason: routeDecision.reason,
             fallbackUsed: routeDecision.fallbackUsed,
             retryable: normalized.retryable,
+            contextMessageIds: context.contextMessageIds,
+            action: input.metadata?.action ?? 'send',
+            ...(input.metadata ?? {}),
           }),
           now(),
           now(),
         );
+      this.insertMessageChunks({
+        messageId: assistantMessageId,
+        conversationId: conversation.id,
+        requestLogId,
+        chunks: [normalized.message],
+        status: 'failed',
+        chunkType: 'error',
+      });
       this.db
         .prepare(
           `UPDATE request_logs
@@ -620,7 +871,7 @@ export class NexaStore {
         );
       this.db
         .prepare('UPDATE conversations SET title = ?, last_message_at = ?, message_count = message_count + 2, updated_at = ? WHERE id = ?')
-        .run(inferTitle(conversation.title, input.content), now(), now(), conversation.id);
+        .run(inferTitle(conversation.title, trimmedContent), now(), now(), conversation.id);
       this.audit('chat.failed', 'conversation', conversation.id, {
         requestLogId,
         providerId: routeDecision.providerId,
@@ -636,6 +887,7 @@ export class NexaStore {
       assistantMessage: this.requireMessage(assistantMessageId),
       requestLog: this.requireRequestLog(requestLogId),
       routeDecision,
+      chunks: this.getMessageChunks(assistantMessageId),
     };
   }
 
@@ -1018,6 +1270,22 @@ export class NexaStore {
       this.createAgent(t('tools.agent.seedConfigName'), t('tools.agent.seedConfigGoal'));
     }
 
+    const promptCount = Number((this.db.prepare('SELECT COUNT(*) AS count FROM prompt_templates').get() as { count: number }).count);
+    if (promptCount === 0) {
+      this.db
+        .prepare(
+          `INSERT INTO prompt_templates (id, scope, name, content, enabled, created_at, updated_at)
+           VALUES (?, 'global', ?, ?, 1, ?, ?)`,
+        )
+        .run(
+          createId('prompt'),
+          t('chat.prompt.defaultName'),
+          t('chat.prompt.defaultContent'),
+          timestamp,
+          timestamp,
+        );
+    }
+
     if (!this.db.prepare('SELECT * FROM ui_preferences WHERE id = ?').get(DEFAULT_PREFS_ID)) {
       this.saveUiPreferences({
         theme: 'system',
@@ -1096,6 +1364,218 @@ export class NexaStore {
     return [{ fileId: firstChunk.file_id, citation: firstChunk.citation, snippet: firstChunk.content.slice(0, 120) }];
   }
 
+  private buildConversationContext(
+    conversationId: string,
+    strategy: SendMessageInput['contextStrategy'],
+    content: string,
+    modelContextWindow: number,
+  ): { providerMessages: ChatMessageInput[]; contextMessageIds: string[]; trimReason: string } {
+    const normalizedStrategy = strategy ?? 'recent_n';
+    const limits = CONTEXT_STRATEGY_LIMITS[normalizedStrategy];
+    const prompt = this.getPromptTemplates().find((template) => template.enabled);
+    const maxTokens = Math.max(256, Math.floor(modelContextWindow * limits.tokenBudgetRatio));
+    let usedTokens = estimateTokens(content) + (prompt ? estimateTokens(prompt.content) : 0);
+    const selected: Message[] = [];
+
+    const candidates = this.getMessages(conversationId)
+      .filter((message) => message.status === 'completed')
+      .filter((message) => message.role === 'user' || message.role === 'assistant' || message.role === 'system' || message.role === 'tool')
+      .slice()
+      .reverse();
+
+    for (const message of candidates) {
+      if (selected.length >= limits.messageLimit) {
+        break;
+      }
+      const messageTokens = estimateTokens(message.content);
+      if (usedTokens + messageTokens > maxTokens && selected.length > 0) {
+        break;
+      }
+      selected.push(message);
+      usedTokens += messageTokens;
+    }
+
+    const ordered = selected.reverse();
+    const providerMessages: ChatMessageInput[] = [
+      ...(prompt ? [{ role: 'system' as const, content: prompt.content }] : []),
+      ...ordered.map((message): ChatMessageInput => ({
+        role: message.role === 'error' ? 'assistant' : message.role,
+        content: message.content,
+      })),
+      { role: 'user', content },
+    ];
+    const availableCount = candidates.length;
+    const trimReason = availableCount > ordered.length
+      ? t('chat.context.trimmed', { selected: ordered.length, available: availableCount })
+      : t('chat.context.untrimmed', { selected: ordered.length });
+    return {
+      providerMessages,
+      contextMessageIds: ordered.map((message) => message.id),
+      trimReason,
+    };
+  }
+
+  private validateMessageAttachments(inputs: MessageAttachmentInput[]): {
+    accepted: Array<MessageAttachmentInput & { id: string }>;
+    rejected: Array<MessageAttachmentInput & { reason: string }>;
+    summary: { accepted: number; rejected: number; maxBytes: number };
+  } {
+    const accepted: Array<MessageAttachmentInput & { id: string }> = [];
+    const rejected: Array<MessageAttachmentInput & { reason: string }> = [];
+    for (const input of inputs) {
+      const name = input.name.trim();
+      const mimeType = input.mimeType.trim();
+      const size = Math.max(0, Math.floor(input.size));
+      if (!name || !mimeType) {
+        rejected.push({ ...input, reason: t('chat.attachments.errors.metadata') });
+        continue;
+      }
+      if (size > MESSAGE_ATTACHMENT_POLICY.maxBytes) {
+        rejected.push({ ...input, reason: t('chat.attachments.errors.size') });
+        continue;
+      }
+      if (!isAllowedAttachmentMimeType(mimeType)) {
+        rejected.push({ ...input, reason: t('chat.attachments.errors.type') });
+        continue;
+      }
+      accepted.push({ name, mimeType, size, id: createId('attach') });
+    }
+    return {
+      accepted,
+      rejected,
+      summary: {
+        accepted: accepted.length,
+        rejected: rejected.length,
+        maxBytes: MESSAGE_ATTACHMENT_POLICY.maxBytes,
+      },
+    };
+  }
+
+  private insertMessageAttachments(
+    messageId: string,
+    conversationId: string,
+    attachments: Array<MessageAttachmentInput & { id: string }>,
+  ): void {
+    const timestamp = now();
+    for (const attachment of attachments) {
+      this.db
+        .prepare(
+          `INSERT INTO message_attachments (id, message_id, conversation_id, name, mime_type, size, status, storage_ref, error_message, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, 'accepted', NULL, NULL, ?, ?)`,
+        )
+        .run(attachment.id, messageId, conversationId, attachment.name, attachment.mimeType, attachment.size, timestamp, timestamp);
+    }
+  }
+
+  private insertMessageChunks({
+    messageId,
+    conversationId,
+    requestLogId,
+    chunks,
+    status,
+    chunkType = 'text',
+  }: {
+    messageId: string;
+    conversationId: string;
+    requestLogId: string;
+    chunks: string[];
+    status: MessageChunk['status'];
+    chunkType?: MessageChunk['chunkType'];
+  }): void {
+    const timestamp = now();
+    chunks.forEach((chunk, index) => {
+      this.db
+        .prepare(
+          `INSERT INTO message_chunks (id, message_id, conversation_id, request_log_id, sequence, chunk_type, content, token_count, status, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          createId('chunk'),
+          messageId,
+          conversationId,
+          requestLogId,
+          index,
+          index === chunks.length - 1 && chunkType === 'text' ? 'final' : chunkType,
+          chunk,
+          estimateTokens(chunk),
+          status,
+          timestamp + index,
+        );
+    });
+  }
+
+  private buildConversationMarkdownExport(
+    conversation: Conversation,
+    messages: Message[],
+    attachments: MessageAttachment[],
+    redacted: boolean,
+  ): string {
+    const lines = [
+      `# ${redacted ? redactSensitive(conversation.title) : conversation.title}`,
+      '',
+      `- ${t('chat.export.fields.conversationId')}: ${conversation.id}`,
+      `- ${t('chat.export.fields.messageCount')}: ${messages.length}`,
+      `- ${t('chat.export.fields.attachments')}: ${attachments.length}`,
+      '',
+    ];
+    for (const message of messages) {
+      const content = redacted ? redactSensitive(message.content) : message.content;
+      lines.push(`## ${message.role} · ${message.status}`);
+      if (message.modelNameSnapshot) {
+        lines.push(`_${message.modelNameSnapshot}_`);
+      }
+      lines.push('', content, '');
+    }
+    return lines.join('\n');
+  }
+
+  private buildConversationJsonExport(
+    conversation: Conversation,
+    messages: Message[],
+    attachments: MessageAttachment[],
+    redacted: boolean,
+  ): string {
+    const redactMessage = (message: Message): Message => ({
+      ...message,
+      content: redacted ? redactSensitive(message.content) : message.content,
+      errorMessage: message.errorMessage ? redactSensitive(message.errorMessage) : null,
+      metadataJson: message.metadataJson ? redactSensitive(message.metadataJson) : null,
+    });
+    return JSON.stringify({
+      conversation: {
+        ...conversation,
+        title: redacted ? redactSensitive(conversation.title) : conversation.title,
+      },
+      messages: messages.map(redactMessage),
+      attachments: attachments.map((attachment) => ({
+        ...attachment,
+        storageRef: redacted ? null : attachment.storageRef,
+        errorMessage: attachment.errorMessage ? redactSensitive(attachment.errorMessage) : null,
+      })),
+      redacted,
+      exportedAt: now(),
+    }, null, 2);
+  }
+
+  private findLatestMessageId(conversationId: string): string | null {
+    const row = this.db
+      .prepare("SELECT id FROM messages WHERE conversation_id = ? AND status != 'deleted' ORDER BY created_at DESC LIMIT 1")
+      .get(conversationId) as { id: string } | undefined;
+    return row?.id ?? null;
+  }
+
+  private findPreviousUserMessage(conversationId: string, beforeCreatedAt: number): Message | null {
+    const row = this.db
+      .prepare(
+        `SELECT * FROM messages
+         WHERE conversation_id = ? AND role = 'user' AND status != 'deleted' AND created_at <= ?
+         ORDER BY created_at DESC
+         LIMIT 1`,
+      )
+      .get(conversationId, beforeCreatedAt) as Record<string, unknown> | undefined;
+    return row ? mapMessage(row) : null;
+  }
+
   private estimateCost(modelId: string, inputTokens: number, outputTokens: number): number {
     const model = this.requireModel(modelId);
     const inputPrice = model.inputPrice ?? 0;
@@ -1130,20 +1610,6 @@ export class NexaStore {
     }
     const row = this.db.prepare('SELECT encrypted_value FROM secrets WHERE id = ?').get(provider.secretRef) as { encrypted_value: string } | undefined;
     return row ? decodeSecretValue(row.encrypted_value) : null;
-  }
-
-  private buildChatMessages(conversationId: string, content: string): ChatMessageInput[] {
-    const previous = this.getMessages()
-      .filter((message) => message.conversationId === conversationId && message.status === 'completed')
-      .slice(-8)
-      .map((message): ChatMessageInput | null => {
-        if (message.role !== 'user' && message.role !== 'assistant' && message.role !== 'system' && message.role !== 'tool') {
-          return null;
-        }
-        return { role: message.role, content: message.content };
-      })
-      .filter((message): message is ChatMessageInput => Boolean(message));
-    return [...previous, { role: 'user', content }];
   }
 
   private normalizeProviderError(error: unknown): { code: string; message: string; retryable: boolean } {
@@ -1220,6 +1686,12 @@ export class NexaStore {
     const row = this.db.prepare('SELECT * FROM config_snapshots WHERE id = ?').get(id);
     if (!row) throw new Error(`Import/export result not found: ${id}`);
     return mapImportExportResult(row as Record<string, unknown>);
+  }
+
+  private requireConversationExport(id: string): ConversationExport {
+    const row = this.db.prepare('SELECT * FROM conversation_exports WHERE id = ?').get(id);
+    if (!row) throw new Error(`Conversation export not found: ${id}`);
+    return mapConversationExport(row as Record<string, unknown>);
   }
 }
 

@@ -2,7 +2,18 @@ import { app, ipcMain, shell } from 'electron';
 import { store } from './services/store.js';
 import { startLocalGateway, stopLocalGateway } from './services/localGateway.js';
 import { assertIpcPayload, IPC_CHANNELS, type IpcChannel } from '../shared/ipc.js';
-import type { McpServer, ModelInput, ProviderInput, SendMessageInput, UiPreferences } from '../shared/types.js';
+import type {
+  CancelMessageInput,
+  CompareModelsInput,
+  ExportConversationInput,
+  McpServer,
+  ModelInput,
+  ProviderInput,
+  RegenerateMessageInput,
+  RetryMessageInput,
+  SendMessageInput,
+  UiPreferences,
+} from '../shared/types.js';
 
 function handleIpc<C extends IpcChannel>(channel: C, handler: (...args: any[]) => unknown): void {
   ipcMain.handle(channel, (_event, ...args: unknown[]) => {
@@ -18,6 +29,11 @@ export function registerIpcHandlers(): void {
   handleIpc(IPC_CHANNELS.modelCreate, (input: ModelInput) => store.createModel(input));
   handleIpc(IPC_CHANNELS.chatCreateConversation, (title?: string) => store.createConversation(title));
   handleIpc(IPC_CHANNELS.chatSendMessage, (input: SendMessageInput) => store.sendMessage(input));
+  handleIpc(IPC_CHANNELS.chatRetryMessage, (input: RetryMessageInput) => store.retryMessage(input));
+  handleIpc(IPC_CHANNELS.chatRegenerateMessage, (input: RegenerateMessageInput) => store.regenerateMessage(input));
+  handleIpc(IPC_CHANNELS.chatCancelMessage, (input: CancelMessageInput) => store.cancelMessage(input));
+  handleIpc(IPC_CHANNELS.chatCompareModels, (input: CompareModelsInput) => store.compareModels(input));
+  handleIpc(IPC_CHANNELS.chatExportConversation, (input: ExportConversationInput) => store.exportConversation(input));
   handleIpc(IPC_CHANNELS.chatUpdateConversationFlags, (conversationId: string, flags) =>
     store.updateConversationFlags(conversationId, flags),
   );

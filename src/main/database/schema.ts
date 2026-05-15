@@ -150,6 +150,70 @@ CREATE INDEX IF NOT EXISTS idx_messages_request_log ON messages(request_log_id);
 CREATE INDEX IF NOT EXISTS idx_messages_parent ON messages(parent_message_id);
 CREATE INDEX IF NOT EXISTS idx_messages_workspace_created ON messages(workspace_id, created_at);
 
+CREATE TABLE IF NOT EXISTS message_chunks (
+  id TEXT PRIMARY KEY,
+  message_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  request_log_id TEXT,
+  sequence INTEGER NOT NULL,
+  chunk_type TEXT NOT NULL,
+  content TEXT NOT NULL,
+  token_count INTEGER,
+  status TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY(message_id) REFERENCES messages(id),
+  FOREIGN KEY(conversation_id) REFERENCES conversations(id),
+  FOREIGN KEY(request_log_id) REFERENCES request_logs(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_message_chunks_message_sequence ON message_chunks(message_id, sequence);
+CREATE INDEX IF NOT EXISTS idx_message_chunks_request ON message_chunks(request_log_id, sequence);
+
+CREATE TABLE IF NOT EXISTS message_attachments (
+  id TEXT PRIMARY KEY,
+  message_id TEXT,
+  conversation_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  storage_ref TEXT,
+  error_message TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY(message_id) REFERENCES messages(id),
+  FOREIGN KEY(conversation_id) REFERENCES conversations(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_message_attachments_conversation ON message_attachments(conversation_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_message_attachments_message ON message_attachments(message_id);
+
+CREATE TABLE IF NOT EXISTS prompt_templates (
+  id TEXT PRIMARY KEY,
+  scope TEXT NOT NULL,
+  name TEXT NOT NULL,
+  content TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_prompt_templates_scope ON prompt_templates(scope, enabled);
+
+CREATE TABLE IF NOT EXISTS conversation_exports (
+  id TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL,
+  format TEXT NOT NULL,
+  redacted INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  content TEXT NOT NULL,
+  summary_json TEXT,
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY(conversation_id) REFERENCES conversations(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_conversation_exports_conversation ON conversation_exports(conversation_id, created_at);
+
 CREATE TABLE IF NOT EXISTS request_logs (
   id TEXT PRIMARY KEY,
   conversation_id TEXT,

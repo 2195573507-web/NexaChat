@@ -275,3 +275,38 @@
 - Ran `npm.cmd run build`: passed.
 - Ran `npm.cmd run verify`: passed.
 - Ran `npm.cmd run test:electron-smoke`: passed.
+
+## 2026-05-15 Full App Round 7 Execution
+
+- Reconfirmed real project root with `git rev-parse --show-toplevel`: `D:/NexaChat`.
+- Verified working tree was clean before Round 7 implementation: `## main...origin/main`.
+- Continued the active `/goal` at Round 7 after Round 0-6 completion.
+- Used parallel lanes:
+  - Lane A: schema, service, context builder, attachment policy, prompt metadata, chunks, and exports.
+  - Lane B: Chat UI lifecycle controls, multi-model UX, i18n, and browser mock parity.
+  - Lane C: tests, docs, desktop shortcut/Git closeout.
+- Added `src/shared/conversationRuntime.ts`.
+- Added message chunk, attachment, prompt template, and conversation export schema.
+- Extended shared API/IPC/preload/main handlers for retry, regenerate, cancel, compare, and export.
+- Updated Store to record context message IDs, persist provider chunks, validate attachment metadata, seed a prompt template, export redacted conversations, and fan out multi-model compare through the same Provider chain.
+- Updated OpenAI-compatible adapter to return normalized chunk arrays.
+- Updated Chat UI with copy/retry/regenerate/cancel/export and compact multi-model comparison controls.
+- Updated browser mock to keep the same AppApi contract in UI-smoke mode.
+- Added `tests/conversation-runtime.test.ts` and updated app/UI smoke assertions.
+- Ran `npm.cmd run typecheck`: passed.
+- First targeted Round 7 tests failed because the test used streaming mode against a JSON mock upstream and tried to cancel an already completed request.
+- Fixed the test to use non-streaming mock completion and cancel a deterministic failed request.
+- Ran `npm.cmd run test -- tests/conversation-runtime.test.ts tests/provider-store-integration.test.ts tests/gateway-provider-chain.test.ts`: passed, 3 files / 6 tests.
+- Ran `npm.cmd run test -- tests/app.test.tsx tests/ipc-contract.test.ts tests/i18n-authority.test.ts`: passed, 3 files / 12 tests.
+- Ran `npm.cmd run test`: passed, 9 files / 31 tests.
+- Ran `npm.cmd run test:ui-smoke`: passed, 11 Playwright tests.
+- Added `docs/implementation/round-07-conversation-system-closure.md`.
+- Updated `PROJECT_PROGRESS.md`, `docs/implementation/full-app-round-execution-matrix.md`, and `task_plan.md`.
+
+## 2026-05-16 Full App Round 7 Closeout
+
+- Reconfirmed real project root with `git rev-parse --show-toplevel`: `D:/NexaChat`.
+- Continued from the interrupted Round 7 state with code/tests already implemented and verified.
+- Updated the authoritative blueprint Round 7 execution record with Completed status, changed files, deleted old links, verification commands, desktop shortcut result, acceptance result, and pending commit placeholders.
+- Updated `PROJECT_PROGRESS.md`, `docs/implementation/full-app-round-execution-matrix.md`, `docs/implementation/round-07-conversation-system-closure.md`, and `task_plan.md` so Round 7 verification is no longer marked pending.
+- Kept two active lanes: main thread for Round 7 docs/commit/push closeout, and parallel subagent review for Round 8 Gateway/API Key chain analysis.

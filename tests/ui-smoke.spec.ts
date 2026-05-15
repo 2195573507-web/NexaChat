@@ -95,6 +95,9 @@ test('browser renderer exposes eight expandable modules and can send chat throug
 
   await expect(page.getByText(message, { exact: true })).toBeVisible();
   await expect(page.getByText(/Mock response from nexachat-mock/)).toBeVisible();
+  await expect(page.getByRole('button', { name: new RegExp(translate('zh-CN', 'chat.exportConversation')) })).toBeVisible();
+  await expect(page.getByText(translate('zh-CN', 'chat.message.copy')).first()).toBeVisible();
+  await expect(page.getByText(translate('zh-CN', 'chat.compare.title'))).toBeVisible();
   await expectNoHorizontalOverflow(page, '.app-shell');
   await expectNoHorizontalOverflow(page, '.content-grid');
   await expectNoHorizontalOverflow(page, '.chat-layout');

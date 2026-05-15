@@ -1,4 +1,15 @@
-import type { McpServer, ModelInput, ProviderInput, SendMessageInput, UiPreferences } from './types.js';
+import type {
+  CancelMessageInput,
+  CompareModelsInput,
+  ExportConversationInput,
+  McpServer,
+  ModelInput,
+  ProviderInput,
+  RegenerateMessageInput,
+  RetryMessageInput,
+  SendMessageInput,
+  UiPreferences,
+} from './types.js';
 
 export const IPC_CHANNELS = {
   appGetSnapshot: 'app:getSnapshot',
@@ -7,6 +18,11 @@ export const IPC_CHANNELS = {
   modelCreate: 'model:create',
   chatCreateConversation: 'chat:createConversation',
   chatSendMessage: 'chat:sendMessage',
+  chatRetryMessage: 'chat:retryMessage',
+  chatRegenerateMessage: 'chat:regenerateMessage',
+  chatCancelMessage: 'chat:cancelMessage',
+  chatCompareModels: 'chat:compareModels',
+  chatExportConversation: 'chat:exportConversation',
   chatUpdateConversationFlags: 'chat:updateConversationFlags',
   gatewayCreateKey: 'gateway:createKey',
   gatewayRevokeKey: 'gateway:revokeKey',
@@ -35,6 +51,11 @@ export type IpcInvokeArgs = {
   [IPC_CHANNELS.modelCreate]: [ModelInput];
   [IPC_CHANNELS.chatCreateConversation]: [string?];
   [IPC_CHANNELS.chatSendMessage]: [SendMessageInput];
+  [IPC_CHANNELS.chatRetryMessage]: [RetryMessageInput];
+  [IPC_CHANNELS.chatRegenerateMessage]: [RegenerateMessageInput];
+  [IPC_CHANNELS.chatCancelMessage]: [CancelMessageInput];
+  [IPC_CHANNELS.chatCompareModels]: [CompareModelsInput];
+  [IPC_CHANNELS.chatExportConversation]: [ExportConversationInput];
   [IPC_CHANNELS.chatUpdateConversationFlags]: [
     string,
     Partial<{
@@ -85,6 +106,11 @@ const ipcPayloadArity: Record<IpcChannel, { min: number; max: number }> = {
   [IPC_CHANNELS.modelCreate]: { min: 1, max: 1 },
   [IPC_CHANNELS.chatCreateConversation]: { min: 0, max: 1 },
   [IPC_CHANNELS.chatSendMessage]: { min: 1, max: 1 },
+  [IPC_CHANNELS.chatRetryMessage]: { min: 1, max: 1 },
+  [IPC_CHANNELS.chatRegenerateMessage]: { min: 1, max: 1 },
+  [IPC_CHANNELS.chatCancelMessage]: { min: 1, max: 1 },
+  [IPC_CHANNELS.chatCompareModels]: { min: 1, max: 1 },
+  [IPC_CHANNELS.chatExportConversation]: { min: 1, max: 1 },
   [IPC_CHANNELS.chatUpdateConversationFlags]: { min: 2, max: 2 },
   [IPC_CHANNELS.gatewayCreateKey]: { min: 1, max: 1 },
   [IPC_CHANNELS.gatewayRevokeKey]: { min: 1, max: 1 },
@@ -103,4 +129,3 @@ const ipcPayloadArity: Record<IpcChannel, { min: number; max: number }> = {
   [IPC_CHANNELS.dataExportDiagnostics]: { min: 0, max: 0 },
   [IPC_CHANNELS.systemOpenLogs]: { min: 0, max: 0 },
 };
-

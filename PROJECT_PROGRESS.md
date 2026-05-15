@@ -305,6 +305,52 @@ Git:
 - Round 6 delivery commit hash: `45054a81190638e209d06d9373ff83e38763a9fd`.
 - Push result: delivery and closeout commits pushed; `origin/main` confirmed at `b151d8d5bda11ae29589bd08a7d9eaf52c4af1ee`.
 
+## 2026-05-16 Full App Round 7 Conversation System
+
+Round 7 of the authoritative full-app blueprint is implemented and verified; Git delivery is in commit/hash backfill closeout. It turns the conversation layer from a one-shot send/display flow into a richer lifecycle with authoritative context, chunks, prompt metadata, export records, retry, regenerate, cancel, copy, and multi-model comparison.
+
+Parallel execution lanes:
+
+- Lane A: schema/service/context/export authority.
+- Lane B: Chat UI lifecycle controls, i18n, and browser mock contract.
+- Lane C: store/gateway/app/UI tests, docs, shortcut and Git closeout.
+
+Key changes:
+
+- Added `src/shared/conversationRuntime.ts` for conversation/message status, chunk type/status, export formats, attachment policy, and context limits.
+- Added `message_chunks`, `message_attachments`, `prompt_templates`, and `conversation_exports` tables.
+- Extended shared `AppApi`, IPC authority, preload bridge, and main IPC handlers for retry, regenerate, cancel, compare, and export.
+- Updated Store so context building records selected message IDs, Provider chunks persist, exports are redacted by default, and multi-model compare fans out through the same real Provider chain.
+- Updated Chat UI with status labels, copy, retry, regenerate, cancel, redacted export, and compact multi-model comparison controls.
+- Updated browser mock to implement the same Round 7 API contract for UI smoke only.
+- Added `tests/conversation-runtime.test.ts` and updated renderer/UI tests for visible Round 7 controls.
+- Added `docs/implementation/round-07-conversation-system-closure.md`.
+
+Verification completed:
+
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test -- tests/conversation-runtime.test.ts tests/provider-store-integration.test.ts tests/gateway-provider-chain.test.ts`: passed, 3 files / 6 tests.
+- `npm.cmd run test -- tests/app.test.tsx tests/ipc-contract.test.ts tests/i18n-authority.test.ts`: passed, 3 files / 12 tests.
+- `npm.cmd run test`: passed, 9 files / 31 tests.
+- `npm.cmd run test:ui-smoke`: passed, 11 Playwright tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run verify`: passed, including typecheck, full unit test suite, and build.
+- `npm.cmd run test:electron-smoke`: passed; Electron shell rendered.
+- `git diff --check`: passed with LF/CRLF conversion warnings only.
+
+Desktop shortcut:
+
+- `C:\Users\至亲\Desktop\NexaChat.lnk` exists and still points to `D:\NexaChat\node_modules\electron\dist\electron.exe`.
+- Arguments remain `"D:\NexaChat"`.
+- Working directory remains `D:\NexaChat`.
+- Icon remains `D:\NexaChat\assets\app-icon.ico,0`.
+- No shortcut was modified in Round 7.
+
+Pending before Round 7 Git closeout:
+
+- Delivery commit hash backfill into blueprint, matrix, progress, and closure docs.
+- Push confirmation after hash backfill commit.
+
 ## 2026-05-14 UI Shell Redesign
 
 This round rebuilt the visible desktop shell, sidebar hierarchy, topbar, workbench home, and visual system so NexaChat reads as a formal compact desktop tool instead of a crowded prototype/debug panel.

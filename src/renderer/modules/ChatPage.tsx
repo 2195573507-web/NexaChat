@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Archive, Copy, Plus, Send, Star } from 'lucide-react';
+import { Archive, Copy, Download, Plus, RefreshCcw, RotateCcw, Send, Split, Star, XCircle } from 'lucide-react';
 import type { ContextStrategy } from '../../shared/types';
 import { EmptyState } from '../components/EmptyState';
 import { useI18n } from '../i18n';
@@ -14,6 +14,7 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
   const [content, setContent] = useState('');
   const [historyQuery, setHistoryQuery] = useState('');
   const [modelId, setModelId] = useState(defaultModel?.id ?? snapshot.models[0]?.id ?? '');
+  const [compareModelIds, setCompareModelIds] = useState<string[]>([]);
   const [contextStrategy, setContextStrategy] = useState<ContextStrategy>('recent_n');
   const activeConversation = conversations.find((conversation) => conversation.id === conversationId) ?? conversations[0];
   const messages = activeConversation ? snapshot.messages.filter((message) => message.conversationId === activeConversation.id) : [];
@@ -54,6 +55,28 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
       setContent('');
     });
 
+  const runCompare = () =>
+    onAction(t('chat.toast.compare'), async () => {
+      await api.compareModels({ conversationId: activeConversation?.id, content, modelIds: compareModelIds, contextStrategy });
+      setContent('');
+    });
+
+  const exportCurrentConversation = () =>
+    onAction(t('chat.toast.exported'), async () => {
+      if (!activeConversation) return;
+      const exported = await api.exportConversation({ conversationId: activeConversation.id, format: 'markdown', redacted: true });
+      copyText(exported.content);
+    });
+
+  const toggleCompareModel = (nextModelId: string) => {
+    setCompareModelIds((current) => {
+      if (current.includes(nextModelId)) {
+        return current.filter((id) => id !== nextModelId);
+      }
+      return [...current, nextModelId].slice(0, 3);
+    });
+  };
+
   if (activeTab.id === 'playground') {
     return (
       <TabPanel moduleId="chat" tab={activeTab} className="chat-panel">
@@ -74,7 +97,12 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
                 onClick={() => setConversationId(conversation.id)}
               >
                 <strong>{conversation.title}</strong>
-                <span>{t('common.messageCount', { count: conversation.messageCount })} · {conversation.isFavorite ? t('common.favorite') : conversation.status}</span>
+                <span>
+                  {t('common.valueSeparator', {
+                    left: t('common.messageCount', { count: conversation.messageCount }),
+                    right: conversation.isFavorite ? t('common.favorite') : conversation.status,
+                  })}
+                </span>
               </button>
             ))}
           </aside>
@@ -85,31 +113,64 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
                 <h2>{activeConversation?.title ?? t('chat.fallbackConversation')}</h2>
                 <p>{t('chat.playground.note')}</p>
               </div>
-              <select value={modelId} onChange={(event) => setModelId(event.target.value)} aria-label={t('chat.modelSelect.aria')}>
-                {snapshot.models.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.displayName} · {model.healthStatus}
-                  </option>
-                ))}
-              </select>
+              <div className="chat-topline-actions">
+                <select value={modelId} onChange={(event) => setModelId(event.target.value)} aria-label={t('chat.modelSelect.aria')}>
+                  {snapshot.models.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {t('common.valueSeparator', { left: model.displayName, right: model.healthStatus })}
+                    </option>
+                  ))}
+                </select>
+                <button type="button" onClick={exportCurrentConversation} disabled={!activeConversation}>
+                  <Download size={16} /> {t('chat.exportConversation')}
+                </button>
+              </div>
             </div>
 
             <div className="message-timeline">
               {messages.length === 0 ? (
                 <EmptyState title={t('chat.empty.title')} reason={t('chat.empty.reason')} />
               ) : (
-                messages.map((message) => (
-                  <article className={`message-bubble role-${message.role}`} key={message.id}>
-                    <div className="message-meta">
-                      <strong>{message.role === 'user' ? t('chat.role.user') : t('chat.role.assistant')}</strong>
-                      {message.modelNameSnapshot ? <span>{message.modelNameSnapshot}</span> : null}
-                      {message.latencyMs ? <span>{message.latencyMs}ms</span> : null}
-                      <span>{message.contextStrategy}</span>
-                    </div>
-                    <p>{message.content}</p>
-                    {message.metadataJson ? <small>{formatMessageMetadata(message.metadataJson, t)}</small> : null}
-                  </article>
-                ))
+                messages.map((message) => {
+                  const chunks = snapshot.messageChunks.filter((chunk) => chunk.messageId === message.id);
+                  const parentUser = message.parentMessageId ? messages.find((candidate) => candidate.id === message.parentMessageId) : null;
+                  return (
+                    <article className={`message-bubble role-${message.role} status-${message.status}`} key={message.id}>
+                      <div className="message-meta">
+                        <strong>{message.role === 'user' ? t('chat.role.user') : t('chat.role.assistant')}</strong>
+                        {message.modelNameSnapshot ? <span>{message.modelNameSnapshot}</span> : null}
+                        {message.latencyMs ? <span>{message.latencyMs}ms</span> : null}
+                        <span>{message.contextStrategy}</span>
+                        <StateBadge label={statusLabelForMessage(message.status, t)} tone={message.status === 'failed' ? 'error' : message.status === 'cancelled' ? 'warning' : 'muted'} />
+                      </div>
+                      <p>{message.content}</p>
+                      {message.errorMessage ? <small>{message.errorMessage}</small> : null}
+                      {message.metadataJson ? <small>{formatMessageMetadata(message.metadataJson, t)}</small> : null}
+                      {message.contextMessageIdsJson ? <small>{t('chat.message.contextIds', { count: parseJsonArrayCount(message.contextMessageIdsJson) })}</small> : null}
+                      {chunks.length > 0 ? <small>{t('chat.message.chunks', { count: chunks.length })}</small> : null}
+                      <div className="message-actions" aria-label={t('chat.message.actions.aria')}>
+                        <button type="button" onClick={() => copyText(message.content)}>
+                          <Copy size={14} /> {t('chat.message.copy')}
+                        </button>
+                        {message.status === 'failed' ? (
+                          <button type="button" onClick={() => onAction(t('chat.toast.retry'), () => api.retryMessage({ messageId: message.id, modelId, contextStrategy }))}>
+                            <RefreshCcw size={14} /> {t('chat.message.retry')}
+                          </button>
+                        ) : null}
+                        {message.role === 'assistant' && message.status === 'completed' && parentUser ? (
+                          <button type="button" onClick={() => onAction(t('chat.toast.regenerate'), () => api.regenerateMessage({ assistantMessageId: message.id, modelId, contextStrategy }))}>
+                            <RotateCcw size={14} /> {t('chat.message.regenerate')}
+                          </button>
+                        ) : null}
+                        {(message.status === 'streaming' || message.status === 'failed') && message.requestLogId ? (
+                          <button type="button" onClick={() => onAction(t('chat.toast.cancelled'), () => api.cancelMessage({ requestLogId: message.requestLogId! }))}>
+                            <XCircle size={14} /> {t('chat.message.cancel')}
+                          </button>
+                        ) : null}
+                      </div>
+                    </article>
+                  );
+                })
               )}
             </div>
 
@@ -146,6 +207,26 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
               <div><dt>{t('chat.context.historyState')}</dt><dd>{t('chat.context.sqlite')}</dd></div>
               <div><dt>{t('chat.context.currentModel')}</dt><dd>{snapshot.models.find((model) => model.id === modelId)?.displayName ?? t('common.notConfigured')}</dd></div>
             </dl>
+            <div className="compare-panel">
+              <h3>{t('chat.compare.title')}</h3>
+              <p>{t('chat.compare.note')}</p>
+              <div className="compare-model-list" aria-label={t('chat.compare.models')}>
+                {snapshot.models.slice(0, 6).map((model) => (
+                  <label key={model.id}>
+                    <input
+                      type="checkbox"
+                      checked={compareModelIds.includes(model.id)}
+                      onChange={() => toggleCompareModel(model.id)}
+                    />
+                    <span>{model.displayName}</span>
+                  </label>
+                ))}
+              </div>
+              <small>{t('chat.compare.limitHint')}</small>
+              <button type="button" disabled={!content.trim() || compareModelIds.length < 2} onClick={runCompare}>
+                <Split size={16} /> {t('chat.compare.run')}
+              </button>
+            </div>
           </aside>
         </div>
       </TabPanel>
@@ -229,4 +310,22 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
       </section>
     </TabPanel>
   );
+}
+
+function parseJsonArrayCount(value: string): number {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed.length : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function statusLabelForMessage(status: string, t: ReturnType<typeof useI18n>['t']): string {
+  if (status === 'streaming') return t('chat.status.streaming');
+  if (status === 'failed') return t('chat.status.failed');
+  if (status === 'cancelled') return t('chat.status.cancelled');
+  if (status === 'draft') return t('common.draft');
+  if (status === 'completed') return t('common.completed');
+  return status;
 }

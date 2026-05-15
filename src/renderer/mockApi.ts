@@ -2,9 +2,14 @@ import type {
   AgentDefinition,
   AppSnapshot,
   AuditLog,
+  CancelMessageInput,
   ChatResponse,
+  CompareModelsInput,
+  CompareModelsResponse,
   ContextStrategy,
   Conversation,
+  ConversationExport,
+  ExportConversationInput,
   GatewayApiKey,
   GatewayKeyCreated,
   GatewayLog,
@@ -14,11 +19,16 @@ import type {
   KnowledgeFile,
   McpServer,
   Message,
+  MessageAttachment,
+  MessageChunk,
   Model,
   ModelInput,
+  PromptTemplate,
   Provider,
   ProviderInput,
+  RegenerateMessageInput,
   RequestLog,
+  RetryMessageInput,
   RouteDecision,
   SendMessageInput,
   UiPreferences,
@@ -37,6 +47,10 @@ interface MockState {
   models: Model[];
   conversations: Conversation[];
   messages: Message[];
+  messageChunks: MessageChunk[];
+  messageAttachments: MessageAttachment[];
+  promptTemplates: PromptTemplate[];
+  conversationExports: ConversationExport[];
   requestLogs: RequestLog[];
   gatewayLogs: GatewayLog[];
   usageRecords: UsageRecord[];
@@ -204,6 +218,20 @@ function createSeedState(): MockState {
     models,
     conversations,
     messages,
+    messageChunks: [],
+    messageAttachments: [],
+    promptTemplates: [
+      {
+        id: 'prompt_browser_mock',
+        scope: 'global',
+        name: t('chat.prompt.defaultName'),
+        content: t('chat.prompt.defaultContent'),
+        enabled: true,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+    ],
+    conversationExports: [],
     requestLogs: [],
     gatewayLogs: [],
     usageRecords: [],
@@ -373,6 +401,10 @@ function buildSnapshot(state: MockState): AppSnapshot {
     },
     conversations: state.conversations,
     messages: state.messages,
+    messageChunks: state.messageChunks,
+    messageAttachments: state.messageAttachments,
+    promptTemplates: state.promptTemplates,
+    conversationExports: state.conversationExports,
     providers: state.providers,
     models: state.models,
     requestLogs: state.requestLogs,
@@ -550,6 +582,7 @@ export function createMockApi(): AppApi {
       const assistantContent = buildAssistantContent(input.content, routeDecision);
       const assistantOutputTokens = estimateTokens(assistantContent);
       const requestLogId = createId('request');
+      const assistantChunks = assistantContent.split('\n\n').filter(Boolean);
 
       const previousMessage = [...state.messages]
         .reverse()
@@ -630,6 +663,18 @@ export function createMockApi(): AppApi {
         completedAt: now(),
         createdAt: timestamp,
       };
+      const chunks: MessageChunk[] = assistantChunks.map((chunk, index) => ({
+        id: createId('chunk'),
+        messageId: assistantMessage.id,
+        conversationId: storedConversation.id,
+        requestLogId,
+        sequence: index,
+        chunkType: index === assistantChunks.length - 1 ? 'final' : 'text',
+        content: chunk,
+        tokenCount: estimateTokens(chunk),
+        status: 'completed',
+        createdAt: timestamp + index,
+      }));
 
       const usageRecord: UsageRecord = {
         id: createId('usage'),
@@ -644,6 +689,7 @@ export function createMockApi(): AppApi {
       };
 
       state.messages.push(userMessage, assistantMessage);
+      state.messageChunks.push(...chunks);
       state.requestLogs.unshift(requestLog);
       state.usageRecords.unshift(usageRecord);
 
@@ -664,8 +710,128 @@ export function createMockApi(): AppApi {
         assistantMessage,
         requestLog,
         routeDecision,
+        chunks,
       };
       return clone(response);
+    },
+
+    async retryMessage(input: RetryMessageInput) {
+      const message = findById(state.messages, input.messageId, 'Message');
+      const sourceUser = message.role === 'user'
+        ? message
+        : message.parentMessageId
+          ? findById(state.messages, message.parentMessageId, 'Parent message')
+          : [...state.messages].reverse().find((candidate) => candidate.conversationId === message.conversationId && candidate.role === 'user');
+      if (!sourceUser || sourceUser.role !== 'user') {
+        throw new Error(t('chat.errors.retrySourceMissing'));
+      }
+      pushAudit('chat.retryMessage', 'message', message.id);
+      return api.sendMessage({
+        conversationId: sourceUser.conversationId,
+        content: sourceUser.content,
+        modelId: input.modelId ?? message.modelId ?? undefined,
+        contextStrategy: input.contextStrategy ?? message.contextStrategy,
+        parentMessageId: sourceUser.id,
+        metadata: { action: 'retry', sourceMessageId: message.id },
+      });
+    },
+
+    async regenerateMessage(input: RegenerateMessageInput) {
+      const assistant = findById(state.messages, input.assistantMessageId, 'Assistant message');
+      if (assistant.role !== 'assistant') {
+        throw new Error(t('chat.errors.regenerateAssistantOnly'));
+      }
+      const sourceUser = assistant.parentMessageId
+        ? findById(state.messages, assistant.parentMessageId, 'Parent message')
+        : [...state.messages].reverse().find((candidate) => candidate.conversationId === assistant.conversationId && candidate.role === 'user');
+      if (!sourceUser || sourceUser.role !== 'user') {
+        throw new Error(t('chat.errors.regenerateSourceMissing'));
+      }
+      pushAudit('chat.regenerateMessage', 'message', assistant.id);
+      return api.sendMessage({
+        conversationId: assistant.conversationId,
+        content: sourceUser.content,
+        modelId: input.modelId ?? assistant.modelId ?? undefined,
+        contextStrategy: input.contextStrategy ?? assistant.contextStrategy,
+        parentMessageId: sourceUser.id,
+        metadata: { action: 'regenerate', sourceAssistantMessageId: assistant.id },
+      });
+    },
+
+    async cancelMessage(input: CancelMessageInput) {
+      const requestLog = findById(state.requestLogs, input.requestLogId, 'Request log');
+      if (!requestLog.messageId) {
+        throw new Error(t('chat.errors.cancelRequestMissing'));
+      }
+      const assistantMessage = findById(state.messages, requestLog.messageId, 'Message');
+      assistantMessage.status = 'cancelled';
+      assistantMessage.errorMessage = t('chat.cancelled.message');
+      assistantMessage.errorCode = 'cancelled_by_user';
+      requestLog.status = 'cancelled';
+      requestLog.errorMessage = t('chat.cancelled.message');
+      requestLog.errorCode = 'cancelled_by_user';
+      requestLog.completedAt = now();
+      state.messageChunks
+        .filter((chunk) => chunk.requestLogId === requestLog.id)
+        .forEach((chunk) => {
+          chunk.status = 'cancelled';
+        });
+      pushAudit('chat.cancelMessage', 'requestLog', requestLog.id);
+      const conversation = findById(state.conversations, assistantMessage.conversationId, 'Conversation');
+      const routeDecision = resolveRoute(state, { content: assistantMessage.content, modelId: assistantMessage.modelId ?? undefined });
+      return clone({
+        conversation,
+        userMessage: assistantMessage.parentMessageId ? findById(state.messages, assistantMessage.parentMessageId, 'Parent message') : assistantMessage,
+        assistantMessage,
+        requestLog,
+        routeDecision,
+        chunks: state.messageChunks.filter((chunk) => chunk.messageId === assistantMessage.id),
+      });
+    },
+
+    async compareModels(input: CompareModelsInput) {
+      const modelIds = Array.from(new Set(input.modelIds)).filter(Boolean).slice(0, 3);
+      if (modelIds.length < 2) {
+        throw new Error(t('chat.errors.compareNeedsModels'));
+      }
+      const conversation = input.conversationId
+        ? findById(state.conversations, input.conversationId, 'Conversation')
+        : await api.createConversation(input.content.slice(0, 32) || t('chat.seed.newConversation'));
+      const responses: ChatResponse[] = [];
+      for (const modelId of modelIds) {
+        responses.push(await api.sendMessage({
+          conversationId: conversation.id,
+          content: input.content,
+          modelId,
+          contextStrategy: input.contextStrategy ?? 'recent_n',
+          metadata: { action: 'compare', compareModelIds: modelIds },
+        }));
+      }
+      pushAudit('chat.compareModels', 'conversation', conversation.id, { modelIds });
+      const result: CompareModelsResponse = { conversation, responses };
+      return clone(result);
+    },
+
+    async exportConversation(input: ExportConversationInput) {
+      const conversation = findById(state.conversations, input.conversationId, 'Conversation');
+      const messages = state.messages.filter((message) => message.conversationId === conversation.id && message.status !== 'deleted');
+      const redacted = input.redacted !== false;
+      const content = input.format === 'json'
+        ? JSON.stringify({ conversation, messages, redacted, source: 'browser-mock' }, null, 2)
+        : [`# ${conversation.title}`, '', ...messages.flatMap((message) => [`## ${message.role} · ${message.status}`, message.content, ''])].join('\n');
+      const created: ConversationExport = {
+        id: createId('conversation_export'),
+        conversationId: conversation.id,
+        format: input.format,
+        redacted,
+        status: 'completed',
+        content,
+        summaryJson: JSON.stringify({ messageCount: messages.length, redacted }),
+        createdAt: now(),
+      };
+      state.conversationExports.unshift(created);
+      pushAudit('chat.exportConversation', 'conversation', conversation.id, { format: input.format, redacted });
+      return clone(created);
     },
 
     async createConversation(title?: string) {

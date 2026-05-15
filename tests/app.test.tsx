@@ -72,6 +72,8 @@ describe('NexaChat renderer', () => {
       expect(screen.getByText(message)).toBeInTheDocument();
     });
     expect(screen.getByText(/Mock response from nexachat-mock/)).toBeInTheDocument();
+    expect(screen.getAllByText(translate('zh-CN', 'chat.message.copy')).length).toBeGreaterThan(0);
+    expect(screen.getByText(translate('zh-CN', 'chat.exportConversation'))).toBeInTheDocument();
   });
 
   it('shows model gateway and settings key areas on new canonical routes', async () => {

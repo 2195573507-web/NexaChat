@@ -2,13 +2,17 @@ import type {
   AgentDefinition,
   AuditLog,
   Conversation,
+  ConversationExport,
   GatewayApiKey,
   GatewayLog,
   ImportExportResult,
   KnowledgeFile,
   McpServer,
   Message,
+  MessageAttachment,
+  MessageChunk,
   Model,
+  PromptTemplate,
   Provider,
   RequestLog,
   UiPreferences,
@@ -123,6 +127,62 @@ export function mapMessage(row: Row): Message {
     metadataJson: nullableString(row.metadata_json),
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
+  };
+}
+
+export function mapMessageChunk(row: Row): MessageChunk {
+  return {
+    id: String(row.id),
+    messageId: String(row.message_id),
+    conversationId: String(row.conversation_id),
+    requestLogId: nullableString(row.request_log_id),
+    sequence: Number(row.sequence),
+    chunkType: String(row.chunk_type) as MessageChunk['chunkType'],
+    content: String(row.content),
+    tokenCount: nullableNumber(row.token_count),
+    status: String(row.status) as MessageChunk['status'],
+    createdAt: Number(row.created_at),
+  };
+}
+
+export function mapMessageAttachment(row: Row): MessageAttachment {
+  return {
+    id: String(row.id),
+    messageId: nullableString(row.message_id),
+    conversationId: String(row.conversation_id),
+    name: String(row.name),
+    mimeType: String(row.mime_type),
+    size: Number(row.size),
+    status: String(row.status) as MessageAttachment['status'],
+    storageRef: nullableString(row.storage_ref),
+    errorMessage: nullableString(row.error_message),
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
+  };
+}
+
+export function mapPromptTemplate(row: Row): PromptTemplate {
+  return {
+    id: String(row.id),
+    scope: String(row.scope) as PromptTemplate['scope'],
+    name: String(row.name),
+    content: String(row.content),
+    enabled: bool(row.enabled),
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
+  };
+}
+
+export function mapConversationExport(row: Row): ConversationExport {
+  return {
+    id: String(row.id),
+    conversationId: String(row.conversation_id),
+    format: String(row.format) as ConversationExport['format'],
+    redacted: bool(row.redacted),
+    status: String(row.status) as ConversationExport['status'],
+    content: String(row.content),
+    summaryJson: nullableString(row.summary_json),
+    createdAt: Number(row.created_at),
   };
 }
 

@@ -1,7 +1,17 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { AppApi } from '../shared/api.js';
 import { IPC_CHANNELS, type IpcChannel, type IpcInvokeArgs } from '../shared/ipc.js';
-import type { ModelInput, ProviderInput, SendMessageInput, UiPreferences } from '../shared/types.js';
+import type {
+  CancelMessageInput,
+  CompareModelsInput,
+  ExportConversationInput,
+  ModelInput,
+  ProviderInput,
+  RegenerateMessageInput,
+  RetryMessageInput,
+  SendMessageInput,
+  UiPreferences,
+} from '../shared/types.js';
 
 function invoke<C extends IpcChannel>(channel: C, ...args: IpcInvokeArgs[C]) {
   return ipcRenderer.invoke(channel, ...args);
@@ -13,6 +23,11 @@ const api: AppApi = {
   createModel: (input: ModelInput) => invoke(IPC_CHANNELS.modelCreate, input),
   testProvider: (providerId: string) => invoke(IPC_CHANNELS.providerTest, providerId),
   sendMessage: (input: SendMessageInput) => invoke(IPC_CHANNELS.chatSendMessage, input),
+  retryMessage: (input: RetryMessageInput) => invoke(IPC_CHANNELS.chatRetryMessage, input),
+  regenerateMessage: (input: RegenerateMessageInput) => invoke(IPC_CHANNELS.chatRegenerateMessage, input),
+  cancelMessage: (input: CancelMessageInput) => invoke(IPC_CHANNELS.chatCancelMessage, input),
+  compareModels: (input: CompareModelsInput) => invoke(IPC_CHANNELS.chatCompareModels, input),
+  exportConversation: (input: ExportConversationInput) => invoke(IPC_CHANNELS.chatExportConversation, input),
   createConversation: (title?: string) => invoke(IPC_CHANNELS.chatCreateConversation, title),
   updateConversationFlags: (conversationId, flags) => invoke(IPC_CHANNELS.chatUpdateConversationFlags, conversationId, flags),
   createGatewayKey: (name: string) => invoke(IPC_CHANNELS.gatewayCreateKey, name),

@@ -46,7 +46,8 @@ At least three agents were launched concurrently before implementation work cont
 - Full App Round 3 global UI and design system refactor: complete as implementation, verification, commit, and push.
 - Full App Round 4 Chinese / English switching and i18n authority: complete as implementation, verification, commit, and push.
 - Full App Round 5 dark/light/system theme runtime: complete as implementation, verification, commit, and push.
-- Full App Round 6 Provider/model real invocation chain: complete as implementation and verification; commit and push pending.
+- Full App Round 6 Provider/model real invocation chain: complete as implementation, verification, commit, and push.
+- Full App Round 7 conversation system and multi-model experience: implementation, verification, Electron smoke, and shortcut readback complete; commit hash backfill and push pending.
 - Phase 1: complete.
 - Phase 2: complete.
 - Phase 3: complete.
