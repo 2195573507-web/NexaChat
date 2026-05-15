@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { translate } from '../src/shared/i18n';
 import { getDefaultTab, getTabRoute, navModules } from '../src/shared/navigation';
 import type { NavModule, NavTab } from '../src/shared/types';
 
@@ -20,7 +21,7 @@ async function clickModule(page: Page, module: NavModule) {
 }
 
 async function openFeature(page: Page, module: NavModule, tab: NavTab) {
-  const expandButton = page.getByRole('button', { name: new RegExp(`展开${module.label}|收起${module.label}`) });
+  const expandButton = page.getByRole('button', { name: new RegExp(`${translate('zh-CN', 'shell.expand')}${module.label}|${translate('zh-CN', 'shell.collapse')}${module.label}`) });
   if ((await expandButton.getAttribute('aria-expanded')) === 'false') {
     await expandButton.click();
   }
@@ -51,10 +52,11 @@ test('browser renderer exposes eight expandable modules and can send chat throug
 
   const chat = navModules.find((module) => module.id === 'chat')!;
   await openFeature(page, chat, chat.tabs.find((tab) => tab.id === 'playground')!);
-  await page.getByPlaceholder('输入消息，本地保存后再路由到模型...').fill('浏览器模式发送测试');
-  await page.getByRole('button', { name: /发送/ }).click();
+  const message = 'browser mode send test';
+  await page.getByPlaceholder(translate('zh-CN', 'chat.composer.placeholder')).fill(message);
+  await page.getByRole('button', { name: translate('zh-CN', 'chat.send') }).click();
 
-  await expect(page.getByText('浏览器模式发送测试', { exact: true })).toBeVisible();
+  await expect(page.getByText(message, { exact: true })).toBeVisible();
   await expect(page.getByText(/Mock response from nexachat-mock/)).toBeVisible();
   await expectNoHorizontalOverflow(page, '.app-shell');
   await expectNoHorizontalOverflow(page, '.content-grid');
@@ -71,23 +73,23 @@ test('model gateway data and settings key flows stay real on new routes', async 
   const settings = navModules.find((module) => module.id === 'settings')!;
 
   await openFeature(page, models, models.tabs.find((tab) => tab.id === 'providers')!);
-  await expect(page.locator('main [data-tab="providers"]').getByRole('heading', { name: 'Provider 管理' }).first()).toBeVisible();
+  await expect(page.locator('main [data-tab="providers"]').getByRole('heading', { name: translate('zh-CN', 'models.provider.title') }).first()).toBeVisible();
   await openFeature(page, models, models.tabs.find((tab) => tab.id === 'catalog')!);
-  await expect(page.locator('main [data-tab="catalog"]').getByRole('heading', { name: '模型创建' }).first()).toBeVisible();
+  await expect(page.locator('main [data-tab="catalog"]').getByRole('heading', { name: translate('zh-CN', 'models.create.title') }).first()).toBeVisible();
 
   await openFeature(page, gateway, gateway.tabs.find((tab) => tab.id === 'keys')!);
   await expect(page.locator('main [data-tab="keys"]').getByRole('heading', { name: 'Gateway API Key' }).first()).toBeVisible();
-  await page.getByRole('button', { name: /生成 Key/ }).click();
-  await expect(page.getByText('一次性完整 Key')).toBeVisible();
-  await page.getByRole('button', { name: /撤销/ }).first().click();
-  await expect(page.getByText('已撤销').first()).toBeVisible();
+  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'gateway.generateKey')) }).click();
+  await expect(page.getByText(translate('zh-CN', 'gateway.oneTimeKey'))).toBeVisible();
+  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'gateway.revoke')) }).first().click();
+  await expect(page.getByText(translate('zh-CN', 'common.revoked')).first()).toBeVisible();
 
   await openFeature(page, data, data.tabs.find((tab) => tab.id === 'diagnostics')!);
-  await page.getByRole('button', { name: /导出诊断预览/ }).click();
+  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'data.diagnostics.export')) }).click();
   await expect(page.locator('main [data-tab="diagnostics"]').getByRole('cell', { name: /Exported browser mock diagnostics/ })).toBeVisible();
 
   await openFeature(page, settings, settings.tabs.find((tab) => tab.id === 'security')!);
-  await expect(page.locator('main [data-tab="security"]').getByRole('heading', { name: '安全存储与 IPC 边界' }).first()).toBeVisible();
+  await expect(page.locator('main [data-tab="security"]').getByRole('heading', { name: translate('zh-CN', 'settings.security.title') }).first()).toBeVisible();
 });
 
 test('all modules and feature routes sync sidebar subnav route and panel', async ({ page }) => {
@@ -107,28 +109,28 @@ test('all modules and feature routes sync sidebar subnav route and panel', async
 test('workspace home has four clean product areas and real quick entries', async ({ page }) => {
   await page.goto('/workspace/overview');
 
-  await expect(page.getByRole('region', { name: '工作台首页' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '当前概览' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '核心指标' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '操作入口' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '最近活动' })).toBeVisible();
-  await expect(page.getByText('系统总览')).toHaveCount(0);
-  await expect(page.getByText('真实快速入口')).toHaveCount(0);
-  await expect(page.getByText('启动状态与下一步')).toHaveCount(0);
-  await expect(page.locator('.module-child-link.is-active')).toContainText('工作台首页');
+  await expect(page.getByRole('region', { name: translate('zh-CN', 'dashboard.home.aria') })).toBeVisible();
+  await expect(page.getByRole('heading', { name: translate('zh-CN', 'dashboard.overview.title') })).toBeVisible();
+  await expect(page.getByRole('heading', { name: translate('zh-CN', 'dashboard.metrics.title') })).toBeVisible();
+  await expect(page.getByRole('heading', { name: translate('zh-CN', 'dashboard.actions.title') })).toBeVisible();
+  await expect(page.getByRole('heading', { name: translate('zh-CN', 'dashboard.activity.title') })).toBeVisible();
+  await expect(page.getByText('System overview')).toHaveCount(0);
+  await expect(page.getByText('Real quick entries')).toHaveCount(0);
+  await expect(page.getByText('Startup status and next steps')).toHaveCount(0);
+  await expect(page.locator('.module-child-link.is-active')).toContainText(translate('zh-CN', 'nav.workspace.overview.label'));
 
   const quickEntries = [
-    { label: '打开聊天', path: '/chat/playground', moduleId: 'chat', tabId: 'playground' },
-    { label: '管理 Provider', path: '/models/providers', moduleId: 'models', tabId: 'providers' },
-    { label: '管理 Model', path: '/models/catalog', moduleId: 'models', tabId: 'catalog' },
-    { label: '管理 Gateway Key', path: '/gateway/keys', moduleId: 'gateway', tabId: 'keys' },
-    { label: '导入配置', path: '/data/import', moduleId: 'data', tabId: 'import' },
-    { label: '查看日志', path: '/gateway/logs', moduleId: 'gateway', tabId: 'logs' },
+    { label: translate('zh-CN', 'dashboard.action.chat'), path: '/chat/playground', moduleId: 'chat', tabId: 'playground' },
+    { label: translate('zh-CN', 'dashboard.action.provider'), path: '/models/providers', moduleId: 'models', tabId: 'providers' },
+    { label: translate('zh-CN', 'dashboard.action.model'), path: '/models/catalog', moduleId: 'models', tabId: 'catalog' },
+    { label: translate('zh-CN', 'dashboard.action.gatewayKey'), path: '/gateway/keys', moduleId: 'gateway', tabId: 'keys' },
+    { label: translate('zh-CN', 'dashboard.action.import'), path: '/data/import', moduleId: 'data', tabId: 'import' },
+    { label: translate('zh-CN', 'dashboard.action.logs'), path: '/gateway/logs', moduleId: 'gateway', tabId: 'logs' },
   ];
 
   for (const entry of quickEntries) {
     await page.goto('/workspace/overview');
-    await page.getByLabel('操作入口').getByRole('button', { name: new RegExp(entry.label) }).click();
+    await page.getByLabel(translate('zh-CN', 'dashboard.actions.title')).getByRole('button', { name: new RegExp(entry.label) }).click();
     await expect(page).toHaveURL(new RegExp(`${entry.path}$`));
     const panel = page.locator(`main [role="tabpanel"][data-module="${entry.moduleId}"][data-tab="${entry.tabId}"]`);
     await expect(panel).toBeVisible();
@@ -138,7 +140,7 @@ test('workspace home has four clean product areas and real quick entries', async
 test('sidebar expansion persists and never exposes route paths', async ({ page }) => {
   await page.goto('/workspace/overview');
   const gateway = navModules.find((module) => module.id === 'gateway')!;
-  const expandButton = page.getByRole('button', { name: new RegExp(`展开${gateway.label}|收起${gateway.label}`) });
+  const expandButton = page.getByRole('button', { name: new RegExp(`${translate('zh-CN', 'shell.expand')}${gateway.label}|${translate('zh-CN', 'shell.collapse')}${gateway.label}`) });
 
   if ((await expandButton.getAttribute('aria-expanded')) === 'true') {
     await expandButton.click();
@@ -152,7 +154,7 @@ test('sidebar expansion persists and never exposes route paths', async ({ page }
   await expectNoVisibleRouteLeak(page);
 
   await page.reload();
-  await expect(page.getByRole('button', { name: new RegExp(`收起${gateway.label}`) })).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('button', { name: new RegExp(`${translate('zh-CN', 'shell.collapse')}${gateway.label}`) })).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator(`#sidebar-children-${gateway.id}`)).toBeVisible();
 });
 
@@ -179,7 +181,7 @@ test('renderer keeps the 1040x680 desktop floor usable without horizontal overfl
   }
 
   await page.goto('/chat/playground');
-  await expect(page.getByPlaceholder('输入消息，本地保存后再路由到模型...')).toBeVisible();
+  await expect(page.getByPlaceholder(translate('zh-CN', 'chat.composer.placeholder'))).toBeVisible();
   await expect(page.locator('.chat-context')).toBeHidden();
   await expectNoHorizontalOverflow(page, '.chat-layout');
 });
@@ -188,13 +190,13 @@ test('shell stays readable at 1040 1280 1440 and 1920 widths', async ({ page }) 
   for (const width of [1040, 1280, 1440, 1920]) {
     await page.setViewportSize({ width, height: 820 });
     await page.goto('/workspace/overview');
-    await expect(page.getByRole('heading', { name: '当前概览' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: translate('zh-CN', 'dashboard.overview.title') })).toBeVisible();
     await expectNoHorizontalOverflow(page, '.app-shell');
     await expectNoHorizontalOverflow(page, '.topbar');
     await expectNoHorizontalOverflow(page, '.content-grid');
     await expectNoHorizontalOverflow(page, '.workbench-overview');
-    await expect(page.locator('.topbar-context')).toContainText('默认模型');
-    await expect(page.locator('.topbar-actions')).toContainText('打开聊天');
+    await expect(page.locator('.topbar-context')).toContainText(translate('zh-CN', 'dashboard.defaultModel'));
+    await expect(page.locator('.topbar-actions')).toContainText(translate('zh-CN', 'shell.openChat'));
     await expectNoVisibleRouteLeak(page);
     await page.screenshot({ path: `test-results/round-03-design-system/workspace-${width}.png`, fullPage: true });
   }
@@ -202,20 +204,22 @@ test('shell stays readable at 1040 1280 1440 and 1920 widths', async ({ page }) 
 
 test('data import rejects invalid manifests and records the failure visibly', async ({ page }) => {
   await page.goto('/data/import');
-  await page.getByLabel('导入清单 JSON').fill('{"bad":true}');
-  await page.getByRole('button', { name: /预检清单/ }).click();
-  await expect(page.getByText(/导入清单被拒绝/)).toBeVisible();
+  await page.getByLabel(translate('zh-CN', 'data.import.aria')).fill('{"bad":true}');
+  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'data.import.preflight')) }).click();
+  await expect(page.getByText(/rejected|refused|invalid|Import/i)).toBeVisible();
 });
 
 test('theme and language preferences can change without breaking the shell', async ({ page }) => {
   await page.goto('/settings/preferences');
 
-  await page.getByLabel('Theme').selectOption('dark');
-  await page.getByLabel('Language').selectOption('en-US');
-  await page.getByLabel('Motion').selectOption('reduced');
-  await page.getByRole('button', { name: /保存界面偏好/ }).click();
+  await page.getByLabel(translate('zh-CN', 'settings.preferences.theme')).selectOption('dark');
+  await page.getByLabel(translate('zh-CN', 'settings.preferences.language')).selectOption('en-US');
+  await page.getByLabel(translate('zh-CN', 'settings.preferences.motion')).selectOption('reduced');
+  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'settings.preferences.save')) }).click();
 
   await expect(page.locator('.app-shell')).toHaveClass(/theme-dark/);
-  await expect(page.locator('.module-child-link.is-active')).toContainText('界面偏好');
+  await expect(page.locator('.module-child-link.is-active')).toContainText(translate('en-US', 'nav.settings.preferences.label'));
+  await expect(page.locator('.topbar-actions')).toContainText(translate('en-US', 'shell.openChat'));
+  await expect(page.locator('main [data-tab="preferences"]').getByRole('heading', { name: translate('en-US', 'settings.preferences.title') }).first()).toBeVisible();
   await expectNoHorizontalOverflow(page, '.app-shell');
 });

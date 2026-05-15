@@ -187,3 +187,29 @@
 - Checked `C:\Users\至亲\Desktop\NexaChat.lnk`: target, arguments, working directory, and icon still point to the current local Electron launch entry.
 - Attempted in-app browser verification twice against `http://127.0.0.1:5173/workspace/overview`; the browser connection timed out, so the accepted visual evidence is the passing Playwright UI smoke plus generated screenshots.
 - Round 3 delivery commit `7a89160d0c83733b80176cda7643cc401e2dcdd2` was pushed and confirmed on `origin/main`.
+
+## 2026-05-15 Full App Round 4 Execution
+
+- Reconfirmed real project root with `git rev-parse --show-toplevel`: `D:/NexaChat`.
+- Continued the active `/goal` from Round 4 after Rounds 0-3 had already been completed, committed, pushed, and recorded.
+- Used parallel lanes:
+  - Lane A: i18n authority, locale normalization, settings persistence, and dictionary parity.
+  - Lane B: navigation/shell/module/error/status/store text migration.
+  - Lane C: tests, UI smoke lifecycle, Electron production renderer smoke, desktop shortcut readback, and docs.
+  - Lane D: read-only Round 5 input review for theme runtime.
+- Added `src/shared/i18n.ts` with zh-CN/en-US dictionaries, `translate`, locale normalization, and missing-key detection.
+- Added `src/renderer/i18n.tsx` with `I18nProvider`, `useI18n`, and navigation translation helpers.
+- Migrated renderer shell, module pages, status pills, error diagnosis, mock API display text, navigation labels/descriptions/boundaries, and store display messages to dictionary-backed text.
+- Added `tests/i18n-authority.test.ts` to verify dictionary parity, navigation dictionary backing, and block CJK literals in migrated runtime files.
+- Updated `tests/ui-smoke.spec.ts` to use dictionary-backed selectors and verify live language switching to en-US while preserving dark theme.
+- Fixed production Electron renderer loading by serving built assets through `nexachat://app/index.html` instead of `file://`.
+- Added `scripts/ui-smoke.mjs` so UI smoke starts/stops its own Vite mock server and exits cleanly.
+- Updated `scripts/electron-smoke.mjs` with smoke-only userData/GPU-safe launch flags and structural shell assertions.
+- Ran `npm.cmd run typecheck`: passed.
+- Ran `npm.cmd run test`: passed, 5 files / 18 tests.
+- Ran `npm.cmd run build`: passed.
+- Ran `npm.cmd run verify`: passed.
+- Ran `npm.cmd run test:ui-smoke`: passed, 10 Playwright tests.
+- Ran `npm.cmd run test:electron-smoke`: passed.
+- Ran `git diff --check`: passed with LF/CRLF warnings only.
+- Checked `C:\Users\至亲\Desktop\NexaChat.lnk`: target, arguments, working directory, and icon still point to the current local Electron launch entry.

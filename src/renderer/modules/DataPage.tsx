@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { useI18n } from '../i18n';
 import type { TabPageProps } from './shared';
 import { DataTable, PlannedTabPlaceholder, StateBadge, TabPanel } from './shared';
 
 export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
-  const [manifestText, setManifestText] = useState('{"providers":[{"name":"Local Provider","baseUrl":"http://127.0.0.1:11434/v1"}]}');
+  const { t } = useI18n();
+  const [manifestText, setManifestText] = useState(t('data.import.sampleManifest'));
   const latestReadyImport = snapshot.importExportResults.find((item) => item.action === 'import' && item.status === 'ready');
   const latestSnapshot = snapshot.importExportResults.find((item) => item.action === 'snapshot');
 
@@ -12,29 +14,29 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
       <TabPanel moduleId="data" tab={activeTab}>
         <section className="two-column">
           <div className="panel">
-            <h2>快照与恢复预检</h2>
-            <p>快照默认脱敏，恢复先生成预检，不直接覆盖本地数据。</p>
+            <h2>{t('data.snapshots.title')}</h2>
+            <p>{t('data.snapshots.note')}</p>
             <div className="button-row">
-              <button type="button" onClick={() => onAction('脱敏快照已创建', () => api.createSnapshot())}>
-                创建配置快照
+              <button type="button" onClick={() => onAction(t('data.toast.snapshotCreated'), () => api.createSnapshot())}>
+                {t('data.snapshots.create')}
               </button>
-              <button type="button" disabled={!latestSnapshot} onClick={() => latestSnapshot && onAction('恢复预检已创建', () => api.restoreSnapshot(latestSnapshot.id))}>
-                恢复预检
+              <button type="button" disabled={!latestSnapshot} onClick={() => latestSnapshot && onAction(t('data.toast.restoreCreated'), () => api.restoreSnapshot(latestSnapshot.id))}>
+                {t('data.snapshots.restore')}
               </button>
             </div>
           </div>
           <div className="panel">
-            <h2>快照记录</h2>
+            <h2>{t('data.snapshots.records')}</h2>
             <DataTable
-              columns={['动作', '状态', '摘要', '确认', '脱敏']}
+              columns={[t('data.columns.action'), t('data.columns.status'), t('data.columns.summary'), t('data.columns.confirmation'), t('data.columns.redacted')]}
               rows={snapshot.importExportResults
-                .filter((item) => item.action === 'snapshot' || item.summary.includes('恢复'))
+                .filter((item) => item.action === 'snapshot' || item.summary.includes(t('data.restore.keyword')))
                 .map((item) => [
                   item.action,
                   <StateBadge key={`${item.id}-status`} label={item.status} tone={item.status === 'failed' ? 'error' : item.status === 'ready' ? 'warning' : 'success'} />,
                   item.summary,
-                  item.requiresConfirmation ? '需要' : '否',
-                  item.redacted ? 'yes' : 'no',
+                  item.requiresConfirmation ? t('common.required') : t('common.no'),
+                  item.redacted ? t('common.yes') : t('common.no'),
                 ])}
             />
           </div>
@@ -48,23 +50,23 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
       <TabPanel moduleId="data" tab={activeTab}>
         <section className="two-column">
           <div className="panel">
-            <h2>诊断导出</h2>
-            <p>生成脱敏诊断包预览，用于排查本地网关、Provider、Chat 和日志问题。</p>
-            <button type="button" className="primary-button" onClick={() => onAction('诊断包预览已生成', () => api.exportDiagnostics())}>
-              导出诊断预览
+            <h2>{t('data.diagnostics.title')}</h2>
+            <p>{t('data.diagnostics.note')}</p>
+            <button type="button" className="primary-button" onClick={() => onAction(t('data.toast.diagnosticsExported'), () => api.exportDiagnostics())}>
+              {t('data.diagnostics.export')}
             </button>
           </div>
           <div className="panel">
-            <h2>诊断记录</h2>
+            <h2>{t('data.diagnostics.records')}</h2>
             <DataTable
-              columns={['动作', '状态', '摘要', '脱敏', '时间']}
+              columns={[t('data.columns.action'), t('data.columns.status'), t('data.columns.summary'), t('data.columns.redacted'), t('data.columns.time')]}
               rows={snapshot.importExportResults
                 .filter((item) => item.action === 'export')
                 .map((item) => [
                   item.action,
                   <StateBadge key={`${item.id}-status`} label={item.status} tone={item.status === 'failed' ? 'error' : item.status === 'ready' ? 'warning' : 'success'} />,
                   item.summary,
-                  item.redacted ? 'yes' : 'no',
+                  item.redacted ? t('common.yes') : t('common.no'),
                   new Date(item.createdAt).toLocaleString(),
                 ])}
             />
@@ -79,9 +81,9 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
       <TabPanel moduleId="data" tab={activeTab}>
         <PlannedTabPlaceholder
           tab={activeTab}
-          featureName="安全清理"
-          why="破坏性删除需要预览、影响范围、审计和撤销策略；本轮不开放删除控件。"
-          dependency="先实现 cleanup preview、依赖检查、确认短语和审计事件。"
+          featureName={t('data.cleanup.feature')}
+          why={t('data.cleanup.why')}
+          dependency={t('data.cleanup.dependency')}
         />
       </TabPanel>
     );
@@ -92,42 +94,50 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
       <section className="panel">
         <div className="panel-header">
           <div>
-            <h2>导入清单预检</h2>
-            <p>先预检清单，再确认应用；无效清单会被拒绝并记录。</p>
+            <h2>{t('data.import.title')}</h2>
+            <p>{t('data.import.note')}</p>
           </div>
-          <button type="button" className="primary-button" onClick={() => onAction('导入清单已预检', () => api.validateImportManifest(manifestText))}>
-            预检清单
+          <button type="button" className="primary-button" onClick={() => onAction(t('data.toast.importPreflighted'), () => api.validateImportManifest(manifestText))}>
+            {t('data.import.preflight')}
           </button>
         </div>
         <div className="wizard-steps">
-          {['detect', 'preview', 'map fields', 'conflict review', 'secret handling', 'confirm', 'result'].map((step, index) => (
+          {[
+            t('data.import.steps.detect'),
+            t('data.import.steps.preview'),
+            t('data.import.steps.mapFields'),
+            t('data.import.steps.conflictReview'),
+            t('data.import.steps.secretHandling'),
+            t('data.import.steps.confirm'),
+            t('data.import.steps.result'),
+          ].map((step, index) => (
             <span key={step}>{index + 1}. {step}</span>
           ))}
         </div>
-        <textarea className="manifest-input" value={manifestText} onChange={(event) => setManifestText(event.target.value)} aria-label="导入清单 JSON" />
-        <p>CCS、sub2api、OpenAI-compatible、Ollama、LM Studio 会先生成 review plan；不会静默覆盖或明文落库 secrets。</p>
+        <textarea className="manifest-input" value={manifestText} onChange={(event) => setManifestText(event.target.value)} aria-label={t('data.import.aria')} />
+        <p>{t('data.import.compatNote')}</p>
       </section>
       <section className="two-column">
         <div className="panel">
-          <h2>导入确认</h2>
+          <h2>{t('data.import.confirmTitle')}</h2>
           <div className="button-row">
-            <button type="button" disabled={!latestReadyImport} onClick={() => latestReadyImport && onAction('导入计划已确认应用', () => api.applyImportPlan(latestReadyImport.id))}>
-              确认应用导入
+            <button type="button" disabled={!latestReadyImport} onClick={() => latestReadyImport && onAction(t('data.toast.importApplied'), () => api.applyImportPlan(latestReadyImport.id))}>
+              {t('data.import.apply')}
             </button>
           </div>
-          <p>当前确认只记录已通过预检的应用结果，不伪装成完整 Provider/Model/secret 导入器。</p>
+          <p>{t('data.import.confirmNote')}</p>
         </div>
         <div className="panel">
-          <h2>导入记录</h2>
+          <h2>{t('data.import.records')}</h2>
           <DataTable
-            columns={['动作', '状态', '摘要', '冲突', '确认', '脱敏']}
+            columns={[t('data.columns.action'), t('data.columns.status'), t('data.columns.summary'), t('data.columns.conflicts'), t('data.columns.confirmation'), t('data.columns.redacted')]}
             rows={snapshot.importExportResults.filter((item) => item.action === 'import').map((item) => [
               item.action,
               <StateBadge key={`${item.id}-status`} label={item.status} tone={item.status === 'failed' ? 'error' : item.status === 'ready' ? 'warning' : 'success'} />,
               item.summary,
               item.conflictCount,
-              item.requiresConfirmation ? '需要' : '否',
-              item.redacted ? 'yes' : 'no',
+              item.requiresConfirmation ? t('common.required') : t('common.no'),
+              item.redacted ? t('common.yes') : t('common.no'),
             ])}
           />
         </div>

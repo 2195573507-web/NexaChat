@@ -22,6 +22,7 @@ import {
 import { redactSensitive } from '../security/redaction.js';
 import { createId, estimateTokens, now, previewSecret } from '../utils/ids.js';
 import { diagnoses } from '../../shared/errors.js';
+import { translate } from '../../shared/i18n.js';
 import type {
   AgentDefinition,
   AppSnapshot,
@@ -51,6 +52,7 @@ import type {
 
 const DEFAULT_WORKSPACE_ID = 'ws_default';
 const DEFAULT_PREFS_ID = 'ui_default';
+const t = (key: Parameters<typeof translate>[1], params?: Parameters<typeof translate>[2]) => translate('zh-CN', key, params);
 
 export class NexaStore {
   private readonly db: DatabaseSync;
@@ -95,10 +97,10 @@ export class NexaStore {
     todayStart.setHours(0, 0, 0, 0);
     const today = usage.filter((record) => record.createdAt >= todayStart.getTime());
     const setupGaps: string[] = [];
-    if (providers.length === 0) setupGaps.push('还没有配置供应商');
-    if (models.length === 0) setupGaps.push('还没有可用模型');
-    if (this.getGatewayKeys().length === 0) setupGaps.push('本地网关还没有 API Key');
-    if (this.getConversations().length === 0) setupGaps.push('还没有本地会话历史');
+    if (providers.length === 0) setupGaps.push(t('dashboard.setup.providerMissing'));
+    if (models.length === 0) setupGaps.push(t('dashboard.setup.modelMissing'));
+    if (this.getGatewayKeys().length === 0) setupGaps.push(t('dashboard.setup.gatewayKeyMissing'));
+    if (this.getConversations().length === 0) setupGaps.push(t('dashboard.setup.conversationMissing'));
 
     return {
       workspace,
@@ -320,7 +322,7 @@ export class NexaStore {
           JSON.stringify({ baseUrl: provider.baseUrl, authType: provider.authType }),
           Math.max(1, now() - start),
           urlOk ? 'api_key_missing' : 'invalid_base_url',
-          urlOk ? '需要填写 API Key 或改为无认证供应商。' : 'Base URL 必须以 http:// 或 https:// 开头。',
+          urlOk ? t('models.errors.providerKeyMissing') : t('models.errors.invalidBaseUrl'),
           start,
           now(),
           start,
@@ -334,7 +336,7 @@ export class NexaStore {
     return this.requireProvider(providerId);
   }
 
-  createConversation(title = '新的本地会话'): Conversation {
+  createConversation(title = t('chat.seed.newConversation')): Conversation {
     const workspace = this.getDefaultWorkspace();
     const timestamp = now();
     const id = createId('conv');
@@ -616,7 +618,7 @@ export class NexaStore {
     const textLike = /text|markdown|json|csv|code|txt|md/i.test(`${name} ${type}`);
     const status = textLike ? 'indexed' : 'failed';
     const chunkCount = textLike ? 3 : 0;
-    const errorMessage = textLike ? null : '当前迭代只解析文本/Markdown/JSON/CSV；请转换为文本或等待 planned 解析器。';
+    const errorMessage = textLike ? null : t('knowledge.errors.unsupportedParser');
     this.db
       .prepare(
         `INSERT INTO files (id, name, type, size, parse_status, chunk_count, error_message, created_at, updated_at)
@@ -632,7 +634,7 @@ export class NexaStore {
           .run(
             createId('chunk'),
             id,
-            `${name} 的本地文本片段 ${index + 1}。这是首版 lexical 检索 fallback，可用于 Chat citation 验证。`,
+            t('knowledge.chunkContent', { name, index: index + 1 }),
             `${name}#chunk-${index + 1}`,
             index,
             timestamp,
@@ -650,7 +652,7 @@ export class NexaStore {
     if (!textLike) {
       this.db
         .prepare('UPDATE files SET parse_status = ?, error_message = ?, updated_at = ? WHERE id = ?')
-        .run('failed', '重试被拒绝：当前迭代只支持文本类 lexical fallback。', timestamp, fileId);
+        .run('failed', t('knowledge.errors.retryRejected'), timestamp, fileId);
       this.audit('knowledge.file.retry.failed', 'file', fileId, { reason: 'unsupported file type' });
       return this.requireKnowledgeFile(fileId);
     }
@@ -706,14 +708,14 @@ export class NexaStore {
       agentName: agent.name,
       mode: 'dry-run',
       requiresConfirmation: false,
-      steps: ['读取工作区状态', '检查模型/网关/知识边界', '生成只读建议'],
+      steps: [t('tools.agent.dryRun.step.read'), t('tools.agent.dryRun.step.check'), t('tools.agent.dryRun.step.suggest')],
     };
     this.db
       .prepare(
         `INSERT INTO config_snapshots (id, action, status, summary, redacted, manifest_json, created_at)
          VALUES (?, 'cleanup-preview', 'ready', ?, 1, ?, ?)`,
       )
-      .run(id, `Agent dry-run 已生成：${agent.name}。不会执行工具、MCP 或危险操作。`, JSON.stringify(manifest), timestamp);
+      .run(id, t('tools.agent.dryRun.summary', { agent: agent.name }), JSON.stringify(manifest), timestamp);
     this.audit('agent.dry_run.previewed', 'agent', agentId, manifest);
     return this.requireImportExportResult(id);
   }
@@ -722,7 +724,7 @@ export class NexaStore {
     const timestamp = now();
     const id = createId('import');
     let status: ImportExportResult['status'] = 'ready';
-    let summary = '导入清单已通过预检；应用前仍需要确认冲突和密钥处理。';
+    let summary = t('data.import.summary.ready');
     let manifest: Record<string, unknown> = {
       requiresConfirmation: true,
       conflictCount: 0,
@@ -738,7 +740,7 @@ export class NexaStore {
         (Array.isArray(models) && models.length > 0) ||
         typeof parsed.workspace === 'object';
       if (!hasValidList) {
-        throw new Error('清单必须包含 providers、models 或 workspace。');
+        throw new Error(t('data.import.errors.requiredList'));
       }
       const conflictCount = Array.isArray(providers)
         ? providers.filter((provider) =>
@@ -753,11 +755,11 @@ export class NexaStore {
         keys: 'stripped',
       };
       if (conflictCount > 0) {
-        summary = `导入清单可用，但发现 ${conflictCount} 个供应商名称冲突；需要确认合并策略。`;
+        summary = t('data.import.summary.conflict', { count: conflictCount });
       }
     } catch (error) {
       status = 'failed';
-      summary = `导入清单被拒绝：${error instanceof Error ? error.message : String(error)}`;
+      summary = t('data.import.summary.rejected', { reason: error instanceof Error ? error.message : String(error) });
       manifest = {
         requiresConfirmation: false,
         conflictCount: 0,
@@ -778,12 +780,12 @@ export class NexaStore {
   applyImportPlan(resultId: string): ImportExportResult {
     const result = this.requireImportExportResult(resultId);
     if (result.action !== 'import' || result.status !== 'ready') {
-      throw new Error('只有 ready 状态的导入预检结果可以应用。');
+      throw new Error(t('data.import.errors.readyOnly'));
     }
     const timestamp = now();
     this.db
       .prepare('UPDATE config_snapshots SET status = ?, summary = ?, created_at = ? WHERE id = ?')
-      .run('completed', '导入计划已确认应用；本迭代只记录确认结果，不静默覆盖现有配置。', timestamp, resultId);
+      .run('completed', t('data.import.summary.applied'), timestamp, resultId);
     this.audit('import.plan.applied', 'config_snapshot', resultId, { mode: 'confirmed preview only' });
     return this.requireImportExportResult(resultId);
   }
@@ -803,7 +805,7 @@ export class NexaStore {
         `INSERT INTO config_snapshots (id, action, status, summary, redacted, manifest_json, created_at)
          VALUES (?, 'cleanup-preview', 'ready', ?, 1, ?, ?)`,
       )
-      .run(id, '恢复预检已创建；当前迭代不会无确认覆盖本地配置。', JSON.stringify(manifest), timestamp);
+      .run(id, t('data.snapshot.summary.restore'), JSON.stringify(manifest), timestamp);
     this.audit('snapshot.restore.previewed', 'config_snapshot', snapshotId, manifest);
     return this.requireImportExportResult(id);
   }
@@ -822,7 +824,7 @@ export class NexaStore {
         `INSERT INTO config_snapshots (id, action, status, summary, redacted, manifest_json, created_at)
          VALUES (?, 'snapshot', 'completed', ?, 1, ?, ?)`,
       )
-      .run(id, '已创建脱敏配置快照，包含供应商、模型、会话索引和界面设置。', JSON.stringify(manifest), timestamp);
+      .run(id, t('data.snapshot.summary.created'), JSON.stringify(manifest), timestamp);
     this.audit('snapshot.created', 'config_snapshot', id, manifest);
     return this.requireImportExportResult(id);
   }
@@ -842,7 +844,7 @@ export class NexaStore {
         `INSERT INTO config_snapshots (id, action, status, summary, redacted, manifest_json, created_at)
          VALUES (?, 'export', 'completed', ?, 1, ?, ?)`,
       )
-      .run(id, '诊断包已生成预览，默认脱敏密钥、Authorization 和本地路径。', JSON.stringify(diagnostics), timestamp);
+      .run(id, t('data.diagnostics.summary.created'), JSON.stringify(diagnostics), timestamp);
     this.audit('diagnostics.exported', 'diagnostics', id, diagnostics);
     return this.requireImportExportResult(id);
   }
@@ -853,7 +855,7 @@ export class NexaStore {
     if (workspaceCount === 0) {
       this.db
         .prepare('INSERT INTO workspaces (id, name, default_provider_id, default_model_id, created_at, updated_at) VALUES (?, ?, NULL, NULL, ?, ?)')
-        .run(DEFAULT_WORKSPACE_ID, '本地工作区', timestamp, timestamp);
+        .run(DEFAULT_WORKSPACE_ID, t('dashboard.workspace'), timestamp, timestamp);
     }
 
     const providerCount = Number((this.db.prepare('SELECT COUNT(*) AS count FROM providers').get() as { count: number }).count);
@@ -880,10 +882,10 @@ export class NexaStore {
 
     const conversationCount = Number((this.db.prepare('SELECT COUNT(*) AS count FROM conversations').get() as { count: number }).count);
     if (conversationCount === 0) {
-      const conversation = this.createConversation('欢迎使用 NexaChat');
+      const conversation = this.createConversation(t('chat.seed.welcomeConversation'));
       this.sendMessage({
         conversationId: conversation.id,
-        content: '请说明本地历史在切换模型后是否保留。',
+        content: t('chat.seed.welcomePrompt'),
         contextStrategy: 'recent_n',
       });
     }
@@ -895,12 +897,12 @@ export class NexaStore {
 
     const mcpCount = Number((this.db.prepare('SELECT COUNT(*) AS count FROM mcp_servers').get() as { count: number }).count);
     if (mcpCount === 0) {
-      this.createMcpServer('本地文件 MCP 示例', 'stdio', 'npx @modelcontextprotocol/server-filesystem');
+      this.createMcpServer(t('tools.mcp.seedLocalFile'), 'stdio', 'npx @modelcontextprotocol/server-filesystem');
     }
 
     const agentCount = Number((this.db.prepare('SELECT COUNT(*) AS count FROM agents').get() as { count: number }).count);
     if (agentCount === 0) {
-      this.createAgent('配置检查 Agent', '读取当前模型、知识库和网关状态，生成 dry-run 检查计划。');
+      this.createAgent(t('tools.agent.seedConfigName'), t('tools.agent.seedConfigGoal'));
     }
 
     if (!this.db.prepare('SELECT * FROM ui_preferences WHERE id = ?').get(DEFAULT_PREFS_ID)) {
@@ -915,14 +917,14 @@ export class NexaStore {
 
     const keyCount = Number((this.db.prepare('SELECT COUNT(*) AS count FROM gateway_api_keys').get() as { count: number }).count);
     if (keyCount === 0) {
-      this.createGatewayKey('本机集成示例');
+      this.createGatewayKey('Local app integration');
     }
   }
 
   private route(providerId?: string, modelId?: string): RouteDecision {
     const models = this.getModels().filter((model) => model.enabled && model.healthStatus !== 'error');
     if (models.length === 0) {
-      throw new Error('没有可用模型。请先添加供应商和模型。');
+      throw new Error(t('models.errors.noModel'));
     }
 
     if (modelId) {
@@ -933,7 +935,7 @@ export class NexaStore {
           providerId: fallback.providerId,
           modelId: fallback.id,
           modelNameSnapshot: fallback.modelNameSnapshot,
-          reason: '显式模型不可用，已回退到第一个健康模型。',
+          reason: t('chat.route.explicitUnavailable'),
           fallbackUsed: true,
         };
       }
@@ -941,7 +943,7 @@ export class NexaStore {
         providerId: explicit.providerId,
         modelId: explicit.id,
         modelNameSnapshot: explicit.modelNameSnapshot,
-        reason: '使用用户显式选择的模型。',
+        reason: t('chat.route.explicitModel'),
         fallbackUsed: false,
       };
     }
@@ -953,7 +955,7 @@ export class NexaStore {
           providerId: providerModel.providerId,
           modelId: providerModel.id,
           modelNameSnapshot: providerModel.modelNameSnapshot,
-          reason: '使用用户显式选择的供应商下的可用模型。',
+          reason: t('chat.route.explicitProvider'),
           fallbackUsed: false,
         };
       }
@@ -966,18 +968,18 @@ export class NexaStore {
       providerId: selected.providerId,
       modelId: selected.id,
       modelNameSnapshot: selected.modelNameSnapshot,
-      reason: defaultModel ? '使用工作区默认模型。' : '使用第一个健康可用模型。',
+      reason: defaultModel ? t('chat.route.workspaceDefault') : t('chat.route.firstHealthy'),
       fallbackUsed: false,
     };
   }
 
   private generateLocalAssistantReply(content: string, routeDecision: RouteDecision): string {
     return [
-      `已通过 ${routeDecision.modelNameSnapshot} 处理这条消息。`,
+      t('chat.assistant.processed', { model: routeDecision.modelNameSnapshot }),
       '',
-      '本地历史已经先写入 SQLite；Provider、Model 或 API Key 切换不会删除当前会话。',
-      `路由原因：${routeDecision.reason}`,
-      `你的输入摘要：${content.slice(0, 180)}${content.length > 180 ? '...' : ''}`,
+      t('chat.assistant.localHistory'),
+      t('chat.assistant.routeReason', { reason: routeDecision.reason }),
+      t('chat.assistant.inputSummary', { summary: `${content.slice(0, 180)}${content.length > 180 ? '...' : ''}` }),
     ].join('\n');
   }
 
@@ -1109,7 +1111,7 @@ function decodeSecretValue(value: string): string {
 }
 
 function inferTitle(currentTitle: string, content: string): string {
-  if (currentTitle !== '新的本地会话' && currentTitle !== '欢迎使用 NexaChat') {
+  if (currentTitle !== t('chat.seed.newConversation') && currentTitle !== t('chat.seed.welcomeConversation')) {
     return currentTitle;
   }
   const cleaned = content.replace(/\s+/g, ' ').trim();

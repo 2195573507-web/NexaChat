@@ -466,6 +466,55 @@ These references guide product and engineering decisions. They are not permissio
 25. **Deliverables**: i18n authority, migrated UI text, scanners, tests, docs.
 26. **Next Round Input**: Text authority ready for theme and settings refinement.
 
+### Round 4 Execution Status
+
+- Status: Completed.
+- Completion date: 2026-05-15.
+- Main changed files:
+  - `src/shared/i18n.ts`
+  - `src/renderer/i18n.tsx`
+  - `src/shared/navigation.ts`
+  - `src/renderer/App.tsx`
+  - `src/renderer/AppShell.tsx`
+  - `src/renderer/components/ErrorDiagnosisPanel.tsx`
+  - `src/renderer/components/ModulePageFrame.tsx`
+  - `src/renderer/components/StatusPill.tsx`
+  - `src/renderer/modules/ChatPage.tsx`
+  - `src/renderer/modules/DashboardPage.tsx`
+  - `src/renderer/modules/DataPage.tsx`
+  - `src/renderer/modules/GatewayPage.tsx`
+  - `src/renderer/modules/KnowledgePage.tsx`
+  - `src/renderer/modules/ModelsPage.tsx`
+  - `src/renderer/modules/SettingsPage.tsx`
+  - `src/renderer/modules/ToolsPage.tsx`
+  - `src/renderer/modules/shared.tsx`
+  - `src/renderer/mockApi.ts`
+  - `src/main/services/store.ts`
+  - `src/shared/errors.ts`
+  - `src/shared/types.ts`
+  - `tests/i18n-authority.test.ts`
+  - `tests/app.test.tsx`
+  - `tests/ui-smoke.spec.ts`
+  - `scripts/ui-smoke.mjs`
+  - `scripts/electron-smoke.mjs`
+  - `src/main/index.ts`
+  - `package.json`
+  - `playwright.config.ts`
+- Added/modified functionality: added a typed zh-CN/en-US i18n authority, renderer i18n provider and `t()` hook, dictionary-backed navigation/shell/page/error/status/settings text, live language switching through persisted UI preferences, i18n parity and hardcoded-CJK scanner tests, and language-switch UI smoke coverage. Also fixed the production Electron renderer entry by serving `dist` through a `nexachat://` protocol instead of `file://`, and made smoke scripts own their Vite/Electron test lifecycle.
+- Deleted old links: removed migrated hardcoded CJK UI text from the renderer authority files and removed old Playwright webServer lifecycle dependence that left UI smoke hanging after tests passed. No provider/model/gateway/RAG business chain was deleted in this round.
+- Test commands and results:
+  - `npm.cmd run typecheck`: passed.
+  - `npm.cmd run test`: passed, 5 files / 18 tests.
+  - `npm.cmd run build`: passed.
+  - `npm.cmd run verify`: passed.
+  - `npm.cmd run test:ui-smoke`: passed, 10 Playwright tests including live language switch to en-US and theme preservation.
+  - `npm.cmd run test:electron-smoke`: passed after `nexachat://` production renderer loading and smoke-only GPU/userData isolation.
+  - `git diff --check`: passed with LF/CRLF warnings only.
+- Desktop shortcut result: `C:\Users\至亲\Desktop\NexaChat.lnk` still targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"` as the app argument, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`. No shortcut was modified.
+- Acceptance result: Passed. UI/navigation/status/error/settings copy now comes from the i18n authority, zh-CN and en-US dictionaries stay in parity, language switching is live and persisted, theme/density/font/motion are not reset by the language switch, and tests catch missing keys plus new CJK literals in migrated files.
+- Commit hash: pending Round 4 delivery commit.
+- Remaining issues: None for Round 4. Round 5 owns full system-theme resolution and screenshot regression coverage.
+
 ## 11. Round 5: Dark / Light / System Theme
 
 1. **Round Name**: Dark / Light / System Theme.

@@ -188,6 +188,39 @@ Verification on 2026-05-14:
 
 Round 3 delivery commit: `7a89160d0c83733b80176cda7643cc401e2dcdd2`, pushed and confirmed on `origin/main`. Round 4 remains responsible for i18n dictionary migration and Round 5 for runtime system-theme resolution.
 
+## 2026-05-15 Full App Round 4 i18n Authority
+
+Round 4 of the authoritative full-app blueprint is complete as an implementation and verification round. It established the zh-CN/en-US i18n authority, migrated visible renderer/navigation/status/error/settings copy to dictionary-backed text, and verified live language switching.
+
+Parallel execution lanes:
+
+- Lane A: added `src/shared/i18n.ts`, `src/renderer/i18n.tsx`, locale normalization, dictionary lookup, parameter interpolation, and parity checks.
+- Lane B: migrated navigation, shell, module pages, status/error panels, mock API display text, store service display messages, and tests to dictionary-backed strings.
+- Lane C: added i18n scanner coverage, stabilized UI smoke lifecycle, repaired production Electron renderer loading through `nexachat://`, rechecked Electron smoke, and read back the desktop shortcut.
+
+Key changes:
+
+- `src/shared/i18n.ts` now owns all zh-CN/en-US UI copy and exposes `translate`, `normalizeLocale`, and `getMissingTranslationKeys`.
+- `src/renderer/i18n.tsx` provides the renderer `I18nProvider`, `useI18n`, and navigation translation helpers.
+- `tests/i18n-authority.test.ts` verifies dictionary parity, navigation dictionary backing, and blocks new CJK literals in migrated runtime files.
+- `tests/ui-smoke.spec.ts` now uses dictionary-backed selectors and verifies live language switching to en-US without breaking the shell.
+- `scripts/ui-smoke.mjs` owns Vite/Playwright lifecycle so UI smoke exits cleanly.
+- `scripts/electron-smoke.mjs` runs with smoke-only user data and GPU-safe flags, and asserts the real preload API plus eight first-level modules.
+- `src/main/index.ts` now serves the packaged renderer with the `nexachat://` protocol in production mode so Electron does not depend on `file://` module loading.
+
+Verification on 2026-05-15:
+
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test`: passed, 5 files / 18 tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run verify`: passed.
+- `npm.cmd run test:ui-smoke`: passed, 10 Playwright tests.
+- `npm.cmd run test:electron-smoke`: passed.
+- `git diff --check`: passed with LF/CRLF warnings only.
+- Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`.
+
+Round 4 delivery commit: pending. Round 5 owns full light/dark/system theme resolution and visual regression coverage.
+
 ## 2026-05-14 UI Shell Redesign
 
 This round rebuilt the visible desktop shell, sidebar hierarchy, topbar, workbench home, and visual system so NexaChat reads as a formal compact desktop tool instead of a crowded prototype/debug panel.

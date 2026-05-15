@@ -26,6 +26,9 @@ import type {
   Workspace,
 } from '../shared/types';
 import type { AppApi } from '../shared/api';
+import { translate } from '../shared/i18n';
+
+const t = (key: Parameters<typeof translate>[1], params?: Parameters<typeof translate>[2]) => translate('zh-CN', key, params);
 
 interface MockState {
   workspace: Workspace;
@@ -284,7 +287,7 @@ function resolveRoute(state: MockState, input: SendMessageInput): RouteDecision 
     state.models[0];
 
   if (!model) {
-    throw new Error('No model is configured in the browser mock API.');
+    throw new Error(t('models.errors.noBrowserModel'));
   }
 
   const requestedProvider = input.providerId ? state.providers.find((provider) => provider.id === input.providerId) : null;
@@ -296,14 +299,14 @@ function resolveRoute(state: MockState, input: SendMessageInput): RouteDecision 
     state.providers[0];
 
   if (!provider) {
-    throw new Error('No provider is configured in the browser mock API.');
+    throw new Error(t('models.errors.noBrowserProvider'));
   }
 
   return {
     providerId: provider.id,
     modelId: model.id,
     modelNameSnapshot: model.name,
-    reason: requestedModel || requestedProvider ? 'Matched requested browser mock route.' : 'Used workspace browser mock default route.',
+    reason: requestedModel || requestedProvider ? t('chat.route.browserRequested') : t('chat.route.browserDefault'),
     fallbackUsed: !requestedModel || (input.providerId ? !requestedProvider : false),
   };
 }
@@ -320,11 +323,11 @@ function createMessage(input: Omit<Message, 'id' | 'createdAt' | 'updatedAt'>): 
 
 function buildAssistantContent(content: string, routeDecision: RouteDecision): string {
   return [
-    `Mock response from ${routeDecision.modelNameSnapshot}.`,
+    t('chat.assistant.browserResponse', { model: routeDecision.modelNameSnapshot }),
     '',
-    `I received: ${content}`,
+    t('chat.assistant.browserReceived', { content }),
     '',
-    'This response is generated entirely in memory for browser development and UI smoke tests.',
+    t('chat.assistant.browserRuntime'),
   ].join('\n');
 }
 
@@ -345,13 +348,13 @@ function buildSnapshot(state: MockState): AppSnapshot {
 
   const setupGaps: string[] = [];
   if (state.providers.length === 0) {
-    setupGaps.push('Add at least one provider.');
+    setupGaps.push(t('dashboard.setup.browserProviderMissing'));
   }
   if (state.models.length === 0) {
-    setupGaps.push('Add at least one model.');
+    setupGaps.push(t('dashboard.setup.browserModelMissing'));
   }
   if (!state.gatewayStatus.running) {
-    setupGaps.push('Gateway is disabled in the browser mock.');
+    setupGaps.push(t('dashboard.setup.browserGatewayDisabled'));
   }
 
   return {
@@ -395,9 +398,10 @@ export function createMockApi(): AppApi {
     state.workspace.updatedAt = now();
   }
 
-  function createResult(action: ImportExportResult['action'], summary: string, redacted: boolean): ImportExportResult {
+  function createResult(action: ImportExportResult['action'], summary: string, redacted: boolean, options: { failed?: boolean; conflictCount?: number } = {}): ImportExportResult {
     const timestamp = now();
-    const status: ImportExportResult['status'] = summary.includes('被拒绝') ? 'failed' : action === 'import' || action === 'cleanup-preview' ? 'ready' : 'completed';
+    const status: ImportExportResult['status'] = options.failed ? 'failed' : action === 'import' || action === 'cleanup-preview' ? 'ready' : 'completed';
+    const conflictCount = options.conflictCount ?? 0;
     const result: ImportExportResult = {
       id: createId(action.replace('-', '_')),
       action,
@@ -406,11 +410,11 @@ export function createMockApi(): AppApi {
       redacted,
       manifestJson: JSON.stringify({
         requiresConfirmation: status === 'ready',
-        conflictCount: summary.includes('冲突') ? 1 : 0,
+        conflictCount,
         source: 'browser-mock',
       }),
       errorMessage: status === 'failed' ? summary : null,
-      conflictCount: summary.includes('冲突') ? 1 : 0,
+      conflictCount,
       requiresConfirmation: status === 'ready',
       createdAt: timestamp,
     };
@@ -426,7 +430,7 @@ export function createMockApi(): AppApi {
 
     async createProvider(input: ProviderInput) {
       if (!/^https?:\/\//i.test(input.baseUrl.trim())) {
-        throw new Error('Base URL 必须以 http:// 或 https:// 开头。');
+        throw new Error(t('models.errors.invalidBaseUrl'));
       }
       const timestamp = now();
       const provider: Provider = {
@@ -523,7 +527,7 @@ export function createMockApi(): AppApi {
           latencyMs: 1,
           finishReason: null,
           errorCode: 'invalid_base_url',
-          errorMessage: 'Base URL 必须以 http:// 或 https:// 开头。',
+          errorMessage: t('models.errors.invalidBaseUrl'),
           startedAt: timestamp,
           completedAt: timestamp,
           createdAt: timestamp,
@@ -762,7 +766,7 @@ export function createMockApi(): AppApi {
         size: Math.max(0, Math.floor(size)),
         parseStatus: textLike ? 'indexed' : 'failed',
         chunkCount: textLike ? Math.max(1, Math.ceil(Math.max(0, size) / 1024)) : 0,
-        errorMessage: textLike ? null : '当前迭代只支持文本类 lexical fallback。',
+        errorMessage: textLike ? null : t('knowledge.errors.unsupportedFallback'),
         createdAt: timestamp,
         updatedAt: timestamp,
       };
@@ -783,7 +787,7 @@ export function createMockApi(): AppApi {
         pushAudit('knowledge.retry.completed', 'knowledgeFile', file.id);
       } else {
         file.parseStatus = 'failed';
-        file.errorMessage = '重试被拒绝：当前迭代只支持文本类 lexical fallback。';
+        file.errorMessage = t('knowledge.errors.retryRejected');
         pushAudit('knowledge.retry.failed', 'knowledgeFile', file.id);
       }
       file.updatedAt = timestamp;
@@ -839,7 +843,7 @@ export function createMockApi(): AppApi {
 
     async previewAgentRun(agentId: string) {
       const agent = findById(state.agents, agentId, 'Agent');
-      const result = createResult('cleanup-preview', `Agent dry-run 已生成：${agent.name}。不会执行工具或危险操作。`, true);
+      const result = createResult('cleanup-preview', t('tools.agent.dryRun.summary', { agent: agent.name }), true);
       pushAudit('agent.previewRun', 'agent', agent.id, { resultId: result.id });
       return clone(result);
     },
@@ -848,13 +852,12 @@ export function createMockApi(): AppApi {
       try {
         const parsed = JSON.parse(manifestText) as Record<string, unknown>;
         if (!Array.isArray(parsed.providers) && !Array.isArray(parsed.models) && typeof parsed.workspace !== 'object') {
-          throw new Error('清单必须包含 providers、models 或 workspace。');
+          throw new Error(t('data.import.errors.requiredList'));
         }
-        const result = createResult('import', '导入清单已通过预检；应用前仍需要确认冲突和密钥处理。', true);
+        const result = createResult('import', t('data.import.summary.ready'), true);
         return clone(result);
       } catch (error) {
-        const result = createResult('import', `导入清单被拒绝：${error instanceof Error ? error.message : String(error)}`, true);
-        result.status = 'failed';
+        const result = createResult('import', t('data.import.summary.rejected', { reason: error instanceof Error ? error.message : String(error) }), true, { failed: true });
         return clone(result);
       }
     },
@@ -862,24 +865,24 @@ export function createMockApi(): AppApi {
     async applyImportPlan(resultId: string) {
       const result = findById(state.importExportResults, resultId, 'Import result');
       if (result.action !== 'import' || result.status !== 'ready') {
-        throw new Error('只有 ready 状态的导入预检结果可以应用。');
+        throw new Error(t('data.import.errors.readyOnly'));
       }
       result.status = 'completed';
-      result.summary = '导入计划已确认应用；浏览器模式只记录确认结果。';
+      result.summary = t('data.import.summary.browserApplied');
       pushAudit('data.applyImportPlan', 'importExportResult', result.id);
       return clone(result);
     },
 
     async restoreSnapshot(snapshotId: string) {
       findById(state.importExportResults, snapshotId, 'Snapshot');
-      const result = createResult('cleanup-preview', '恢复预检已创建；不会无确认覆盖本地配置。', true);
+      const result = createResult('cleanup-preview', t('data.snapshot.summary.browserRestore'), true);
       return clone(result);
     },
 
     async createSnapshot() {
       const result = createResult(
         'snapshot',
-        `Captured browser mock snapshot with ${state.conversations.length} conversations and ${state.messages.length} messages.`,
+        t('data.snapshot.summary.browserCreated', { conversations: state.conversations.length, messages: state.messages.length }),
         true,
       );
       return clone(result);
@@ -888,7 +891,7 @@ export function createMockApi(): AppApi {
     async exportDiagnostics() {
       const result = createResult(
         'export',
-        `Exported browser mock diagnostics: ${state.requestLogs.length} requests, ${state.auditLogs.length} audit entries.`,
+        t('data.diagnostics.summary.browserCreated', { requests: state.requestLogs.length, audits: state.auditLogs.length }),
         true,
       );
       return clone(result);

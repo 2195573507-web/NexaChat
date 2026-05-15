@@ -1,11 +1,17 @@
 import { _electron as electron } from 'playwright';
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+
+const smokeUserDataDir = join(process.cwd(), 'test-results', 'electron-smoke-user-data');
+mkdirSync(smokeUserDataDir, { recursive: true });
 
 const app = await electron.launch({
-  args: ['.'],
+  args: ['.', '--disable-gpu', '--disable-gpu-sandbox', `--user-data-dir=${smokeUserDataDir}`],
   cwd: process.cwd(),
   env: {
     ...process.env,
     ELECTRON_ENABLE_LOGGING: '1',
+    NEXACHAT_ELECTRON_SMOKE: '1',
   },
 });
 
@@ -24,11 +30,12 @@ window.on('pageerror', (error) => {
 });
 
 try {
-  await window.waitForLoadState('domcontentloaded');
-  await window.locator('.app-shell').waitFor({ timeout: 15_000 });
+  await window.locator('.app-shell').waitFor({ timeout: 20_000 });
+  await window.waitForFunction(() => document.readyState !== 'loading', undefined, { timeout: 5_000 }).catch(() => undefined);
   await window.getByText('NexaChat', { exact: true }).first().waitFor({ timeout: 5_000 });
-  await window.locator('.module-nav-item').filter({ hasText: '对话' }).waitFor({ timeout: 5_000 });
-  await window.getByText('当前概览', { exact: true }).waitFor({ timeout: 5_000 });
+  await window.locator('.module-nav-item').first().waitFor({ timeout: 5_000 });
+  await window.locator('main [role="tabpanel"][data-module="workspace"][data-tab="overview"]').waitFor({ timeout: 5_000 });
+
   const preloadResult = await window.evaluate(async () => {
     const api = window.nexachat;
     if (!api || typeof api.getSnapshot !== 'function') {
@@ -44,6 +51,10 @@ try {
   if (!preloadResult.ok) {
     throw new Error(`Preload API check failed: ${JSON.stringify(preloadResult)}`);
   }
+  if (preloadResult.moduleCountHint !== 8) {
+    throw new Error(`Expected 8 first-level modules, got ${preloadResult.moduleCountHint}.`);
+  }
+
   const bodyText = await window.locator('body').innerText();
   if (/(^|\s)\/(workspace|chat|models|knowledge|tools|gateway|data|settings)\//.test(bodyText)) {
     throw new Error('Visible route path leaked into the Electron shell.');

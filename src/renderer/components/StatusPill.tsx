@@ -1,17 +1,20 @@
 import type { ModuleStage } from '../../shared/types';
+import type { Translate } from '../i18n';
+import { useI18n } from '../i18n';
 
-const stageLabels: Record<ModuleStage, string> = {
-  ready: 'Ready',
-  implemented: '已实现',
-  planned: '计划中',
-  reserved: '预留',
-  'environment-limited': '环境受限',
+const stageLabelKeys: Record<ModuleStage, Parameters<Translate>[0]> = {
+  ready: 'stage.ready',
+  implemented: 'stage.implemented',
+  planned: 'stage.planned',
+  reserved: 'stage.reserved',
+  'environment-limited': 'stage.environment-limited',
 };
 
-export function stageLabel(stage: ModuleStage): string {
-  return stageLabels[stage];
+export function stageLabel(stage: ModuleStage, t: Translate): string {
+  return t(stageLabelKeys[stage]);
 }
 
 export function StatusPill({ stage }: { stage: ModuleStage }) {
-  return <span className={`status-pill status-${stage}`}>{stageLabels[stage]}</span>;
+  const { t } = useI18n();
+  return <span className={`status-pill status-${stage}`}>{stageLabel(stage, t)}</span>;
 }

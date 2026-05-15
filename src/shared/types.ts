@@ -12,6 +12,7 @@ export interface NavTab {
   permission?: string;
   labelKey?: string;
   descriptionKey?: string;
+  featureBoundaryKey?: string;
   icon?: string;
   featureBoundary?: string;
 }

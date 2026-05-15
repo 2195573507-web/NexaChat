@@ -4,6 +4,7 @@ import App from '../src/renderer/App';
 import { createMockApi } from '../src/renderer/mockApi';
 import { modulePageRegistry } from '../src/renderer/modules/modulePageRegistry';
 import { IPC_CHANNELS, IPC_CHANNEL_LIST, assertIpcPayload, isIpcChannel } from '../src/shared/ipc';
+import { translate } from '../src/shared/i18n';
 import { navModules, resolveNavigation, routeAliasRegistry } from '../src/shared/navigation';
 import type { NavModule, NavTab } from '../src/shared/types';
 
@@ -22,7 +23,7 @@ function activePanel() {
 }
 
 function openFeature(module: NavModule, tab: NavTab) {
-  const expandButton = screen.getByRole('button', { name: new RegExp(`展开${module.label}|收起${module.label}`) });
+  const expandButton = screen.getByRole('button', { name: new RegExp(`${translate('zh-CN', 'shell.expand')}${module.label}|${translate('zh-CN', 'shell.collapse')}${module.label}`) });
   if (expandButton.getAttribute('aria-expanded') === 'false') {
     fireEvent.click(expandButton);
   }
@@ -62,12 +63,13 @@ describe('NexaChat renderer', () => {
 
     const chat = navModules.find((module) => module.id === 'chat')!;
     openFeature(chat, chat.tabs.find((tab) => tab.id === 'playground')!);
-    const input = screen.getByPlaceholderText('输入消息，本地保存后再路由到模型...');
-    fireEvent.change(input, { target: { value: '测试本地 fallback 发送' } });
-    fireEvent.click(screen.getByRole('button', { name: /发送/ }));
+    const message = 'local fallback send test';
+    const input = screen.getByPlaceholderText(translate('zh-CN', 'chat.composer.placeholder'));
+    fireEvent.change(input, { target: { value: message } });
+    fireEvent.click(screen.getByRole('button', { name: translate('zh-CN', 'chat.send') }));
 
     await waitFor(() => {
-      expect(screen.getByText('测试本地 fallback 发送')).toBeInTheDocument();
+      expect(screen.getByText(message)).toBeInTheDocument();
     });
     expect(screen.getByText(/Mock response from nexachat-mock/)).toBeInTheDocument();
   });
@@ -81,10 +83,10 @@ describe('NexaChat renderer', () => {
 
     openFeature(models, models.tabs.find((tab) => tab.id === 'providers')!);
     expect(activePanel()).toHaveAttribute('data-tab', 'providers');
-    expect(activePanel()).toHaveTextContent('Provider 管理');
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'models.provider.title'));
     openFeature(models, models.tabs.find((tab) => tab.id === 'catalog')!);
     expect(activePanel()).toHaveAttribute('data-tab', 'catalog');
-    expect(activePanel()).toHaveTextContent('模型创建');
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'models.create.title'));
 
     openFeature(gateway, gateway.tabs.find((tab) => tab.id === 'keys')!);
     expect(activePanel()).toHaveAttribute('data-tab', 'keys');
@@ -92,10 +94,10 @@ describe('NexaChat renderer', () => {
 
     openFeature(settings, settings.tabs.find((tab) => tab.id === 'preferences')!);
     expect(activePanel()).toHaveAttribute('data-tab', 'preferences');
-    expect(activePanel()).toHaveTextContent('界面偏好');
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'settings.preferences.title'));
     openFeature(settings, settings.tabs.find((tab) => tab.id === 'security')!);
     expect(activePanel()).toHaveAttribute('data-tab', 'security');
-    expect(activePanel()).toHaveTextContent('安全存储与 IPC 边界');
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'settings.security.title'));
   });
 });
 

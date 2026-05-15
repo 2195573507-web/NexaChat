@@ -3,13 +3,14 @@ import type { AppApi } from '../../shared/api';
 import type { AppSnapshot, ContextStrategy, ModuleId, NavTab, ProviderType } from '../../shared/types';
 import { EmptyState } from '../components/EmptyState';
 import { StatusPill } from '../components/StatusPill';
+import { useI18n, type Translate } from '../i18n';
 
 export const providerTypes: ProviderType[] = ['openai-compatible', 'openai', 'anthropic', 'gemini', 'deepseek', 'qwen', 'ollama', 'lm-studio', 'custom'];
-export const contextStrategies: Array<{ value: ContextStrategy; label: string }> = [
-  { value: 'recent_n', label: '最近 N 轮' },
-  { value: 'summary_recent_n', label: '摘要 + 最近' },
-  { value: 'manual', label: '手动选择' },
-  { value: 'token_trim', label: 'Token 自动裁剪' },
+export const contextStrategies: Array<{ value: ContextStrategy; labelKey: Parameters<Translate>[0] }> = [
+  { value: 'recent_n', labelKey: 'shared.context.recentN' },
+  { value: 'summary_recent_n', labelKey: 'shared.context.summaryRecentN' },
+  { value: 'manual', labelKey: 'shared.context.manual' },
+  { value: 'token_trim', labelKey: 'shared.context.tokenTrim' },
 ];
 
 export type OpenModuleTarget = ModuleId | { moduleId: ModuleId; tabId?: string };
@@ -32,6 +33,7 @@ export function TabPanel({
   className?: string;
   children: ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     <div
       id={`panel-${moduleId}-${tab.id}`}
@@ -46,7 +48,7 @@ export function TabPanel({
           <h2>{tab.label}</h2>
           {tab.description ? <p>{tab.description}</p> : null}
         </div>
-        <StateBadge label={stageLabelForUi(tab.stage)} tone={tab.stage === 'implemented' ? 'success' : tab.stage === 'reserved' ? 'muted' : 'warning'} />
+        <StateBadge label={stageLabelForUi(tab.stage, t)} tone={tab.stage === 'implemented' ? 'success' : tab.stage === 'reserved' ? 'muted' : 'warning'} />
       </section>
       {children}
     </div>
@@ -64,22 +66,23 @@ export function PlannedTabPlaceholder({
   why: string;
   dependency: string;
 }) {
+  const { t } = useI18n();
   return (
     <section className="panel planned-panel placeholder-panel">
       <div className="panel-header">
         <div>
           <h2>{featureName}</h2>
-          <p>当前阶段：{stageLabelForUi(tab.stage)}</p>
+          <p>{t('shared.planned.currentStage', { stage: stageLabelForUi(tab.stage, t) })}</p>
         </div>
         <StatusPill stage={tab.stage} />
       </div>
       <dl className="detail-list">
         <div>
-          <dt>为什么未开放</dt>
+          <dt>{t('shared.planned.why')}</dt>
           <dd>{why}</dd>
         </div>
         <div>
-          <dt>下一实现依赖</dt>
+          <dt>{t('shared.planned.dependency')}</dt>
           <dd>{dependency}</dd>
         </div>
       </dl>
@@ -101,12 +104,12 @@ export function StateBadge({ label, tone }: { label: string; tone: 'success' | '
   return <span className={`state-badge state-${tone}`}>{label}</span>;
 }
 
-export function stageLabelForUi(stage: NavTab['stage']): string {
-  if (stage === 'implemented') return '已实现';
-  if (stage === 'planned') return '计划中';
-  if (stage === 'reserved') return '预留';
-  if (stage === 'environment-limited') return '环境受限';
-  return 'Ready';
+export function stageLabelForUi(stage: NavTab['stage'], t: Translate): string {
+  if (stage === 'implemented') return t('stage.implemented');
+  if (stage === 'planned') return t('stage.planned');
+  if (stage === 'reserved') return t('stage.reserved');
+  if (stage === 'environment-limited') return t('stage.environment-limited');
+  return t('stage.ready');
 }
 
 export function healthTone(status: string): 'success' | 'warning' | 'error' | 'muted' {
@@ -114,6 +117,57 @@ export function healthTone(status: string): 'success' | 'warning' | 'error' | 'm
   if (status === 'error') return 'error';
   if (status === 'warning') return 'warning';
   return 'muted';
+}
+
+export function statusLabel(status: string, t: Translate): string {
+  if (status === 'healthy') return t('common.available');
+  if (status === 'error') return t('common.error');
+  if (status === 'warning') return t('common.warning');
+  if (status === 'unknown') return t('common.unknown');
+  if (status === 'queued') return t('common.queued');
+  if (status === 'parsing') return t('common.parsing');
+  if (status === 'indexed') return t('common.indexed');
+  if (status === 'failed') return t('common.failed');
+  if (status === 'stale') return t('common.stale');
+  if (status === 'discovered') return t('common.discovered');
+  if (status === 'granted') return t('common.granted');
+  if (status === 'denied') return t('common.denied');
+  if (status === 'always') return t('common.always');
+  if (status === 'destructive-only') return t('common.destructiveOnly');
+  if (status === 'never') return t('common.never');
+  if (status === 'ready') return t('stage.ready');
+  if (status === 'completed') return t('common.completed');
+  if (status === 'started') return t('common.started');
+  if (status === 'streaming') return t('common.streaming');
+  if (status === 'cancelled') return t('common.cancelled');
+  if (status === 'draft') return t('common.draft');
+  if (status === 'deleted') return t('common.deleted');
+  if (status === 'active') return t('common.active');
+  if (status === 'archived') return t('common.archived');
+  if (status === 'unknown') return t('common.unknown');
+  return status;
+}
+
+export function providerTypeLabel(type: ProviderType, t: Translate): string {
+  if (type === 'openai-compatible') return t('provider.type.openaiCompatible');
+  if (type === 'openai') return t('provider.type.openai');
+  if (type === 'anthropic') return t('provider.type.anthropic');
+  if (type === 'gemini') return t('provider.type.gemini');
+  if (type === 'deepseek') return t('provider.type.deepseek');
+  if (type === 'qwen') return t('provider.type.qwen');
+  if (type === 'ollama') return t('provider.type.ollama');
+  if (type === 'lm-studio') return t('provider.type.lmStudio');
+  return t('provider.type.custom');
+}
+
+export function modelCapabilityLabels(model: AppSnapshot['models'][number], t: Translate): string {
+  const labels = [
+    model.supportsStreaming ? t('common.streaming') : null,
+    model.supportsTools ? t('common.tools') : null,
+    model.supportsVision ? t('common.vision') : null,
+    model.supportsEmbeddings ? t('common.embeddings') : null,
+  ].filter(Boolean);
+  return labels.length > 0 ? labels.join(', ') : t('common.none');
 }
 
 export function getDefaultModel(snapshot: AppSnapshot) {
@@ -125,19 +179,19 @@ export function getDefaultModel(snapshot: AppSnapshot) {
   );
 }
 
-export function formatMessageMetadata(metadataJson: string): string {
+export function formatMessageMetadata(metadataJson: string, t: Translate): string {
   try {
     const metadata = JSON.parse(metadataJson) as { routeReason?: string; fallbackUsed?: boolean; contextStrategy?: string; citations?: unknown[] };
     return [
-      metadata.routeReason ? `路由：${metadata.routeReason}` : 'metadata: local trace 已保存',
-      metadata.fallbackUsed ? '使用 fallback' : null,
-      metadata.contextStrategy ? `上下文：${metadata.contextStrategy}` : null,
-      Array.isArray(metadata.citations) ? `引用线索：${metadata.citations.length}` : null,
+      metadata.routeReason ? t('shared.metadata.route', { reason: metadata.routeReason }) : t('shared.metadata.localTrace'),
+      metadata.fallbackUsed ? t('shared.metadata.fallback') : null,
+      metadata.contextStrategy ? t('shared.metadata.context', { strategy: metadata.contextStrategy }) : null,
+      Array.isArray(metadata.citations) ? t('shared.metadata.citations', { count: metadata.citations.length }) : null,
     ]
       .filter(Boolean)
       .join(' · ');
   } catch {
-    return 'metadata: local trace 已保存';
+    return t('shared.metadata.localTrace');
   }
 }
 
@@ -178,12 +232,13 @@ export function ListRows({
 }
 
 export function DataTable({ columns, rows }: { columns: string[]; rows: Array<Array<ReactNode>> }) {
+  const { t } = useI18n();
   if (rows.length === 0) {
     return (
       <EmptyState
-        title="暂无数据"
-        reason="此模块还没有本地记录。"
-        actionLabel="使用上方操作创建"
+        title={t('shared.empty.title')}
+        reason={t('shared.empty.reason')}
+        actionLabel={t('shared.empty.action')}
       />
     );
   }

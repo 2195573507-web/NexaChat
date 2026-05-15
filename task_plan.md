@@ -44,6 +44,7 @@ At least three agents were launched concurrently before implementation work cont
 - Full App Round 1 architecture boundary reorganization: complete as implementation, verification, commit, and push.
 - Full App Round 2 navigation and module information architecture: complete as implementation, verification, commit, and push.
 - Full App Round 3 global UI and design system refactor: complete as implementation, verification, commit, and push.
+- Full App Round 4 Chinese / English switching and i18n authority: complete as implementation and verification; commit and push pending.
 - Phase 1: complete.
 - Phase 2: complete.
 - Phase 3: complete.
@@ -79,6 +80,7 @@ At least three agents were launched concurrently before implementation work cont
 - Unit tests pass.
 - Production build passes.
 - UI smoke test can load the app shell and navigate modules.
+- i18n authority tests keep zh-CN/en-US dictionaries in parity and block new CJK literals in migrated runtime files.
 - The app has no fake-complete labels for reserved features.
 - `git status -sb` is reviewed before final response.
 

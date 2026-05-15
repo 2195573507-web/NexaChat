@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { UiPreferences } from '../../shared/types';
+import { useI18n } from '../i18n';
 import type { TabPageProps } from './shared';
 import { DataTable, StateBadge, TabPanel } from './shared';
 
 export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
+  const { t } = useI18n();
   const [prefs, setPrefs] = useState<UiPreferences>(snapshot.uiPreferences);
   useEffect(() => setPrefs(snapshot.uiPreferences), [snapshot.uiPreferences]);
 
@@ -12,20 +14,20 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
       <TabPanel moduleId="settings" tab={activeTab}>
         <section className="two-column">
           <div className="panel">
-            <h2>安全存储与 IPC 边界</h2>
-            <p>Renderer 只能看到 secret_ref 和 Gateway Key 预览；API Key、Authorization、自定义敏感 Header 在日志和导出中默认脱敏。</p>
+            <h2>{t('settings.security.title')}</h2>
+            <p>{t('settings.security.note')}</p>
             <dl className="detail-list">
-              <div><dt>Preload</dt><dd>仅暴露 `window.nexachat` 的白名单 API，不暴露 ipcRenderer。</dd></div>
-              <div><dt>Provider Key</dt><dd>保存在主进程 secret_ref，页面不显示明文。</dd></div>
-              <div><dt>Gateway Key</dt><dd>完整 Key 仅生成后一次性显示；列表只保留预览。</dd></div>
-              <div><dt>日志脱敏</dt><dd>Authorization、API Key 和敏感 Header 默认 redaction。</dd></div>
+              <div><dt>{t('settings.security.preload')}</dt><dd>{t('settings.security.preload.note')}</dd></div>
+              <div><dt>{t('settings.security.providerKey')}</dt><dd>{t('settings.security.providerKey.note')}</dd></div>
+              <div><dt>{t('settings.security.gatewayKey')}</dt><dd>{t('settings.security.gatewayKey.note')}</dd></div>
+              <div><dt>{t('settings.security.logRedaction')}</dt><dd>{t('settings.security.logRedaction.note')}</dd></div>
             </dl>
           </div>
           <div className="panel">
-            <h2>Gateway Key 状态</h2>
+            <h2>{t('settings.security.keyStatus')}</h2>
             <DataTable
-              columns={['Gateway Key', '预览', 'Scopes', 'Revoked']}
-              rows={snapshot.gatewayKeys.map((key) => [key.name, key.keyPreview, key.scopes.join(', '), key.revokedAt ? 'yes' : 'no'])}
+              columns={[t('settings.security.gatewayKey'), t('settings.columns.preview'), t('gateway.columns.scopes'), t('settings.columns.revoked')]}
+              rows={snapshot.gatewayKeys.map((key) => [key.name, key.keyPreview, key.scopes.join(', '), key.revokedAt ? t('common.yes') : t('common.no')])}
             />
           </div>
         </section>
@@ -37,9 +39,9 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
     return (
       <TabPanel moduleId="settings" tab={activeTab}>
         <section className="panel">
-          <h2>审计日志</h2>
+          <h2>{t('settings.audit.title')}</h2>
           <DataTable
-            columns={['动作', '目标', '详情', '时间']}
+            columns={[t('settings.columns.action'), t('settings.columns.target'), t('settings.columns.details'), t('settings.columns.time')]}
             rows={snapshot.auditLogs.map((log) => [log.action, `${log.targetType}:${log.targetId ?? '-'}`, log.detailsJson ?? '-', new Date(log.createdAt).toLocaleString()])}
           />
         </section>
@@ -52,24 +54,24 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
       <TabPanel moduleId="settings" tab={activeTab}>
         <section className="two-column">
           <div className="panel">
-            <h2>版本与运行环境</h2>
+            <h2>{t('settings.about.title')}</h2>
             <dl className="detail-list">
-              <div><dt>应用版本</dt><dd>0.2 operation logic refactor</dd></div>
-              <div><dt>网关端口</dt><dd>{snapshot.dashboard.gatewayStatus.port}</dd></div>
-              <div><dt>绑定地址</dt><dd>{snapshot.dashboard.gatewayStatus.bindHost}</dd></div>
-              <div><dt>数据位置</dt><dd>Electron userData / SQLite</dd></div>
-              <div><dt>桌面入口</dt><dd>由本轮桌面快捷方式检查记录，不在 UI 内提供不可验证修复按钮。</dd></div>
+              <div><dt>{t('settings.about.version')}</dt><dd>{t('settings.about.versionValue')}</dd></div>
+              <div><dt>{t('settings.about.gatewayPort')}</dt><dd>{snapshot.dashboard.gatewayStatus.port}</dd></div>
+              <div><dt>{t('settings.about.bindHost')}</dt><dd>{snapshot.dashboard.gatewayStatus.bindHost}</dd></div>
+              <div><dt>{t('settings.about.dataLocation')}</dt><dd>{t('settings.about.dataLocationValue')}</dd></div>
+              <div><dt>{t('settings.about.desktopEntry')}</dt><dd>{t('settings.about.desktopEntry.note')}</dd></div>
             </dl>
           </div>
           <div className="panel">
-            <h2>环境限制</h2>
+            <h2>{t('settings.environment.title')}</h2>
             <DataTable
-              columns={['能力', '状态', '说明']}
+              columns={[t('settings.environment.columns.capability'), t('settings.environment.columns.status'), t('settings.environment.columns.note')]}
               rows={[
-                ['真实上游模型推理', <StateBadge key="provider" label="未开放" tone="warning" />, '当前 sendMessage 走本地持久化和 mock/local response。'],
-                ['完整向量 RAG', <StateBadge key="rag" label="环境受限" tone="warning" />, '当前为文本 lexical fallback。'],
-                ['MCP / Agent 真执行', <StateBadge key="agent" label="未开放" tone="warning" />, '当前只保存注册、授权和 dry-run。'],
-                ['打包安装器', <StateBadge key="installer" label="未配置" tone="muted" />, 'package.json 未配置 electron-builder 或 Forge。'],
+                [t('settings.environment.providerInference'), <StateBadge key="provider" label={t('common.notOpen')} tone="warning" />, t('settings.environment.providerInference.note')],
+                [t('settings.environment.fullRag'), <StateBadge key="rag" label={t('stage.environment-limited')} tone="warning" />, t('settings.environment.fullRag.note')],
+                [t('settings.environment.mcpAgent'), <StateBadge key="agent" label={t('common.notOpen')} tone="warning" />, t('settings.environment.mcpAgent.note')],
+                [t('settings.environment.installer'), <StateBadge key="installer" label={t('common.notConfigured')} tone="muted" />, t('settings.environment.installer.note')],
               ]}
             />
           </div>
@@ -81,47 +83,47 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
   return (
     <TabPanel moduleId="settings" tab={activeTab}>
       <section className="panel">
-        <h2>界面偏好</h2>
+        <h2>{t('settings.preferences.title')}</h2>
         <div className="form-grid">
           <label>
-            Theme
+            {t('settings.preferences.theme')}
             <select value={prefs.theme} onChange={(event) => setPrefs({ ...prefs, theme: event.target.value as UiPreferences['theme'] })}>
-              <option value="system">System</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
+              <option value="system">{t('settings.preferences.theme.system')}</option>
+              <option value="light">{t('settings.preferences.theme.light')}</option>
+              <option value="dark">{t('settings.preferences.theme.dark')}</option>
             </select>
           </label>
           <label>
-            Density
+            {t('settings.preferences.density')}
             <select value={prefs.density} onChange={(event) => setPrefs({ ...prefs, density: event.target.value as UiPreferences['density'] })}>
-              <option value="comfortable">Comfortable</option>
-              <option value="compact">Compact</option>
+              <option value="comfortable">{t('settings.preferences.density.comfortable')}</option>
+              <option value="compact">{t('settings.preferences.density.compact')}</option>
             </select>
           </label>
           <label>
-            Font
+            {t('settings.preferences.font')}
             <select value={prefs.fontMode} onChange={(event) => setPrefs({ ...prefs, fontMode: event.target.value as UiPreferences['fontMode'] })}>
-              <option value="system">System</option>
-              <option value="kaiti">KaiTi for message preview</option>
+              <option value="system">{t('settings.preferences.font.system')}</option>
+              <option value="kaiti">{t('settings.preferences.font.kaiti')}</option>
             </select>
           </label>
           <label>
-            Language
+            {t('settings.preferences.language')}
             <select value={prefs.language} onChange={(event) => setPrefs({ ...prefs, language: event.target.value as UiPreferences['language'] })}>
-              <option value="zh-CN">简体中文</option>
-              <option value="en-US">English</option>
+              <option value="zh-CN">{t('settings.preferences.language.zh')}</option>
+              <option value="en-US">{t('settings.preferences.language.en')}</option>
             </select>
           </label>
           <label>
-            Motion
+            {t('settings.preferences.motion')}
             <select value={prefs.reducedMotion ? 'reduced' : 'normal'} onChange={(event) => setPrefs({ ...prefs, reducedMotion: event.target.value === 'reduced' })}>
-              <option value="normal">Normal</option>
-              <option value="reduced">Reduced</option>
+              <option value="normal">{t('settings.preferences.motion.normal')}</option>
+              <option value="reduced">{t('settings.preferences.motion.reduced')}</option>
             </select>
           </label>
         </div>
-        <button type="button" className="primary-button" onClick={() => onAction('界面偏好已持久化', () => api.saveUiPreferences(prefs))}>
-          保存界面偏好
+        <button type="button" className="primary-button" onClick={() => onAction(t('settings.preferences.saved'), () => api.saveUiPreferences(prefs))}>
+          {t('settings.preferences.save')}
         </button>
       </section>
     </TabPanel>

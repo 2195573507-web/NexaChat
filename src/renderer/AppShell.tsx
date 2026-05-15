@@ -37,6 +37,7 @@ import { navModules } from '../shared/navigation';
 import type { AppSnapshot, ModuleId, NavModule, NavTab } from '../shared/types';
 import { ModulePageFrame } from './components/ModulePageFrame';
 import { stageLabel } from './components/StatusPill';
+import { translateModule, useI18n } from './i18n';
 
 const SIDEBAR_EXPANDED_KEY = 'nexachat.sidebar.expandedModuleIds';
 
@@ -117,12 +118,12 @@ function persistExpandedModules(moduleIds: ModuleId[]) {
   }
 }
 
-function getDefaultModelLabel(snapshot: AppSnapshot) {
+function getDefaultModelLabel(snapshot: AppSnapshot, fallback: string) {
   return (
     snapshot.models.find((model) => model.id === snapshot.dashboard.workspace.defaultModelId)?.displayName ??
     snapshot.models.find((model) => model.enabled)?.displayName ??
     snapshot.models[0]?.displayName ??
-    '未配置'
+    fallback
   );
 }
 
@@ -136,8 +137,10 @@ export function AppShell({
   children,
   rightRail,
 }: AppShellProps) {
+  const { t } = useI18n();
   const themeClass = snapshot.uiPreferences.theme === 'dark' ? 'theme-dark' : 'theme-light';
   const [expandedModuleIds, setExpandedModuleIds] = useState<ModuleId[]>(() => getStoredExpandedModules(activeModuleId));
+  const translatedModules = navModules.map((module) => translateModule(module, t));
 
   useEffect(() => {
     setExpandedModuleIds((current) => {
@@ -160,19 +163,19 @@ export function AppShell({
 
   return (
     <div className={`app-shell ${themeClass} density-${snapshot.uiPreferences.density} font-${snapshot.uiPreferences.fontMode}`}>
-      <aside className="sidebar" aria-label="一级模块导航">
+      <aside className="sidebar" aria-label={t('shell.sidebar.aria')}>
         <div className="brand">
           <div className="brand-mark" aria-hidden="true">
             N
           </div>
           <div className="brand-copy">
             <strong>NexaChat</strong>
-            <span>AI 对话中枢</span>
+            <span>{t('shell.brand.subtitle')}</span>
           </div>
         </div>
 
-        <nav className="module-nav" aria-label="产品模块">
-          {navModules.map((module) => {
+        <nav className="module-nav" aria-label={t('shell.productModules.aria')}>
+          {translatedModules.map((module) => {
             const Icon = moduleIcons[module.id] ?? Activity;
             const isActive = activeModuleId === module.id;
             const isExpanded = expandedModuleIds.includes(module.id);
@@ -182,7 +185,7 @@ export function AppShell({
                   <button
                     type="button"
                     className="module-expand-button"
-                    aria-label={`${isExpanded ? '收起' : '展开'}${module.label}`}
+                    aria-label={`${isExpanded ? t('shell.collapse') : t('shell.expand')}${module.label}`}
                     aria-expanded={isExpanded}
                     aria-controls={`sidebar-children-${module.id}`}
                     onClick={() => toggleModule(module.id)}
@@ -198,7 +201,7 @@ export function AppShell({
                     <Icon size={18} />
                     <span className="module-label-full">{module.label}</span>
                     <span className="module-label-short">{module.shortLabel}</span>
-                    <span className={`stage-dot stage-${module.stage}`} title={stageLabel(module.stage)} aria-label={stageLabel(module.stage)} />
+                    <span className={`stage-dot stage-${module.stage}`} title={stageLabel(module.stage, t)} aria-label={stageLabel(module.stage, t)} />
                   </button>
                 </div>
 
@@ -218,7 +221,7 @@ export function AppShell({
                         >
                           <TabIcon size={15} />
                           <span>{tab.label}</span>
-                          <span className={`child-stage child-stage-${tab.stage}`} aria-label={stageLabel(tab.stage)} title={stageLabel(tab.stage)} />
+                          <span className={`child-stage child-stage-${tab.stage}`} aria-label={stageLabel(tab.stage, t)} title={stageLabel(tab.stage, t)} />
                         </button>
                       );
                     })}
@@ -234,24 +237,24 @@ export function AppShell({
         <header className="topbar">
           <div className="topbar-context">
             <strong>{snapshot.dashboard.workspace.name}</strong>
-            <span>默认模型：{getDefaultModelLabel(snapshot)}</span>
+            <span>{t('shell.defaultModel', { model: getDefaultModelLabel(snapshot, t('app.rail.unconfigured')) })}</span>
             <span className={snapshot.dashboard.gatewayStatus.running ? 'gateway-running' : 'gateway-stopped'}>
-              网关 {snapshot.dashboard.gatewayStatus.running ? '运行中' : '未启用'}
+              {t('shell.gateway', { state: snapshot.dashboard.gatewayStatus.running ? t('shell.gateway.running') : t('shell.gateway.stopped') })}
             </span>
           </div>
 
           <div className="topbar-actions">
             <button type="button" className="icon-text-button topbar-search" onClick={() => onTabChange('logs', 'gateway')}>
-              <Search size={16} /> 查看日志
+              <Search size={16} /> {t('shell.viewLogs')}
             </button>
             <button type="button" className="primary-button" onClick={() => onTabChange('playground', 'chat')}>
-              打开聊天
+              {t('shell.openChat')}
             </button>
             <button type="button" onClick={() => onTabChange('providers', 'models')}>
-              Provider
+              {t('shell.provider')}
             </button>
             <button type="button" onClick={() => onTabChange('catalog', 'models')}>
-              Model
+              {t('shell.model')}
             </button>
           </div>
         </header>

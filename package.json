@@ -13,7 +13,7 @@
     "build": "npm run typecheck && npm run build:renderer && npm run build:main",
     "start": "npm run build && electron .",
     "test": "vitest run",
-    "test:ui-smoke": "playwright test tests/ui-smoke.spec.ts",
+    "test:ui-smoke": "node scripts/ui-smoke.mjs",
     "test:electron-smoke": "node scripts/electron-smoke.mjs",
     "verify": "npm run typecheck && npm run test && npm run build"
   },

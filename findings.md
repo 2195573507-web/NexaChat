@@ -32,6 +32,15 @@
 - Round 3 does not migrate UI copy. A read-only i18n audit confirmed only `labelKey` placeholders exist and no runtime dictionary/`t()` authority exists yet, so Round 4 must create the real i18n authority before migrating text.
 - In-app browser automation timed out twice on the local dev page, but Playwright UI smoke produced equivalent responsive screenshot evidence under ignored `test-results/round-03-design-system/`.
 
+## Full App Round 4 Findings
+
+- The i18n authority can live in `src/shared/i18n.ts` without a folder split yet because the current dictionary is still type-checkable and consumed by both renderer and main display-message code.
+- Navigation still carries default `label` / `description` strings for compatibility, but `tests/i18n-authority.test.ts` now asserts they equal zh-CN dictionary values and that every label/description/boundary key resolves.
+- A CJK literal scan over migrated runtime files is a better Round 4 gate than a broad English literal scan because protocol names, provider type names, status enum values, and test data legitimately remain English.
+- Electron production loading was broken independently of i18n: Chromium blocks Vite module assets under `file://`. Serving `dist` through a privileged `nexachat://` protocol fixes the real desktop entry without disabling web security.
+- The current Windows smoke host can fail Electron startup when GPU/cache state is locked. The Electron smoke script now uses smoke-only user data and disables hardware GPU while preserving software rendering.
+- Playwright's built-in webServer lifecycle could leave `test:ui-smoke` hanging after all tests passed on this host. `scripts/ui-smoke.mjs` now owns the Vite process lifecycle and exits with the Playwright result.
+
 ## Initial Repository State
 
 - Repository root: `D:\NexaChat`.

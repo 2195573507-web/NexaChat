@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { NavModule, NavTab } from '../../shared/types';
+import { useI18n } from '../i18n';
 import { StatusPill } from './StatusPill';
 
 interface ModulePageFrameProps {
@@ -15,6 +16,7 @@ export function ModulePageFrame({
   onTabChange,
   children,
 }: ModulePageFrameProps) {
+  const { t } = useI18n();
   return (
     <>
       <div className="module-header">
@@ -25,13 +27,13 @@ export function ModulePageFrame({
         <StatusPill stage={activeModule.stage} />
       </div>
 
-      <nav className="module-subnav-panel" aria-label={`${activeModule.label} 二级导航`}>
+      <nav className="module-subnav-panel" aria-label={`${activeModule.label} ${t('module.subnav')}`}>
         <div className="module-subnav-summary">
-          <span>二级导航</span>
+          <span>{t('module.subnav')}</span>
           <strong>{activeTab.label}</strong>
           <p>{activeTab.featureBoundary ?? activeTab.description ?? activeModule.description}</p>
         </div>
-        <div className="module-tabs" role="tablist" aria-label={`${activeModule.label} 功能页面`}>
+        <div className="module-tabs" role="tablist" aria-label={`${activeModule.label} ${t('module.featurePages')}`}>
           {activeModule.tabs.map((tab) => (
             <button
               type="button"
