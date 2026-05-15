@@ -236,7 +236,8 @@
 - Ran `npm.cmd run verify`: passed.
 - Ran `npm.cmd run test:electron-smoke`: passed.
 - Checked `C:\Users\至亲\Desktop\NexaChat.lnk`: target, arguments, working directory, and icon still point to the current local Electron launch entry.
-- Committed Round 6 delivery as `45054a81190638e209d06d9373ff83e38763a9fd`; closeout push confirmation pending.
+- Committed Round 6 delivery as `45054a81190638e209d06d9373ff83e38763a9fd`.
+- Committed Round 6 closeout as `b151d8d5bda11ae29589bd08a7d9eaf52c4af1ee`; pushed through Git OpenSSL + local proxy after direct GitHub HTTPS and Schannel proxy paths failed; `origin/main` confirmed at `b151d8d5bda11ae29589bd08a7d9eaf52c4af1ee`.
 - First `npm.cmd run test:ui-smoke` after adding the system-theme test failed because the test `matchMedia` mock returned a fixed `matches` value.
 - Fixed the mock to expose `matches` as a getter.
 - Re-ran `npm.cmd run test:ui-smoke`: passed, 11 Playwright tests.
