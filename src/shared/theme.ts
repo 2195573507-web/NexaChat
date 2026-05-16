@@ -20,6 +20,7 @@ export const THEME_TOKEN_CATEGORIES = {
     '--color-success',
     '--color-warning',
     '--color-error',
+    '--color-danger-soft',
     '--color-on-primary',
     '--color-focus-ring',
     '--color-primary-soft',
@@ -33,8 +34,9 @@ export const THEME_TOKEN_CATEGORIES = {
   ],
   radius: ['--radius-sm', '--radius-md', '--radius-pill'],
   spacing: ['--space-1', '--space-2', '--space-3', '--space-4', '--space-5'],
+  shadow: ['--shadow-focus', '--shadow-panel'],
   layout: ['--sidebar-width', '--topbar-min-height'],
-  typography: ['--font-ui', '--font-mono']
+  typography: ['--font-ui', '--font-mono', '--font-size-xs', '--font-size-sm', '--font-size-md', '--font-size-lg', '--font-size-xl']
 } as const;
 
 export const THEME_TOKEN_NAMES = Object.values(THEME_TOKEN_CATEGORIES).flat();

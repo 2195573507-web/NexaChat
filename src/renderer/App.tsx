@@ -8,7 +8,7 @@ import { getAppApi } from './api';
 import { I18nProvider, translateModule, translateTab, useI18n } from './i18n';
 import { modulePageRegistry } from './modules/modulePageRegistry';
 import type { OpenModuleTarget } from './modules/shared';
-import { copyText, getDefaultModel } from './modules/shared';
+import { copyText, getDefaultModel, statusLabel } from './modules/shared';
 import './styles.css';
 
 type ActionNotice = {
@@ -211,7 +211,7 @@ function RightRail({
         <h2>{t('app.recent.title')}</h2>
         {latestRequest ? (
           <button type="button" className="rail-link" onClick={() => onOpenModule({ moduleId: 'gateway', tabId: 'logs' })}>
-            {latestRequest.status} · {latestRequest.endpoint}
+            {t('common.valueSeparator', { left: statusLabel(latestRequest.status, t), right: latestRequest.endpoint })}
           </button>
         ) : (
           <p>{t('app.recent.empty')}</p>
@@ -249,7 +249,7 @@ function getRailContext(moduleId: ModuleId, tab: NavTab, snapshot: AppSnapshot, 
     return {
       title: t('app.rail.gateway.title'),
       items: [
-        { label: t('app.rail.running'), value: snapshot.dashboard.gatewayStatus.running ? 'on' : 'off' },
+        { label: t('app.rail.running'), value: snapshot.dashboard.gatewayStatus.running ? t('shell.gateway.running') : t('shell.gateway.stopped') },
         { label: t('app.rail.port'), value: snapshot.dashboard.gatewayStatus.port },
         { label: t('app.rail.keys'), value: snapshot.gatewayKeys.length },
         { label: t('app.rail.logs'), value: snapshot.gatewayLogs.length },

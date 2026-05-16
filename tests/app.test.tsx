@@ -6,6 +6,7 @@ import { modulePageRegistry } from '../src/renderer/modules/modulePageRegistry';
 import { IPC_CHANNELS, IPC_CHANNEL_LIST, assertIpcPayload, isIpcChannel } from '../src/shared/ipc';
 import { translate } from '../src/shared/i18n';
 import { navModules, resolveNavigation, routeAliasRegistry } from '../src/shared/navigation';
+import { DEFAULT_MODEL_FORM, DEFAULT_PROVIDER_FORM, PROVIDER_CATALOG } from '../src/shared/providerCatalog';
 import type { NavModule, NavTab } from '../src/shared/types';
 
 beforeEach(() => {
@@ -135,7 +136,7 @@ describe('IPC authority', () => {
 });
 
 describe('navigation authority', () => {
-  it('removes milestone-bound legacy aliases while preserving root fallback', () => {
+  it('keeps only the root alias and normalizes unknown paths to module defaults', () => {
     expect(routeAliasRegistry).toEqual([
       expect.objectContaining({
         from: '/',
@@ -153,5 +154,35 @@ describe('navigation authority', () => {
     const routes = navModules.flatMap((module) => module.tabs.map((tab) => tab.route));
     expect(new Set(routes).size).toBe(routes.length);
     expect(Object.keys(modulePageRegistry).sort()).toEqual(navModules.map((module) => module.id).sort());
+  });
+
+  it('keeps navigation state and provider defaults centralized without fake configured values', () => {
+    expect(navModules).toHaveLength(8);
+    for (const module of navModules) {
+      expect(module.uiState).toBeTruthy();
+      for (const tab of module.tabs) {
+        expect(tab.uiState).toBeTruthy();
+        expect(tab.route).toBe(`/${module.id}/${tab.id}`);
+      }
+    }
+
+    expect(PROVIDER_CATALOG.map((entry) => entry.type)).toEqual([
+      'openai-compatible',
+      'openai',
+      'anthropic',
+      'gemini',
+      'deepseek',
+      'qwen',
+      'ollama',
+      'lm-studio',
+      'custom',
+    ]);
+    expect(DEFAULT_PROVIDER_FORM).toEqual({
+      type: 'openai-compatible',
+      name: '',
+      baseUrl: '',
+      apiKey: '',
+    });
+    expect(DEFAULT_MODEL_FORM).toEqual({ name: '' });
   });
 });

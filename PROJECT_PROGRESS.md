@@ -1,5 +1,117 @@
 # NexaChat Project Progress
 
+## 2026-05-16 UI Full Redesign Implementation Closure
+
+This round executed `docs/build-plans/00-modular-refactor-master-plan/ui-full-redesign-plan.md` as a source-code UI rebuild and closeout pass. The real repository root was confirmed with `git rev-parse --show-toplevel`: `D:/NexaChat`. All files and generated verification artifacts stayed under the repository root except the intentional Windows desktop shortcut update at `C:\Users\至亲\Desktop\NexaChat.lnk`.
+
+Goal:
+
+- Rebuild the NexaChat shell and modular UI into a compact, low-noise local AI conversation hub.
+- Keep one authoritative navigation / route registry.
+- Remove misleading old UI defaults, fake capability cues, repeated route surfaces, and dangerous prefilled actions.
+- Preserve main process, IPC, Store, SQLite schema, Provider/Gateway/Knowledge/Agent execution logic, and existing data contracts unless a UI contract required read-only use.
+
+Skill usage:
+
+- `using-superpowers` was read and applied before continuing implementation.
+- `using-superpower` singular path was checked earlier in this goal and was not present.
+- `impeccable` was read and applied as the product-UI design and verification guardrail. Its context loader was run for this repo and reported no `PRODUCT.md` / `DESIGN.md`, so the implementation used the `product` register principles directly: restrained desktop-tool UI, predictable navigation, centralized tokens, clear empty/error/disabled states, no decorative glass, and no repeated card-grid gimmicks.
+
+Parallel execution lanes:
+
+- Lane A: AppShell, sidebar module hierarchy, single route authority, old content-area secondary navigation cleanup, and route smoke assertions.
+- Lane B: design tokens, reusable base components, status badges, form fields, danger confirmation, empty/error/loading states, and module page surface cleanup.
+- Lane C: module capability states, centralized Provider/UI copy defaults, anti-hallucination checks, full verification matrix, package/desktop shortcut validation, docs, and Git closeout.
+
+UI architecture changes:
+
+- `src/shared/navigation.ts` remains the single authoritative module/tab/route registry for 8 first-level modules and their canonical `/<module>/<tab>` pages.
+- `src/renderer/App.tsx` continues to resolve route state through the shared navigation registry and dispatches module pages through `src/renderer/modules/modulePageRegistry.tsx`.
+- `src/renderer/AppShell.tsx` now presents a compact desktop shell with one expandable sidebar navigation surface, route-aware child selection, focused topbar context, and only one global high-frequency action.
+- `src/renderer/components/ModulePageFrame.tsx` now renders page boundary, module name, active tab title, feature boundary copy, and status badges. It no longer renders a second content-area `.module-tabs` / `.module-subnav-panel` navigation strip.
+- `src/renderer/components/ui.tsx` centralizes reusable UI primitives: `PageSection`, `Card`, `MetricCard`, `StatusBadge`, `CapabilityBadge`, `LoadingState`, `ErrorState`, `Toolbar`, `DataPanel`, `DetailPanel`, `SettingsRow`, `FormField`, and `ConfirmDangerZone`.
+- `src/shared/uiStatus.ts`, `src/shared/uiCopy.ts`, and `src/shared/providerCatalog.ts` centralize UI status vocabulary, non-business UI literals/defaults, Gateway doc placeholders, disabled MCP example endpoint handling, and Provider catalog definitions.
+- `src/shared/theme.ts` and `src/renderer/styles.css` expand the design-token authority for spacing-adjacent surfaces, radius, borders, shadows, focus, font sizes, semantic tones, danger, warning, success, info, disabled, and muted states.
+
+8 first-level modules and second-level pages:
+
+- Workspace: `/workspace/overview`, `/workspace/activity`, `/workspace/health`.
+- Chat: `/chat/conversations`, `/chat/playground`, `/chat/context`.
+- Models: `/models/providers`, `/models/catalog`, `/models/router`.
+- Knowledge: `/knowledge/files`, `/knowledge/chunks`, `/knowledge/retrieval`.
+- Tools and Agent: `/tools/mcp`, `/tools/agents`, `/tools/runs`.
+- Local Gateway: `/gateway/overview`, `/gateway/keys`, `/gateway/logs`, `/gateway/usage`, `/gateway/docs`.
+- Data Config: `/data/import`, `/data/backup`, `/data/restore`, `/data/rollback`, `/data/diagnostics`, `/data/cleanup`.
+- Settings and Security: `/settings/preferences`, `/settings/security`, `/settings/audit`, `/settings/feedback`, `/settings/evals`, `/settings/observability`, `/settings/about`.
+
+Old or misleading UI links cleaned:
+
+- Removed the duplicate content-area secondary navigation strip from `ModulePageFrame`; sidebar child navigation is the only second-level entry surface.
+- Removed the topbar Provider/Model/Logs shortcut cluster so the topbar does not become a second navigation system.
+- Reworded route fallback tests so unknown-path normalization is not presented as an endorsed legacy entry path.
+- Removed fake model/provider form defaults such as `OpenAI-compatible Provider`, `https://api.openai.com/v1`, and `gpt-compatible-model`.
+- Removed fake knowledge import defaults such as `manual-note.md`, sample note content, and sample retrieval query.
+- Disabled the MCP register action until a real endpoint is supplied, instead of executing a hardcoded `http://127.0.0.1:9000/mcp` path.
+- Replaced Gateway docs placeholders with centralized docs copy and the real default model when available, without inventing a callable model.
+- Gateway docs examples now read endpoint paths from `GATEWAY_ENDPOINT` instead of duplicating endpoint strings in the renderer.
+- Removed dangerous prefilled backup, restore, and rollback confirmation values.
+- Added two-click confirmation for Gateway rotate/revoke and Knowledge delete.
+- Kept `/ -> /workspace/overview` as the only route alias; no old route chain was reintroduced.
+
+Business logic kept unchanged:
+
+- No main-process business refactor.
+- No IPC contract rewrite.
+- No Store behavior rewrite.
+- No SQLite schema rewrite.
+- No Provider/Gateway/Knowledge/Agent execution-core rewrite.
+- No production use of browser mock data was added.
+
+Verification:
+
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test`: passed, 19 files / 58 tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run test:ui-smoke`: passed, 16 Playwright tests.
+- `npm.cmd run test:electron-smoke`: passed, Electron shell rendered.
+- `npm.cmd run scan:quality`: passed.
+- `npm.cmd run package:release`: passed, generated latest `release/win-unpacked` and installer script.
+- `npm.cmd run test:package-smoke`: passed.
+- `npm.cmd run test:installer-smoke`: passed.
+- `npm.cmd run shortcut:package`: passed, desktop shortcut updated to packaged target.
+- `npm.cmd run test:shortcut-readback:packaged`: passed.
+- `npm.cmd run test:desktop-entry`: passed.
+- `git diff --check`: passed with LF/CRLF conversion warnings only.
+- Follow-up audit fixes: right-rail request status now uses shared status formatting and `common.valueSeparator`; Gateway running state uses i18n labels instead of `on/off`; 1040-width UI smoke now explicitly waits for the shell before measuring overflow.
+
+Desktop shortcut result:
+
+- `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\release\win-unpacked\NexaChat.exe`.
+- Arguments are empty.
+- Working directory is `D:\NexaChat\release\win-unpacked`.
+- IconLocation resolves to `D:\NexaChat\assets\app-icon.ico,0`.
+- The shortcut was verified by COM readback through `npm.cmd run test:shortcut-readback:packaged` and again through `npm.cmd run test:desktop-entry`.
+
+Unrelated dirty files preserved:
+
+- `findings.md`
+- `progress.md`
+- `src/main/database/connection.ts`
+- `tests/database-migration.test.ts`
+
+These files were present before the UI rebuild work and were not staged for this UI commit. They appear to belong to a separate packaged startup migration hotfix / database migration thread.
+
+Known remaining risks:
+
+- Module page implementations still live in the existing per-module page files with tab-specific branches; the UI boundary is route-level and test-covered, but further physical file splitting can reduce file size later.
+- Some row-level runtime status tone decisions still live in module renderers. They use shared `statusLabel()` and `StateBadge`, but a later low-risk refactor can make `uiStatus` the single tone authority for every domain status.
+- `src/shared/i18n.ts` still contains older mojibake text from prior work; this round did not rewrite the full dictionary to avoid broad unrelated churn.
+- Full upstream provider forwarding, production streaming cancellation, full RAG/OCR/vector retrieval, real MCP execution, workflow canvas, and sandboxed Agent execution remain planned/reserved rather than represented as complete.
+
+Next suggested step:
+
+- Continue with a focused physical page-splitting round for large module pages, keeping the same `src/shared/navigation.ts` authority and current smoke coverage.
+
 ## 2026-05-16 UI Full Redesign Phase 0 Plan
 
 This round completed planning and research only for the NexaChat full UI redesign. No UI source code, routing code, IPC code, Store code, database code, business logic, or test code was modified in this round.

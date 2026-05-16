@@ -1,17 +1,20 @@
 import { useMemo, useState } from 'react';
 import { FilePlus2, RefreshCw, RotateCcw, Search, Trash2 } from 'lucide-react';
 import { KNOWLEDGE_RUNTIME_POLICY } from '../../shared/knowledgeRuntime';
-import type { KnowledgeRetrievalResult } from '../../shared/types';
+import { FORM_DEFAULTS } from '../../shared/uiCopy';
+import type { KnowledgeFile, KnowledgeRetrievalResult } from '../../shared/types';
+import { FormField } from '../components/ui';
 import { useI18n } from '../i18n';
 import type { TabPageProps } from './shared';
 import { DataTable, StateBadge, TabPanel, statusLabel } from './shared';
 
 export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPageProps) {
   const { t } = useI18n();
-  const [importName, setImportName] = useState('manual-note.md');
-  const [importContent, setImportContent] = useState(t('knowledge.import.sampleContent'));
-  const [query, setQuery] = useState(t('knowledge.retrieval.sampleQuery'));
+  const [importName, setImportName] = useState<string>(FORM_DEFAULTS.knowledgeImportName);
+  const [importContent, setImportContent] = useState<string>(FORM_DEFAULTS.knowledgeImportContent);
+  const [query, setQuery] = useState<string>(FORM_DEFAULTS.knowledgeRetrievalQuery);
   const [retrieval, setRetrieval] = useState<KnowledgeRetrievalResult | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const indexedFiles = snapshot.knowledgeFiles.filter((file) => file.indexStatus === 'indexed' && !file.deletedAt);
   const activeChunks = snapshot.knowledgeChunks.filter((chunk) => chunk.status === 'indexed');
   const latestRetrieval = retrieval ?? {
@@ -79,10 +82,9 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
             <StateBadge label={t('knowledge.strategy.lexical')} tone="warning" />
           </div>
           <div className="form-grid single-column">
-            <label>
-              {t('knowledge.retrieval.query')}
+            <FormField label={t('knowledge.retrieval.query')} help={t('knowledge.retrieval.help')}>
               <textarea className="manifest-input" value={query} onChange={(event) => setQuery(event.target.value)} />
-            </label>
+            </FormField>
           </div>
           <div className="button-row">
             <button
@@ -125,20 +127,18 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
           <StateBadge label={t('knowledge.index.healthValue', totals)} tone={totals.files > 0 ? 'success' : 'warning'} />
         </div>
         <div className="form-grid single-column">
-          <label>
-            {t('knowledge.import.name')}
-            <input value={importName} onChange={(event) => setImportName(event.target.value)} />
-          </label>
-          <label>
-            {t('knowledge.import.content')}
+          <FormField label={t('knowledge.import.name')} help={t('knowledge.import.name.help')}>
+            <input value={importName} onChange={(event) => setImportName(event.target.value)} placeholder={t('knowledge.import.name.placeholder')} />
+          </FormField>
+          <FormField label={t('knowledge.import.content')} help={t('knowledge.import.content.help')}>
             <textarea className="manifest-input knowledge-import-input" value={importContent} onChange={(event) => setImportContent(event.target.value)} />
-          </label>
+          </FormField>
         </div>
         <div className="button-row">
           <button
             type="button"
             className="primary-button"
-            disabled={!importContent.trim()}
+            disabled={!importName.trim() || !importContent.trim()}
             onClick={() => onAction(t('knowledge.toast.created'), () => api.createKnowledgeFile({
               name: importName,
               type: importName.toLowerCase().endsWith('.md') ? 'text/markdown' : 'text/plain',
@@ -168,7 +168,7 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
                 <button type="button" onClick={() => onAction(t('knowledge.toast.rebuilt'), () => api.rebuildKnowledgeFile({ fileId: file.id }))}>
                   <RefreshCw size={16} /> {t('knowledge.rebuild')}
                 </button>
-                <button type="button" onClick={() => onAction(t('knowledge.toast.deleted'), () => api.deleteKnowledgeFile({ fileId: file.id }))}>
+                <button type="button" className={pendingDeleteId === file.id ? 'danger-button' : undefined} onClick={() => handleDeleteFile(file)}>
                   <Trash2 size={16} /> {t('knowledge.delete')}
                 </button>
               </div>
@@ -178,4 +178,13 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
       </section>
     </TabPanel>
   );
+
+  function handleDeleteFile(file: KnowledgeFile) {
+    if (pendingDeleteId !== file.id) {
+      setPendingDeleteId(file.id);
+      return;
+    }
+    setPendingDeleteId(null);
+    onAction(t('knowledge.toast.deleted'), () => api.deleteKnowledgeFile({ fileId: file.id }));
+  }
 }

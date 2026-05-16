@@ -1,11 +1,13 @@
 import type { ReactNode } from 'react';
 import type { AppApi } from '../../shared/api';
+import { PROVIDER_CATALOG, type ProviderCatalogEntry } from '../../shared/providerCatalog';
 import type { AppSnapshot, ContextStrategy, ModuleId, NavTab, ProviderType } from '../../shared/types';
 import { EmptyState } from '../components/EmptyState';
 import { StatusPill } from '../components/StatusPill';
+import { Card, MetricCard, StatusBadge } from '../components/ui';
 import { useI18n, type Translate } from '../i18n';
 
-export const providerTypes: ProviderType[] = ['openai-compatible', 'openai', 'anthropic', 'gemini', 'deepseek', 'qwen', 'ollama', 'lm-studio', 'custom'];
+export const providerTypes: ProviderType[] = PROVIDER_CATALOG.map((entry) => entry.type);
 export const contextStrategies: Array<{ value: ContextStrategy; labelKey: Parameters<Translate>[0] }> = [
   { value: 'recent_n', labelKey: 'shared.context.recentN' },
   { value: 'summary_recent_n', labelKey: 'shared.context.summaryRecentN' },
@@ -91,17 +93,11 @@ export function PlannedTabPlaceholder({
 }
 
 export function Metric({ title, value, detail }: { title: string; value: string | number; detail: string }) {
-  return (
-    <article className="metric">
-      <span>{title}</span>
-      <strong>{value}</strong>
-      <p>{detail}</p>
-    </article>
-  );
+  return <MetricCard title={title} value={value} detail={detail} />;
 }
 
 export function StateBadge({ label, tone }: { label: string; tone: 'success' | 'warning' | 'error' | 'muted' }) {
-  return <span className={`state-badge state-${tone}`}>{label}</span>;
+  return <StatusBadge label={label} tone={tone} />;
 }
 
 export function stageLabelForUi(stage: NavTab['stage'], t: Translate): string {
@@ -156,15 +152,12 @@ export function statusLabel(status: string, t: Translate): string {
 }
 
 export function providerTypeLabel(type: ProviderType, t: Translate): string {
-  if (type === 'openai-compatible') return t('provider.type.openaiCompatible');
-  if (type === 'openai') return t('provider.type.openai');
-  if (type === 'anthropic') return t('provider.type.anthropic');
-  if (type === 'gemini') return t('provider.type.gemini');
-  if (type === 'deepseek') return t('provider.type.deepseek');
-  if (type === 'qwen') return t('provider.type.qwen');
-  if (type === 'ollama') return t('provider.type.ollama');
-  if (type === 'lm-studio') return t('provider.type.lmStudio');
-  return t('provider.type.custom');
+  const entry = getProviderCatalogEntry(type);
+  return t(entry.labelKey);
+}
+
+export function getProviderCatalogEntry(type: ProviderType): ProviderCatalogEntry {
+  return PROVIDER_CATALOG.find((entry) => entry.type === type) ?? PROVIDER_CATALOG[0];
 }
 
 export function modelCapabilityLabels(model: AppSnapshot['models'][number], t: Translate): string {
@@ -251,7 +244,7 @@ export function DataTable({ columns, rows }: { columns: string[]; rows: Array<Ar
     );
   }
   return (
-    <div className="table-wrap">
+    <div className="table-wrap data-panel">
       <table>
         <thead>
           <tr>
@@ -271,5 +264,21 @@ export function DataTable({ columns, rows }: { columns: string[]; rows: Array<Ar
         </tbody>
       </table>
     </div>
+  );
+}
+
+export function DetailPanel({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <Card title={title} description={description} className="detail-panel">
+      {children}
+    </Card>
   );
 }

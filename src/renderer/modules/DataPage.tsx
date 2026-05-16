@@ -1,15 +1,17 @@
 import { useState } from 'react';
+import { DATA_CONFIRMATION_PHRASES } from '../../shared/dataRuntime';
+import { FORM_DEFAULTS } from '../../shared/uiCopy';
+import { FormField } from '../components/ui';
 import { useI18n } from '../i18n';
 import type { TabPageProps } from './shared';
 import { DataTable, PlannedTabPlaceholder, StateBadge, TabPanel } from './shared';
-import { DATA_CONFIRMATION_PHRASES } from '../../shared/dataRuntime';
 
 export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
   const { t } = useI18n();
-  const [manifestText, setManifestText] = useState(t('data.import.sampleManifest'));
-  const [backupPassphrase, setBackupPassphrase] = useState('nexachat-backup');
-  const [restorePassphrase, setRestorePassphrase] = useState('nexachat-backup');
-  const [rollbackPhrase, setRollbackPhrase] = useState<string>(DATA_CONFIRMATION_PHRASES.rollback);
+  const [manifestText, setManifestText] = useState<string>(FORM_DEFAULTS.dataImportManifest);
+  const [backupPassphrase, setBackupPassphrase] = useState<string>(FORM_DEFAULTS.backupPassphrase);
+  const [restorePassphrase, setRestorePassphrase] = useState<string>(FORM_DEFAULTS.restorePassphrase);
+  const [rollbackPhrase, setRollbackPhrase] = useState<string>(FORM_DEFAULTS.rollbackPhrase);
   const latestReadyImport = snapshot.importExportResults.find((item) => item.action === 'import' && item.status === 'ready');
   const latestBackup = snapshot.dataBackups[0];
   const latestRollback = snapshot.rollbackRecords.find((record) => record.state === 'available');
@@ -21,11 +23,13 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
           <div className="panel">
             <h2>{t('data.backup.title')}</h2>
             <p>{t('data.backup.note')}</p>
-            <input
-              aria-label={t('data.backup.passphrase')}
-              value={backupPassphrase}
-              onChange={(event) => setBackupPassphrase(event.target.value)}
-            />
+            <FormField label={t('data.backup.passphrase')} help={t('data.backup.passphrase.help')}>
+              <input
+                aria-label={t('data.backup.passphrase')}
+                value={backupPassphrase}
+                onChange={(event) => setBackupPassphrase(event.target.value)}
+              />
+            </FormField>
             <div className="button-row">
               <button type="button" onClick={() => onAction(t('data.toast.snapshotCreated'), () => api.createSnapshot())}>
                 {t('data.snapshots.create')}
@@ -33,7 +37,7 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
               <button type="button" onClick={() => onAction(t('data.toast.exportCreated'), () => api.exportDataPackage({ profile: 'metadata-redacted' }))}>
                 {t('data.export.create')}
               </button>
-              <button type="button" onClick={() => onAction(t('data.toast.backupCreated'), () => api.createEncryptedBackup({ passphrase: backupPassphrase, profile: 'encrypted-full' }))}>
+              <button type="button" disabled={backupPassphrase.trim().length < 8} title={backupPassphrase.trim().length < 8 ? t('data.backup.passphrase.required') : undefined} onClick={() => onAction(t('data.toast.backupCreated'), () => api.createEncryptedBackup({ passphrase: backupPassphrase, profile: 'encrypted-full' }))}>
                 {t('data.backup.create')}
               </button>
             </div>
@@ -65,15 +69,18 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
           <div className="panel">
             <h2>{t('data.restore.title')}</h2>
             <p>{t('data.restore.note')}</p>
-            <input
-              aria-label={t('data.restore.passphrase')}
-              value={restorePassphrase}
-              onChange={(event) => setRestorePassphrase(event.target.value)}
-            />
+            <FormField label={t('data.restore.passphrase')} help={t('data.restore.passphrase.help')}>
+              <input
+                aria-label={t('data.restore.passphrase')}
+                value={restorePassphrase}
+                onChange={(event) => setRestorePassphrase(event.target.value)}
+              />
+            </FormField>
             <button
               type="button"
               className="primary-button"
-              disabled={!latestBackup}
+              disabled={!latestBackup || restorePassphrase.trim().length < 8}
+              title={!latestBackup ? t('data.restore.noBackup') : restorePassphrase.trim().length < 8 ? t('data.restore.passphrase.required') : undefined}
               onClick={() => latestBackup && onAction(t('data.toast.restoreCreated'), () => api.createRestorePreflight({ backupId: latestBackup.id, passphrase: restorePassphrase }))}
             >
               {t('data.restore.preflight')}
@@ -107,15 +114,18 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
           <div className="panel">
             <h2>{t('data.rollback.title')}</h2>
             <p>{t('data.rollback.note')}</p>
-            <input
-              aria-label={t('data.rollback.confirmPhrase')}
-              value={rollbackPhrase}
-              onChange={(event) => setRollbackPhrase(event.target.value)}
-            />
+            <FormField label={t('data.rollback.confirmPhrase')} help={t('data.rollback.confirmPhrase.help')}>
+              <input
+                aria-label={t('data.rollback.confirmPhrase')}
+                value={rollbackPhrase}
+                onChange={(event) => setRollbackPhrase(event.target.value)}
+              />
+            </FormField>
             <button
               type="button"
               className="primary-button"
-              disabled={!latestRollback}
+              disabled={!latestRollback || rollbackPhrase !== DATA_CONFIRMATION_PHRASES.rollback}
+              title={!latestRollback ? t('data.rollback.noRecord') : rollbackPhrase !== DATA_CONFIRMATION_PHRASES.rollback ? t('data.rollback.confirmPhrase.required') : undefined}
               onClick={() => latestRollback && onAction(t('data.toast.rollbackApplied'), () => api.applyDataRollback({ rollbackId: latestRollback.id, confirmationPhrase: rollbackPhrase }))}
             >
               {t('data.rollback.apply')}

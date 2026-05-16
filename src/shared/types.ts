@@ -51,6 +51,7 @@ export type {
 } from './observabilityRuntime.js';
 
 export type ModuleStage = 'ready' | 'implemented' | 'planned' | 'reserved' | 'environment-limited';
+export type UiStatusState = 'ready' | 'empty' | 'loading' | 'error' | 'preview' | 'planned' | 'unavailable';
 
 export interface SecurityUser {
   id: string;
@@ -108,6 +109,7 @@ export interface NavTab {
   title?: string;
   stage: ModuleStage;
   status?: ModuleStage;
+  uiState?: UiStatusState;
   route?: string;
   description?: string;
   default?: boolean;
@@ -129,6 +131,7 @@ export interface NavModule {
   defaultRoute?: string;
   stage: ModuleStage;
   status?: ModuleStage;
+  uiState?: UiStatusState;
   tabs: NavTab[];
   children?: NavTab[];
   description?: string;

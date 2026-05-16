@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Copy, KeyRound, Play, RefreshCw, ToggleLeft, ToggleRight, XCircle } from 'lucide-react';
-import { GATEWAY_SCOPES, type GatewayScope } from '../../shared/gatewayRuntime';
+import { GATEWAY_DEFAULT_KEY_POLICY, GATEWAY_ENDPOINT, GATEWAY_SCOPES, type GatewayScope } from '../../shared/gatewayRuntime';
+import { GATEWAY_DOCS } from '../../shared/uiCopy';
+import { FormField } from '../components/ui';
 import { useI18n } from '../i18n';
 import type { TabPageProps } from './shared';
 import { DataTable, StateBadge, TabPanel, copyText, getDefaultModel, statusLabel } from './shared';
@@ -11,9 +13,10 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
   const defaultModel = getDefaultModel(snapshot);
   const [lastCreatedKey, setLastCreatedKey] = useState<string | null>(null);
   const [keyName, setKeyName] = useState(t('gateway.defaultKeyName'));
-  const [quotaLimit, setQuotaLimit] = useState(1000);
-  const [rateLimit, setRateLimit] = useState(60);
-  const [selectedScopes, setSelectedScopes] = useState<GatewayScope[]>([...GATEWAY_SCOPES]);
+  const [quotaLimit, setQuotaLimit] = useState<number>(GATEWAY_DEFAULT_KEY_POLICY.quotaLimit);
+  const [rateLimit, setRateLimit] = useState<number>(GATEWAY_DEFAULT_KEY_POLICY.rateLimitPerMinute);
+  const [selectedScopes, setSelectedScopes] = useState<GatewayScope[]>([...GATEWAY_DEFAULT_KEY_POLICY.scopes]);
+  const [pendingDangerKeyId, setPendingDangerKeyId] = useState<string | null>(null);
 
   if (activeTab.id === 'keys') {
     return (
@@ -22,18 +25,15 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
           <h2>{t('gateway.keys.title')}</h2>
           <p>{t('gateway.keys.note')}</p>
           <div className="gateway-key-policy">
-            <label>
-              {t('gateway.keyName')}
+            <FormField label={t('gateway.keyName')}>
               <input value={keyName} onChange={(event) => setKeyName(event.target.value)} />
-            </label>
-            <label>
-              {t('gateway.quotaLimit')}
+            </FormField>
+            <FormField label={t('gateway.quotaLimit')}>
               <input type="number" min="0" value={quotaLimit} onChange={(event) => setQuotaLimit(Number(event.target.value))} />
-            </label>
-            <label>
-              {t('gateway.rateLimit')}
+            </FormField>
+            <FormField label={t('gateway.rateLimit')}>
               <input type="number" min="0" value={rateLimit} onChange={(event) => setRateLimit(Number(event.target.value))} />
-            </label>
+            </FormField>
           </div>
           <div className="scope-toggle-list" aria-label={t('gateway.scopes.aria')}>
             {GATEWAY_SCOPES.map((scope) => (
@@ -90,13 +90,27 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
                 <button type="button" disabled={Boolean(key.revokedAt)} onClick={() => onAction(key.disabledAt ? t('gateway.toast.enabled') : t('gateway.toast.disabled'), () => api.updateGatewayKey({ gatewayKeyId: key.id, disabled: !key.disabledAt }))}>
                   {key.disabledAt ? <ToggleRight size={16} /> : <ToggleLeft size={16} />} {key.disabledAt ? t('gateway.enableKey') : t('gateway.disableKey')}
                 </button>
-                <button type="button" disabled={Boolean(key.revokedAt)} onClick={() => onAction(t('gateway.toast.rotated'), async () => {
-                  const rotated = await api.rotateGatewayKey({ gatewayKeyId: key.id });
-                  setLastCreatedKey(rotated.key);
-                })}>
+                <button type="button" disabled={Boolean(key.revokedAt)} onClick={() => {
+                  if (pendingDangerKeyId !== `rotate:${key.id}`) {
+                    setPendingDangerKeyId(`rotate:${key.id}`);
+                    return;
+                  }
+                  setPendingDangerKeyId(null);
+                  onAction(t('gateway.toast.rotated'), async () => {
+                    const rotated = await api.rotateGatewayKey({ gatewayKeyId: key.id });
+                    setLastCreatedKey(rotated.key);
+                  });
+                }}>
                   <RefreshCw size={16} /> {t('gateway.rotate')}
                 </button>
-                <button type="button" disabled={Boolean(key.revokedAt)} onClick={() => onAction(t('gateway.toast.revoked'), () => api.revokeGatewayKey(key.id))}>
+                <button type="button" className={pendingDangerKeyId === `revoke:${key.id}` ? 'danger-button' : undefined} disabled={Boolean(key.revokedAt)} onClick={() => {
+                  if (pendingDangerKeyId !== `revoke:${key.id}`) {
+                    setPendingDangerKeyId(`revoke:${key.id}`);
+                    return;
+                  }
+                  setPendingDangerKeyId(null);
+                  onAction(t('gateway.toast.revoked'), () => api.revokeGatewayKey(key.id));
+                }}>
                   <XCircle size={16} /> {t('gateway.revoke')}
                 </button>
               </div>,
@@ -220,13 +234,13 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
           <div className="panel">
             <h2>{t('gateway.docs.example')}</h2>
             <p>{t('gateway.docs.note', { host: status.bindHost, port: status.port })}</p>
-            <pre className="snippet">{`curl http://${status.bindHost}:${status.port}/v1/models \\
-  -H "Authorization: Bearer <one-time-key>"
+            <pre className="snippet">{`curl http://${status.bindHost}:${status.port}${GATEWAY_ENDPOINT.models} \\
+  -H "Authorization: Bearer ${GATEWAY_DOCS.bearerPlaceholder}"
 
-curl http://${status.bindHost}:${status.port}/v1/chat/completions \\
-  -H "Authorization: Bearer <one-time-key>" \\
+curl http://${status.bindHost}:${status.port}${GATEWAY_ENDPOINT.chatCompletions} \\
+  -H "Authorization: Bearer ${GATEWAY_DOCS.bearerPlaceholder}" \\
   -H "Content-Type: application/json" \\
-  -d '{"model":"${defaultModel?.name ?? 'nexachat-model'}","messages":[{"role":"user","content":"hello"}]}'`}</pre>
+  -d '{"model":"${defaultModel?.name ?? GATEWAY_DOCS.sampleModelPlaceholder}","messages":[{"role":"user","content":"${GATEWAY_DOCS.sampleUserMessage}"}]}'`}</pre>
           </div>
           <div className="panel">
             <h2>{t('gateway.docs.security')}</h2>

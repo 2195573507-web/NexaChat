@@ -15,6 +15,7 @@ const uiSourceFiles = [
   'src/renderer/components/EmptyState.tsx',
   'src/renderer/components/ModulePageFrame.tsx',
   'src/renderer/components/StatusPill.tsx',
+  'src/renderer/components/ui.tsx',
   'src/renderer/modules/ChatPage.tsx',
   'src/renderer/modules/DashboardPage.tsx',
   'src/renderer/modules/DataPage.tsx',
@@ -27,6 +28,9 @@ const uiSourceFiles = [
   'src/renderer/mockApi.ts',
   'src/shared/errors.ts',
   'src/shared/navigation.ts',
+  'src/shared/providerCatalog.ts',
+  'src/shared/uiCopy.ts',
+  'src/shared/uiStatus.ts',
   'src/main/services/store.ts',
 ];
 

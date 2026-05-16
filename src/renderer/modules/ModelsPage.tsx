@@ -1,17 +1,19 @@
 import { useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
+import { DEFAULT_MODEL_FORM, DEFAULT_PROVIDER_FORM } from '../../shared/providerCatalog';
 import type { ProviderType } from '../../shared/types';
+import { FormField } from '../components/ui';
 import { useI18n } from '../i18n';
 import type { TabPageProps } from './shared';
 import { DataTable, StateBadge, TabPanel, getDefaultModel, healthTone, modelCapabilityLabels, providerTypeLabel, providerTypes, statusLabel } from './shared';
 
 export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
   const { t } = useI18n();
-  const [providerName, setProviderName] = useState('OpenAI-compatible Provider');
-  const [providerType, setProviderType] = useState<ProviderType>('openai-compatible');
-  const [baseUrl, setBaseUrl] = useState('https://api.openai.com/v1');
-  const [apiKey, setApiKey] = useState('');
-  const [modelName, setModelName] = useState('gpt-compatible-model');
+  const [providerName, setProviderName] = useState(DEFAULT_PROVIDER_FORM.name);
+  const [providerType, setProviderType] = useState<ProviderType>(DEFAULT_PROVIDER_FORM.type);
+  const [baseUrl, setBaseUrl] = useState(DEFAULT_PROVIDER_FORM.baseUrl);
+  const [apiKey, setApiKey] = useState(DEFAULT_PROVIDER_FORM.apiKey);
+  const [modelName, setModelName] = useState(DEFAULT_MODEL_FORM.name);
   const [selectedProviderId, setSelectedProviderId] = useState(snapshot.providers[0]?.id ?? '');
   const defaultModel = getDefaultModel(snapshot);
 
@@ -29,8 +31,7 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
             <h2>{t('models.create.title')}</h2>
             <p>{t('models.create.note')}</p>
             <div className="form-grid">
-              <label>
-                {t('models.columns.provider')}
+              <FormField label={t('models.columns.provider')}>
                 <select value={selectedProviderId} onChange={(event) => setSelectedProviderId(event.target.value)}>
                   {snapshot.providers.map((provider) => (
                     <option key={provider.id} value={provider.id}>
@@ -38,11 +39,10 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
                     </option>
                   ))}
                 </select>
-              </label>
-              <label>
-                {t('models.modelName')}
-                <input value={modelName} onChange={(event) => setModelName(event.target.value)} />
-              </label>
+              </FormField>
+              <FormField label={t('models.modelName')} help={t('models.modelName.help')}>
+                <input value={modelName} onChange={(event) => setModelName(event.target.value)} placeholder={t('models.modelName.placeholder')} />
+              </FormField>
             </div>
             <button
               type="button"
@@ -115,12 +115,10 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
           <h2>{t('models.provider.title')}</h2>
           <p>{t('models.provider.note')}</p>
           <div className="form-grid">
-            <label>
-              {t('models.name')}
-              <input value={providerName} onChange={(event) => setProviderName(event.target.value)} />
-            </label>
-            <label>
-              {t('models.type')}
+            <FormField label={t('models.name')} help={t('models.name.help')}>
+              <input value={providerName} onChange={(event) => setProviderName(event.target.value)} placeholder={t('models.name.placeholder')} />
+            </FormField>
+            <FormField label={t('models.type')}>
               <select value={providerType} onChange={(event) => setProviderType(event.target.value as ProviderType)}>
                 {providerTypes.map((type) => (
                   <option key={type} value={type}>
@@ -128,15 +126,13 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
                   </option>
                 ))}
               </select>
-            </label>
-            <label>
-              {t('models.baseUrl')}
-              <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} />
-            </label>
-            <label>
-              {t('models.apiKey')}
+            </FormField>
+            <FormField label={t('models.baseUrl')} help={t('models.baseUrl.help')}>
+              <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder={t('models.baseUrl.placeholder')} />
+            </FormField>
+            <FormField label={t('models.apiKey')} help={t('models.apiKey.help')}>
               <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" placeholder={t('models.apiKey.placeholder')} />
-            </label>
+            </FormField>
           </div>
           <div className="button-row">
             <button

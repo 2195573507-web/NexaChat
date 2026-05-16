@@ -1,5 +1,6 @@
 ﻿import { translate, type I18nKey } from './i18n.js';
 import type { ModuleId, ModuleStage, NavModule, NavTab } from './types.js';
+import { uiStateFromModuleStage } from './uiStatus.js';
 
 type ChildOptions = {
   default?: boolean;
@@ -35,6 +36,7 @@ function child(moduleId: ModuleId, id: string, options: ChildOptions): NavTab {
     title: translate('zh-CN', labelKey),
     stage: status,
     status,
+    uiState: uiStateFromModuleStage(status),
     description: translate('zh-CN', descriptionKey),
     default: options.default,
     route: getTabRoute(moduleId, id),
@@ -76,6 +78,7 @@ function defineModule(definition: ModuleDefinition): NavModule {
     defaultRoute,
     stage: 'implemented',
     status: 'implemented',
+    uiState: uiStateFromModuleStage('implemented'),
     tabs,
     children: tabs,
   };

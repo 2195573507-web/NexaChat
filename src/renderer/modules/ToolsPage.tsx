@@ -1,5 +1,6 @@
 import { Play, ShieldCheck } from 'lucide-react';
 import { EXECUTION_TOOL_IDS } from '../../shared/executionRuntime';
+import { MCP_EXAMPLE_ENDPOINT } from '../../shared/uiCopy';
 import { useI18n } from '../i18n';
 import type { TabPageProps } from './shared';
 import { DataTable, StateBadge, TabPanel, healthTone, statusLabel } from './shared';
@@ -111,7 +112,7 @@ export function ToolsPage({ activeTab, snapshot, api, onAction }: TabPageProps) 
       <section className="panel">
         <h2>{t('tools.mcp.title')}</h2>
         <p>{t('tools.mcp.note')}</p>
-        <button type="button" onClick={() => onAction(t('tools.toast.mcpRegistered'), () => api.createMcpServer(t('tools.mcp.seedName'), 'http', 'http://127.0.0.1:9000/mcp'))}>
+        <button type="button" disabled={!MCP_EXAMPLE_ENDPOINT} title={t('tools.mcp.register.disabled')} onClick={() => onAction(t('tools.toast.mcpRegistered'), () => api.createMcpServer(t('tools.mcp.seedName'), 'http', MCP_EXAMPLE_ENDPOINT))}>
           {t('tools.mcp.register')}
         </button>
         <DataTable

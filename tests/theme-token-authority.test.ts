@@ -67,10 +67,19 @@ describe('theme token authority', () => {
     expect(violations).toEqual([]);
   });
 
-  it('keeps raw radii inside token definitions only', () => {
+  it('keeps raw component radii inside token definitions only', () => {
     const violations = styleLines()
       .map((line, index) => ({ line, lineNumber: index + 1 }))
       .filter(({ line }) => /border-radius:\s*(6px|8px|999px)\b/.test(line))
+      .filter(({ line }) => !tokenDefinitionLine(line));
+
+    expect(violations).toEqual([]);
+  });
+
+  it('keeps direct font-size properties inside tokens only', () => {
+    const violations = styleLines()
+      .map((line, index) => ({ line, lineNumber: index + 1 }))
+      .filter(({ line }) => /font-size:\s*\d+px/.test(line))
       .filter(({ line }) => !tokenDefinitionLine(line));
 
     expect(violations).toEqual([]);

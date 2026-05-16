@@ -5,7 +5,6 @@ import {
   Boxes,
   BrainCircuit,
   Braces,
-  Camera,
   ChevronDown,
   ChevronRight,
   Database,
@@ -21,7 +20,6 @@ import {
   Route,
   RotateCcw,
   ScrollText,
-  Search,
   SearchCheck,
   Send,
   Server,
@@ -40,6 +38,7 @@ import { getThemeClass, resolveThemeMode } from '../shared/theme';
 import type { AppSnapshot, ModuleId, NavModule, NavTab } from '../shared/types';
 import { ModulePageFrame } from './components/ModulePageFrame';
 import { stageLabel } from './components/StatusPill';
+import { StatusBadge } from './components/ui';
 import { translateModule, useI18n } from './i18n';
 
 const SIDEBAR_EXPANDED_KEY = 'nexachat.sidebar.expandedModuleIds';
@@ -76,7 +75,6 @@ const childIcons: Record<string, LucideIcon> = {
   'scroll-text': ScrollText,
   brackets: Braces,
   'file-check': FileCheck,
-  camera: Camera,
   archive: Archive,
   'rotate-ccw': RotateCcw,
   'triangle-alert': TriangleAlert,
@@ -151,6 +149,8 @@ export function AppShell({
   const [systemPrefersDark, setSystemPrefersDark] = useState(getInitialSystemPrefersDark);
   const [expandedModuleIds, setExpandedModuleIds] = useState<ModuleId[]>(() => getStoredExpandedModules(activeModuleId));
   const translatedModules = navModules.map((module) => translateModule(module, t));
+  const translatedActiveModule = translateModule(activeModule, t);
+  const translatedActiveTab = translatedActiveModule.tabs.find((tab) => tab.id === activeTab.id) ?? activeTab;
   const resolvedTheme = resolveThemeMode(snapshot.uiPreferences.theme, systemPrefersDark);
   const themeClass = getThemeClass(snapshot.uiPreferences.theme, systemPrefersDark);
 
@@ -263,30 +263,23 @@ export function AppShell({
       <div className="shell-main">
         <header className="topbar">
           <div className="topbar-context">
-            <strong>{snapshot.dashboard.workspace.name}</strong>
+            <strong>{translatedActiveModule.label}</strong>
+            <span>{translatedActiveTab.label}</span>
             <span>{t('shell.defaultModel', { model: getDefaultModelLabel(snapshot, t('app.rail.unconfigured')) })}</span>
-            <span className={snapshot.dashboard.gatewayStatus.running ? 'gateway-running' : 'gateway-stopped'}>
-              {t('shell.gateway', { state: snapshot.dashboard.gatewayStatus.running ? t('shell.gateway.running') : t('shell.gateway.stopped') })}
-            </span>
+            <StatusBadge
+              label={t('shell.gateway', { state: snapshot.dashboard.gatewayStatus.running ? t('shell.gateway.running') : t('shell.gateway.stopped') })}
+              tone={snapshot.dashboard.gatewayStatus.running ? 'success' : 'muted'}
+            />
           </div>
 
           <div className="topbar-actions">
-            <button type="button" className="icon-text-button topbar-search" onClick={() => onTabChange('logs', 'gateway')}>
-              <Search size={16} /> {t('shell.viewLogs')}
-            </button>
             <button type="button" className="primary-button" onClick={() => onTabChange('playground', 'chat')}>
               {t('shell.openChat')}
-            </button>
-            <button type="button" onClick={() => onTabChange('providers', 'models')}>
-              {t('shell.provider')}
-            </button>
-            <button type="button" onClick={() => onTabChange('catalog', 'models')}>
-              {t('shell.model')}
             </button>
           </div>
         </header>
 
-        <ModulePageFrame activeModule={activeModule} activeTab={activeTab} onTabChange={(tabId) => onTabChange(tabId, activeModuleId)}>
+        <ModulePageFrame activeModule={translatedActiveModule} activeTab={translatedActiveTab}>
           <div className="content-grid">
             <main className="content-area">{children}</main>
             {rightRail ? <aside className="right-rail">{rightRail}</aside> : null}

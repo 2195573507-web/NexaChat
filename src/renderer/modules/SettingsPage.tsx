@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import type { ObservabilityFeedbackLabel, UiPreferences } from '../../shared/types';
+import { FormField, SettingsRow } from '../components/ui';
 import { useI18n } from '../i18n';
 import type { TabPageProps } from './shared';
 import { DataTable, Metric, StateBadge, TabPanel, statusLabel } from './shared';
@@ -147,8 +148,7 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
             <h2>{t('observability.feedback.title')}</h2>
             <p>{t('observability.feedback.note')}</p>
             <div className="form-grid">
-              <label>
-                {t('observability.feedback.label')}
+              <FormField label={t('observability.feedback.label')}>
                 <select value={feedbackLabel} onChange={(event) => setFeedbackLabel(event.target.value as ObservabilityFeedbackLabel)}>
                   <option value="thumbs_up">{t('observability.feedback.thumbs_up')}</option>
                   <option value="thumbs_down">{t('observability.feedback.thumbs_down')}</option>
@@ -156,11 +156,10 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
                   <option value="unsafe">{t('observability.feedback.unsafe')}</option>
                   <option value="other">{t('observability.feedback.other')}</option>
                 </select>
-              </label>
-              <label>
-                {t('observability.feedback.notes')}
+              </FormField>
+              <FormField label={t('observability.feedback.notes')}>
                 <textarea value={feedbackNotes} onChange={(event) => setFeedbackNotes(event.target.value)} />
-              </label>
+              </FormField>
             </div>
             <button
               type="button"
@@ -240,22 +239,20 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
             <h2>{t('observability.privacy.title')}</h2>
             <p>{t('observability.privacy.note')}</p>
             <div className="form-grid">
-              <label>
-                {t('observability.privacy.retention')}
+              <FormField label={t('observability.privacy.retention')}>
                 <select value={privacy.retentionPolicy} onChange={(event) => setPrivacy({ ...privacy, retentionPolicy: event.target.value as typeof privacy.retentionPolicy })}>
                   <option value="seven_days">{t('observability.privacy.retention.seven_days')}</option>
                   <option value="thirty_days">{t('observability.privacy.retention.thirty_days')}</option>
                   <option value="ninety_days">{t('observability.privacy.retention.ninety_days')}</option>
                   <option value="forever">{t('observability.privacy.retention.forever')}</option>
                 </select>
-              </label>
-              <label>
-                {t('observability.privacy.exportScope')}
+              </FormField>
+              <FormField label={t('observability.privacy.exportScope')}>
                 <select value={privacy.exportScope} onChange={(event) => setPrivacy({ ...privacy, exportScope: event.target.value as typeof privacy.exportScope })}>
                   <option value="summary">{t('observability.privacy.exportScope.summary')}</option>
                   <option value="redacted_details">{t('observability.privacy.exportScope.redacted_details')}</option>
                 </select>
-              </label>
+              </FormField>
               <label className="checkbox-row">
                 <input type="checkbox" checked={privacy.includePromptSnippets} onChange={(event) => setPrivacy({ ...privacy, includePromptSnippets: event.target.checked })} />
                 {t('observability.privacy.includePromptSnippets')}
@@ -293,42 +290,27 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
       <section className="panel">
         <h2>{t('settings.preferences.title')}</h2>
         <div className="form-grid">
-          <label>
-            {t('settings.preferences.theme')}
-            <select value={prefs.theme} onChange={(event) => setPrefs({ ...prefs, theme: event.target.value as UiPreferences['theme'] })}>
-              <option value="system">{t('settings.preferences.theme.system')}</option>
-              <option value="light">{t('settings.preferences.theme.light')}</option>
-              <option value="dark">{t('settings.preferences.theme.dark')}</option>
-            </select>
-          </label>
-          <label>
-            {t('settings.preferences.density')}
-            <select value={prefs.density} onChange={(event) => setPrefs({ ...prefs, density: event.target.value as UiPreferences['density'] })}>
-              <option value="comfortable">{t('settings.preferences.density.comfortable')}</option>
-              <option value="compact">{t('settings.preferences.density.compact')}</option>
-            </select>
-          </label>
-          <label>
-            {t('settings.preferences.font')}
-            <select value={prefs.fontMode} onChange={(event) => setPrefs({ ...prefs, fontMode: event.target.value as UiPreferences['fontMode'] })}>
-              <option value="system">{t('settings.preferences.font.system')}</option>
-              <option value="kaiti">{t('settings.preferences.font.kaiti')}</option>
-            </select>
-          </label>
-          <label>
-            {t('settings.preferences.language')}
-            <select value={prefs.language} onChange={(event) => setPrefs({ ...prefs, language: event.target.value as UiPreferences['language'] })}>
-              <option value="zh-CN">{t('settings.preferences.language.zh')}</option>
-              <option value="en-US">{t('settings.preferences.language.en')}</option>
-            </select>
-          </label>
-          <label>
-            {t('settings.preferences.motion')}
-            <select value={prefs.reducedMotion ? 'reduced' : 'normal'} onChange={(event) => setPrefs({ ...prefs, reducedMotion: event.target.value === 'reduced' })}>
-              <option value="normal">{t('settings.preferences.motion.normal')}</option>
-              <option value="reduced">{t('settings.preferences.motion.reduced')}</option>
-            </select>
-          </label>
+          <SettingsRow label={t('settings.preferences.theme')} control={<select aria-label={t('settings.preferences.theme')} value={prefs.theme} onChange={(event) => setPrefs({ ...prefs, theme: event.target.value as UiPreferences['theme'] })}>
+            <option value="system">{t('settings.preferences.theme.system')}</option>
+            <option value="light">{t('settings.preferences.theme.light')}</option>
+            <option value="dark">{t('settings.preferences.theme.dark')}</option>
+          </select>} />
+          <SettingsRow label={t('settings.preferences.density')} control={<select aria-label={t('settings.preferences.density')} value={prefs.density} onChange={(event) => setPrefs({ ...prefs, density: event.target.value as UiPreferences['density'] })}>
+            <option value="comfortable">{t('settings.preferences.density.comfortable')}</option>
+            <option value="compact">{t('settings.preferences.density.compact')}</option>
+          </select>} />
+          <SettingsRow label={t('settings.preferences.font')} control={<select aria-label={t('settings.preferences.font')} value={prefs.fontMode} onChange={(event) => setPrefs({ ...prefs, fontMode: event.target.value as UiPreferences['fontMode'] })}>
+            <option value="system">{t('settings.preferences.font.system')}</option>
+            <option value="kaiti">{t('settings.preferences.font.kaiti')}</option>
+          </select>} />
+          <SettingsRow label={t('settings.preferences.language')} control={<select aria-label={t('settings.preferences.language')} value={prefs.language} onChange={(event) => setPrefs({ ...prefs, language: event.target.value as UiPreferences['language'] })}>
+            <option value="zh-CN">{t('settings.preferences.language.zh')}</option>
+            <option value="en-US">{t('settings.preferences.language.en')}</option>
+          </select>} />
+          <SettingsRow label={t('settings.preferences.motion')} control={<select aria-label={t('settings.preferences.motion')} value={prefs.reducedMotion ? 'reduced' : 'normal'} onChange={(event) => setPrefs({ ...prefs, reducedMotion: event.target.value === 'reduced' })}>
+            <option value="normal">{t('settings.preferences.motion.normal')}</option>
+            <option value="reduced">{t('settings.preferences.motion.reduced')}</option>
+          </select>} />
         </div>
         <button type="button" className="primary-button" onClick={() => onAction(t('settings.preferences.saved'), () => api.saveUiPreferences(prefs))}>
           {t('settings.preferences.save')}

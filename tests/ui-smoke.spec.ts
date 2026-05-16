@@ -10,6 +10,7 @@ declare global {
 }
 
 async function expectNoHorizontalOverflow(page: Page, selector: string) {
+  await expect(page.locator(selector).first()).toBeVisible();
   const box = await page.locator(selector).first().evaluate((element) => ({
     scrollWidth: element.scrollWidth,
     clientWidth: element.clientWidth,
@@ -66,10 +67,10 @@ async function openFeature(page: Page, module: NavModule, tab: NavTab) {
 }
 
 async function expectActiveRouteAndPanel(page: Page, module: NavModule, tab: NavTab) {
-  await expect(page.locator('.module-subnav-panel')).toBeVisible();
-  await expect(page.locator('.module-subnav-panel')).toContainText(tab.label);
-  await expect(page.locator('.module-tabs')).toBeVisible();
-  await expect(page.locator('.module-tabs').getByRole('tab', { name: new RegExp(tab.label) })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.module-subnav-panel')).toHaveCount(0);
+  await expect(page.locator('.module-tabs')).toHaveCount(0);
+  await expect(page.locator('.module-header')).toContainText(module.label);
+  await expect(page.locator('.module-header')).toContainText(tab.label);
   await expect(page.locator('.module-child-link.is-active')).toContainText(tab.label);
   await expect(page).toHaveURL(new RegExp(`${getTabRoute(module.id, tab.id)}$`));
   const panel = page.locator(`main [role="tabpanel"][data-module="${module.id}"][data-tab="${tab.id}"]`);
@@ -116,11 +117,13 @@ test('model gateway data and settings key flows stay real on new routes', async 
   await expect(page.locator('main [data-tab="providers"]').getByRole('heading', { name: translate('zh-CN', 'models.provider.title') }).first()).toBeVisible();
   await openFeature(page, models, models.tabs.find((tab) => tab.id === 'catalog')!);
   await expect(page.locator('main [data-tab="catalog"]').getByRole('heading', { name: translate('zh-CN', 'models.create.title') }).first()).toBeVisible();
+  await expect(page.getByPlaceholder(translate('zh-CN', 'models.modelName.placeholder'))).toHaveValue('');
 
   await openFeature(page, gateway, gateway.tabs.find((tab) => tab.id === 'keys')!);
   await expect(page.locator('main [data-tab="keys"]').getByRole('heading', { name: 'Gateway API Key' }).first()).toBeVisible();
   await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'gateway.generateKey')) }).click();
   await expect(page.getByText(translate('zh-CN', 'gateway.oneTimeKey'))).toBeVisible();
+  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'gateway.revoke')) }).first().click();
   await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'gateway.revoke')) }).first().click();
   await expect(page.getByText(translate('zh-CN', 'common.revoked')).first()).toBeVisible();
 
@@ -243,7 +246,7 @@ test('sidebar expansion persists and never exposes route paths', async ({ page }
   await expect(page.locator(`#sidebar-children-${gateway.id}`)).toBeVisible();
 });
 
-test('root and unknown legacy routes resolve without keeping old alias chains', async ({ page }) => {
+test('root and unknown paths normalize without exposing old alias chains', async ({ page }) => {
   await page.goto('/');
   await expectActiveRouteAndPanel(page, navModules.find((module) => module.id === 'workspace')!, navModules.find((module) => module.id === 'workspace')!.tabs[0]);
 
@@ -255,14 +258,16 @@ test('root and unknown legacy routes resolve without keeping old alias chains', 
 });
 
 test('renderer keeps the 1040x680 desktop floor usable without horizontal overflow', async ({ page }) => {
+  test.setTimeout(60_000);
   await page.setViewportSize({ width: 1040, height: 680 });
   for (const path of ['/chat/playground', '/models/providers', '/gateway/keys', '/settings/preferences']) {
     await page.goto(path);
+    await expect(page.locator('.app-shell')).toBeVisible();
     await expect(page.locator('.right-rail')).toBeHidden();
     await expectNoHorizontalOverflow(page, '.app-shell');
     await expectNoHorizontalOverflow(page, '.content-grid');
-    await expect(page.locator('.module-tabs')).toBeVisible();
-    await expectNoHorizontalOverflow(page, '.module-subnav-panel');
+    await expect(page.locator('.module-tabs')).toHaveCount(0);
+    await expect(page.locator('.module-subnav-panel')).toHaveCount(0);
   }
 
   await page.goto('/chat/playground');
@@ -297,6 +302,7 @@ test('data import rejects invalid manifests and records the failure visibly', as
 test('data mobility backup restore and rollback use structured Round 12 records', async ({ page }) => {
   const data = navModules.find((module) => module.id === 'data')!;
   await page.goto('/data/import');
+  await expect(page.getByLabel(translate('zh-CN', 'data.import.aria'))).toHaveValue('');
   await page.getByLabel(translate('zh-CN', 'data.import.aria')).fill('{"providers":[{"name":"Round 12 UI Provider","baseUrl":"http://127.0.0.1:11434/v1"}],"models":[{"providerName":"Round 12 UI Provider","name":"round-12-ui-model"}]}');
   await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'data.import.preflight')) }).click();
   await expect(page.locator('main [data-tab="import"]').getByText('ready').first()).toBeVisible();
@@ -304,11 +310,13 @@ test('data mobility backup restore and rollback use structured Round 12 records'
   await expect(page.locator('main [data-tab="import"]').getByText('completed').first()).toBeVisible();
 
   await openFeature(page, data, data.tabs.find((tab) => tab.id === 'backup')!);
+  await expect(page.getByLabel(translate('zh-CN', 'data.backup.passphrase'))).toHaveValue('');
   await page.getByLabel(translate('zh-CN', 'data.backup.passphrase')).fill('round-12-passphrase');
   await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'data.backup.create')) }).click();
   await expect(page.locator('main [data-tab="backup"]').getByText('encrypted-backup').first()).toBeVisible();
 
   await openFeature(page, data, data.tabs.find((tab) => tab.id === 'restore')!);
+  await expect(page.getByLabel(translate('zh-CN', 'data.restore.passphrase'))).toHaveValue('');
   await page.getByLabel(translate('zh-CN', 'data.restore.passphrase')).fill('round-12-passphrase');
   await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'data.restore.preflight')) }).click();
   await expect(page.locator('main [data-tab="restore"]').getByText('restore-preflight').first()).toBeVisible();
@@ -323,6 +331,8 @@ test('data mobility backup restore and rollback use structured Round 12 records'
 test('knowledge import retrieval rebuild delete and chat citations use one RAG chain', async ({ page }) => {
   const knowledge = navModules.find((module) => module.id === 'knowledge')!;
   await page.goto('/knowledge/files');
+  await expect(page.getByLabel(translate('zh-CN', 'knowledge.import.name'))).toHaveValue('');
+  await expect(page.getByLabel(translate('zh-CN', 'knowledge.import.content'))).toHaveValue('');
   await page.getByLabel(translate('zh-CN', 'knowledge.import.name')).fill('round-09-smoke.md');
   await page.getByLabel(translate('zh-CN', 'knowledge.import.content')).fill('Round 9 smoke verifies retrieval citations, rebuild, and delete in one knowledge pipeline.');
   await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'knowledge.import.create')) }).click();
@@ -344,11 +354,14 @@ test('knowledge import retrieval rebuild delete and chat citations use one RAG c
   await page.locator('tr', { hasText: 'round-09-smoke.md' }).getByRole('button', { name: new RegExp(translate('zh-CN', 'knowledge.rebuild')) }).click();
   await expect(page.locator('main [data-tab="files"]').getByRole('cell', { name: 'round-09-smoke.md' })).toBeVisible();
   await page.locator('tr', { hasText: 'round-09-smoke.md' }).getByRole('button', { name: new RegExp(translate('zh-CN', 'knowledge.delete')) }).click();
+  await page.locator('tr', { hasText: 'round-09-smoke.md' }).getByRole('button', { name: new RegExp(translate('zh-CN', 'knowledge.delete')) }).click();
   await expect(page.locator('main [data-tab="files"]').getByRole('cell', { name: 'round-09-smoke.md' })).toHaveCount(0);
 });
 
 test('tools run center uses unified execution trace approval chain', async ({ page }) => {
   const tools = navModules.find((module) => module.id === 'tools')!;
+  await page.goto('/tools/mcp');
+  await expect(page.getByRole('button', { name: new RegExp(translate('zh-CN', 'tools.mcp.register')) })).toBeDisabled();
   await page.goto('/tools/runs');
   await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'tools.execution.runStatusRead')) }).click();
   await expect(page.locator('main [data-tab="runs"]').getByRole('cell', { name: /Agent|工具|Tool|运行|run/i }).first()).toBeVisible();
