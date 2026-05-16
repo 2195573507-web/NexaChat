@@ -1349,3 +1349,22 @@ Known notes:
 
 - Historical progress/docs sections still contain older mojibake text. This iteration updated the active token/design docs it touched but did not rewrite all historical records.
 - Real upstream Provider execution, full vector RAG/OCR/rerank, external MCP real-run execution, and autonomous Agent sandbox execution remain outside this UI logic pass and stay marked as unavailable, dry-run, reserved, or environment-limited where exposed.
+
+## 2026-05-16 Architecture And Mainline Logic Iteration Plan
+
+This round added `docs/build-plans/00-modular-refactor-master-plan/architecture-mainline-iteration-plan.md` as the architecture and mainline logic reorganization plan for later refactor rounds.
+
+Scope completed:
+
+- This round only wrote the architecture/mainline plan and updated this progress ledger.
+- No business source code, Electron runtime logic, IPC, Gateway behavior, routing implementation, SQLite schema, tests, package files, or dependencies were changed.
+- The plan is based on the current source state and the user's selected direction: chat-first, simple home, ordinary + advanced mode, Gateway as a core module, Agent as an experimental module, and cleanup around the chat mainline first.
+- The plan records the current factual baseline as 7 first-level modules: Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings.
+- The plan records the current root route fact: `/` resolves to `/chat/conversations`.
+- The plan explicitly treats `NexaStore` in `src/main/services/store.ts` as the current centralized aggregate service, with `chat-service`, `router-service`, `security-service`, and related services documented only as future extraction targets.
+- The plan does not claim PDF, Office, OCR, external vector DB, arbitrary MCP execution, Agent sandbox, signed installer hardening, or `safeStorage` fallback strong encryption as current completed capability.
+
+Next recommended execution:
+
+- Start from Phase 0 if the next round should clean stale Workspace/Dashboard or 8-module documentation.
+- Start from Phase 1 if the next round should implement the simple home / chat-first mainline experience.
