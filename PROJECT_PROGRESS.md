@@ -1,5 +1,60 @@
 # NexaChat Project Progress
 
+## 2026-05-16 Chat-first UI Rebuild Closure
+
+本轮目标:
+
+- 将 NexaChat 从后台验收面板式 UI 重建为聊天优先的本地 AI 工具。
+- 默认入口从工作台/首页迁移到聊天: `/` 现在解析到 `/chat/conversations`。
+- 一级导航收敛为 7 个入口: 聊天、模型、知识库、工具、网关、数据、设置。
+- 保留现有业务能力和数据链路，不重写 Electron main、preload、SQLite Store、IPC、Provider、Gateway、Knowledge、Tools、Data、Settings 核心契约。
+
+删除和替换的旧 UI:
+
+- 删除 `src/renderer/modules/DashboardPage.tsx`，并从 `modulePageRegistry` 移除 workspace/dashboard 页面注册。
+- 从 `ModuleId` 与 `navModules` 移除 `workspace` 一级模块，旧 `/dashboard/...` 和 `/workspace/...` 路由现在回落到聊天默认页。
+- 移除 AppFrame 里的厚重 `module-switcher`、feature list、模块状态灯和 stage 标签展示。
+- 侧边栏改为窄 rail，二级功能进入顶部轻量 tabs，不再在左侧堆状态、说明和实现标签。
+
+新增和重构的 UI 基础:
+
+- 重建深色优先 design tokens: 统一颜色、字体、间距、圆角、阴影和 rail 宽度 token。
+- 重写 Shell 布局: `module-rail` + `work-surface` + `command-bar` + `top-tabs`。
+- 重做 ChatPage 为真实聊天主界面: 左侧会话列表、搜索、新建聊天；中间消息流、模型选择、上下文策略、底部输入框；右侧上下文/对比面板默认关闭。
+- 保留并复用现有共享组件: `ChatInput`、`MessageBubble`、`PageHeader`、`ConfigList`、`ConfigDetail`、`StatusPillLite` 等，未新增第二套业务链路。
+
+保留的业务链路:
+
+- Chat 继续通过 `api.createConversation`、`api.sendMessage`、`retryMessage`、`regenerateMessage`、`cancelMessage`、`compareModels`、`updateConversationFlags` 工作。
+- Model/Provider 继续读取 `snapshot.providers` / `snapshot.models`，并通过 `createProvider`、`createModel`、`testProvider` 工作。
+- Gateway Key 继续使用统一新契约: `createGatewayKey(input)`、`updateGatewayKey(input)`、`rotateGatewayKey(input)`、`revokeGatewayKey(id)`，列表来自 `snapshot.gatewayKeys`。
+- Knowledge、Tools/MCP、Data、Settings 页面继续接现有 AppApi/IPC/Store/mockApi 契约，没有制造第二套 mockApi、gateway contract 或状态管理。
+
+文案和能力边界:
+
+- 用户可见文案仍集中在 `src/shared/i18n.ts`。
+- 将可见的“环境受限 / 预留 / Round 12 / 未实现”类开发验收口吻改为“能力有限 / 稍后开放 / 数据移动准备状态”等用户语气。
+- 保留 `snapshot.dashboard` 和 `workspace` 作为内部 Store 聚合/本地工作区数据结构，不把它作为默认 UI 入口或一级导航暴露。
+
+验证结果:
+
+- `npm.cmd run test`: passed, 19 files / 63 tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run test:ui-smoke`: passed, 7 Playwright tests.
+- `npm.cmd run test:electron-smoke`: passed.
+- `npm.cmd run package:release`: passed, regenerated `release/win-unpacked`.
+- `npm.cmd run test:package-smoke`: passed.
+- `npm.cmd run test:installer-smoke`: passed.
+- `npm.cmd run shortcut:package`: passed.
+- `npm.cmd run test:shortcut-readback:packaged`: passed for `C:\Users\至亲\Desktop\NexaChat.lnk`.
+- `git diff --check`: passed with LF/CRLF conversion warnings only.
+
+已知风险和后续任务:
+
+- `snapshot.dashboard` 命名仍存在于数据聚合层，这是内部兼容字段，不是 UI 默认入口；后续如需重命名必须做跨 IPC、Store、mock、tests 的完整合同迁移。
+- Data 和 Settings 页已统一到新 shell/list-detail 视觉体系，但还可以继续降低表格式密度。
+- 真实上游 Provider、完整 RAG/vector/OCR、可执行 MCP/Agent sandbox 仍需按能力边界继续推进；本轮 UI 不伪装这些能力已经完整完成。
+
 ## 2026-05-16 Product UI Redesign Actual Closure
 
 本轮实际重做原因:

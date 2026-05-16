@@ -72,8 +72,8 @@ try {
   await window.locator('.app-frame').waitFor({ timeout: 20_000 });
   await window.locator('.brand-mark').waitFor({ timeout: 5_000 });
   const moduleCount = await window.locator('.rail-item').count();
-  if (moduleCount !== 8) {
-    throw new Error(`Installed app expected 8 modules, got ${moduleCount}.`);
+  if (moduleCount !== 7) {
+    throw new Error(`Installed app expected 7 modules, got ${moduleCount}.`);
   }
   const bodyText = await window.locator('body').innerText();
   if (/(^|\s)\/(workspace|chat|models|knowledge|tools|gateway|data|settings)\//.test(bodyText)) {

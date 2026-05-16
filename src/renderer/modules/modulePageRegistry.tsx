@@ -2,7 +2,6 @@ import type { JSX } from 'react';
 import type { AppApi } from '../../shared/api';
 import type { AppSnapshot, ModuleId, NavTab } from '../../shared/types';
 import { ChatPage } from './ChatPage';
-import { DashboardPage } from './DashboardPage';
 import { DataPage } from './DataPage';
 import { GatewayPage } from './GatewayPage';
 import { KnowledgePage } from './KnowledgePage';
@@ -22,7 +21,6 @@ export type ModulePageRendererProps = {
 export type ModulePageRenderer = (props: ModulePageRendererProps) => JSX.Element;
 
 export const modulePageRegistry: Record<ModuleId, ModulePageRenderer> = {
-  workspace: DashboardPage,
   chat: ChatPage,
   models: ModelsPage,
   knowledge: KnowledgePage,
@@ -31,4 +29,3 @@ export const modulePageRegistry: Record<ModuleId, ModulePageRenderer> = {
   data: DataPage,
   settings: SettingsPage,
 };
-

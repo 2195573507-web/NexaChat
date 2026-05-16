@@ -35,7 +35,7 @@ try {
   await window.waitForFunction(() => document.readyState !== 'loading', undefined, { timeout: 5_000 }).catch(() => undefined);
   await window.locator('.brand-mark').waitFor({ timeout: 5_000 });
   await window.locator('.rail-item').first().waitFor({ timeout: 5_000 });
-  await window.locator('main [role="tabpanel"][data-module="workspace"][data-tab="overview"]').waitFor({ timeout: 5_000 });
+  await window.locator('main [role="tabpanel"][data-module="chat"][data-tab="conversations"]').waitFor({ timeout: 5_000 });
 
   const preloadResult = await window.evaluate(async () => {
     const api = window.nexachat;
@@ -52,8 +52,8 @@ try {
   if (!preloadResult.ok) {
     throw new Error(`Preload API check failed: ${JSON.stringify(preloadResult)}`);
   }
-  if (preloadResult.moduleCountHint !== 8) {
-    throw new Error(`Expected 8 first-level modules, got ${preloadResult.moduleCountHint}.`);
+  if (preloadResult.moduleCountHint !== 7) {
+    throw new Error(`Expected 7 first-level modules, got ${preloadResult.moduleCountHint}.`);
   }
 
   const bodyText = await window.locator('body').innerText();

@@ -27,9 +27,9 @@ export const THEME_TOKEN_CATEGORIES = {
     '--color-code-text',
   ],
   radius: ['--radius-sm', '--radius-md', '--radius-pill'],
-  spacing: ['--space-1', '--space-2', '--space-3', '--space-4', '--space-5'],
-  shadow: ['--shadow-focus'],
-  layout: ['--rail-width', '--switcher-width'],
+  spacing: ['--space-1', '--space-2', '--space-3', '--space-4', '--space-5', '--space-6'],
+  shadow: ['--shadow-focus', '--shadow-panel'],
+  layout: ['--rail-width'],
   typography: [
     '--font-sans',
     '--font-ui',

@@ -60,42 +60,40 @@ async function openModule(page: Page, module: NavModule) {
 
 async function openFeature(page: Page, module: NavModule, tab: NavTab) {
   await openModule(page, module);
-  await page.locator(`#feature-list-${module.id}`).getByRole('button', { name: new RegExp(tab.label) }).click();
+  await page.locator('.top-tabs').getByRole('button', { name: new RegExp(tab.label) }).click();
 }
 
 async function expectActiveRouteAndPanel(page: Page, module: NavModule, tab: NavTab) {
   await expect(page.locator('.app-shell')).toHaveCount(0);
+  await expect(page.locator('.module-switcher')).toHaveCount(0);
   await expect(page.locator('.module-nav-item')).toHaveCount(0);
   await expect(page.locator('.module-tabs')).toHaveCount(0);
   await expect(page.locator('.module-subnav-panel')).toHaveCount(0);
-  await expect(page.locator('.switcher-head')).toContainText(tab.label);
-  await expect(page.locator(`#feature-list-${module.id} .feature-row.is-active`)).toContainText(tab.label);
+  await expect(page.locator('.top-tab.is-active')).toContainText(tab.label);
   await expect(page).toHaveURL(new RegExp(`${getTabRoute(module.id, tab.id)}$`));
   const panel = page.locator(`main [role="tabpanel"][data-module="${module.id}"][data-tab="${tab.id}"]`);
   await expect(panel).toBeVisible();
   await expect(panel).toHaveAttribute('aria-label', tab.label);
-  await expect(panel.locator('.page-header')).toBeVisible();
-  await expect(panel.locator('.page-header').getByRole('heading')).toBeVisible();
   await expectNoVisibleRouteLeak(page);
 }
 
-test('browser renderer exposes rebuilt lightweight rail switcher and can send chat', async ({ page }) => {
+test('browser renderer opens as chat-first app and can send a message', async ({ page }) => {
   await page.goto('/');
-  await expect(page).toHaveURL(/\/workspace\/overview$/);
+  await expect(page).toHaveURL(/\/chat\/conversations$/);
   await expect(page.locator('.app-frame')).toBeVisible();
   await expect(page.locator('.module-rail')).toBeVisible();
-  await expect(page.locator('.module-switcher')).toBeVisible();
+  await expect(page.locator('.module-switcher')).toHaveCount(0);
   await expect(page.locator('.work-surface')).toBeVisible();
   await expect(page.locator('.rail-item')).toHaveCount(navModules.length);
-  await expect(page.locator('.app-shell')).toHaveCount(0);
-  await expect(page.locator('.module-nav-item')).toHaveCount(0);
+  await expect(page.locator('main [data-module="chat"][data-tab="conversations"]')).toBeVisible();
+  await expect(page.locator('.chat-first-layout')).toBeVisible();
+  await expect(page.locator('.chat-sidebar')).toBeVisible();
+  await expect(page.locator('.chat-main')).toBeVisible();
 
   for (const module of navModules) {
     await expect(page.locator('.rail-item').filter({ hasText: module.shortLabel })).toBeVisible();
   }
 
-  const chat = navModules.find((module) => module.id === 'chat')!;
-  await openFeature(page, chat, chat.tabs.find((tab) => tab.id === 'playground')!);
   const message = 'browser mode send test';
   const composer = page.getByPlaceholder(translate('zh-CN', 'chat.composer.placeholder'));
   await expect(composer).toHaveJSProperty('tagName', 'TEXTAREA');
@@ -107,16 +105,15 @@ test('browser renderer exposes rebuilt lightweight rail switcher and can send ch
   await expect(page.getByText(translate('zh-CN', 'chat.message.copy')).first()).toBeVisible();
   await expect(page.getByText(translate('zh-CN', 'chat.message.retry')).first()).toBeVisible();
   await expect(page.getByText(translate('zh-CN', 'chat.message.regenerate')).first()).toBeVisible();
-  await expect(page.getByText(translate('zh-CN', 'chat.compare.title'))).toHaveCount(1);
   await expect(page.locator('.chat-composer')).toBeVisible();
   await expect(page.locator('.message-bubble').first()).toBeVisible();
   await expectNoHorizontalOverflow(page, '.app-frame');
   await expectNoHorizontalOverflow(page, '.work-surface');
-  await expectNoHorizontalOverflow(page, '.chat-workspace');
+  await expectNoHorizontalOverflow(page, '.chat-first-layout');
   await expectNoVisibleRouteLeak(page);
 });
 
-test('core pages read as local AI configuration tools instead of admin tables', async ({ page }) => {
+test('core management pages keep real contracts behind lightweight tabs', async ({ page }) => {
   await page.goto('/');
 
   const models = navModules.find((module) => module.id === 'models')!;
@@ -129,7 +126,6 @@ test('core pages read as local AI configuration tools instead of admin tables', 
   await openFeature(page, models, models.tabs.find((tab) => tab.id === 'providers')!);
   await expect(page.locator('main [data-tab="providers"] .current-config-strip')).toBeVisible();
   await expect(page.locator('main [data-tab="providers"] .provider-switch-list')).toBeVisible();
-  await expect(page.locator('main [data-tab="providers"]').getByRole('heading', { name: translate('zh-CN', 'models.provider.title') }).first()).toBeVisible();
 
   await openFeature(page, gateway, gateway.tabs.find((tab) => tab.id === 'overview')!);
   await expect(page.locator('main [data-tab="overview"] .gateway-console')).toBeVisible();
@@ -160,7 +156,7 @@ test('core pages read as local AI configuration tools instead of admin tables', 
   await expectNoVisibleRouteLeak(page);
 });
 
-test('all modules and feature routes sync the switcher route and panel', async ({ page }) => {
+test('all modules and feature routes sync the top tabs and panel', async ({ page }) => {
   await page.goto('/');
 
   for (const module of navModules) {
@@ -174,41 +170,14 @@ test('all modules and feature routes sync the switcher route and panel', async (
   }
 });
 
-test('workspace home is a current configuration launcher', async ({ page }) => {
-  await page.goto('/workspace/overview');
-
-  await expect(page.locator('.workbench-home')).toBeVisible();
-  await expect(page.locator('.current-config-strip')).toBeVisible();
-  await expect(page.locator('.switch-grid')).toBeVisible();
-  await expect(page.locator('.switch-tile')).toHaveCount(4);
-  await expect(page.locator('.page-header').getByRole('heading', { name: translate('zh-CN', 'dashboard.overview.title') })).toBeVisible();
-  await expect(page.getByRole('heading', { name: translate('zh-CN', 'dashboard.actions.title') })).toBeVisible();
-  await expect(page.getByRole('heading', { name: translate('zh-CN', 'dashboard.activity.title') })).toBeVisible();
-  await expect(page.locator(`#feature-list-workspace .feature-row.is-active`)).toContainText(translate('zh-CN', 'nav.workspace.overview.label'));
-
-  const quickEntries = [
-    { label: translate('zh-CN', 'dashboard.action.chat'), path: '/chat/playground', moduleId: 'chat', tabId: 'playground' },
-    { label: translate('zh-CN', 'dashboard.action.provider'), path: '/models/providers', moduleId: 'models', tabId: 'providers' },
-    { label: translate('zh-CN', 'dashboard.action.gatewayKey'), path: '/gateway/keys', moduleId: 'gateway', tabId: 'keys' },
-    { label: translate('zh-CN', 'tools.mcp.title'), path: '/tools/mcp', moduleId: 'tools', tabId: 'mcp' },
-  ];
-
-  for (const entry of quickEntries) {
-    await page.goto('/workspace/overview');
-    await page.locator('.switch-grid .switch-tile').filter({ hasText: entry.label }).click();
-    await expect(page).toHaveURL(new RegExp(`${entry.path}$`));
-    await expect(page.locator(`main [role="tabpanel"][data-module="${entry.moduleId}"][data-tab="${entry.tabId}"]`)).toBeVisible();
-  }
-});
-
 test('route fallback and desktop floor stay overflow-free', async ({ page }) => {
   await page.setViewportSize({ width: 1040, height: 680 });
-  const workspace = navModules.find((module) => module.id === 'workspace')!;
+  const chat = navModules.find((module) => module.id === 'chat')!;
   const settings = navModules.find((module) => module.id === 'settings')!;
   const models = navModules.find((module) => module.id === 'models')!;
 
   await page.goto('/');
-  await expectActiveRouteAndPanel(page, workspace, workspace.tabs[0]);
+  await expectActiveRouteAndPanel(page, chat, chat.tabs[0]);
 
   await page.goto('/settings/request-logs');
   await expectActiveRouteAndPanel(page, settings, settings.tabs[0]);
@@ -216,7 +185,7 @@ test('route fallback and desktop floor stay overflow-free', async ({ page }) => 
   await page.goto('/models/not-real');
   await expectActiveRouteAndPanel(page, models, models.tabs[0]);
 
-  for (const path of ['/chat/playground', '/models/providers', '/gateway/keys', '/settings/preferences']) {
+  for (const path of ['/chat/conversations', '/models/providers', '/gateway/keys', '/settings/preferences']) {
     await page.goto(path);
     await expect(page.locator('.app-frame')).toBeVisible();
     await expectNoHorizontalOverflow(page, '.app-frame');
@@ -264,7 +233,7 @@ test('theme and language preferences keep light dark and system modes usable', a
   await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'settings.preferences.save')) }).click();
 
   await expect(page.locator('.app-frame')).toHaveClass(/theme-dark/);
-  await expect(page.locator(`#feature-list-settings .feature-row.is-active`)).toContainText(translate('en-US', 'nav.settings.preferences.label'));
+  await expect(page.locator('.top-tab.is-active')).toContainText(translate('en-US', 'nav.settings.preferences.label'));
   await expect(page.locator('.command-actions')).toContainText(translate('en-US', 'shell.openChat'));
   await expect(page.locator('main [data-tab="preferences"]').getByRole('heading', { name: translate('en-US', 'settings.preferences.title') }).first()).toBeVisible();
   await expectNoHorizontalOverflow(page, '.app-frame');

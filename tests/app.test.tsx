@@ -30,26 +30,28 @@ function openModule(module: NavModule) {
 
 function openFeature(module: NavModule, tab: NavTab) {
   openModule(module);
-  const switcher = document.querySelector(`#feature-list-${module.id}`);
-  if (!switcher) {
-    throw new Error(`Missing feature switcher for ${module.id}`);
+  const tabs = document.querySelector('.top-tabs');
+  if (!tabs) {
+    throw new Error(`Missing top tabs for ${module.id}`);
   }
-  fireEvent.click(within(switcher as HTMLElement).getByRole('button', { name: new RegExp(tab.label) }));
+  fireEvent.click(within(tabs as HTMLElement).getByRole('button', { name: new RegExp(tab.label) }));
 }
 
 describe('NexaChat renderer', () => {
-  it('renders the rebuilt lightweight tool frame without old shell structures', async () => {
+  it('renders the chat-first shell without old dashboard structures', async () => {
     await renderApp();
 
     expect(document.querySelectorAll('.app-frame')).toHaveLength(1);
     expect(document.querySelectorAll('.module-rail')).toHaveLength(1);
-    expect(document.querySelectorAll('.module-switcher')).toHaveLength(1);
+    expect(document.querySelectorAll('.module-switcher')).toHaveLength(0);
     expect(document.querySelectorAll('.work-surface')).toHaveLength(1);
     expect(document.querySelectorAll('.rail-item')).toHaveLength(navModules.length);
     expect(document.querySelectorAll('.app-shell')).toHaveLength(0);
     expect(document.querySelectorAll('.module-nav-item')).toHaveLength(0);
     expect(document.querySelectorAll('.module-tabs')).toHaveLength(0);
     expect(document.querySelectorAll('.module-subnav-panel')).toHaveLength(0);
+    expect(activePanel()).toHaveAttribute('data-module', 'chat');
+    expect(activePanel()).toHaveAttribute('data-tab', 'conversations');
 
     for (const module of navModules) {
       const rail = document.querySelector('.module-rail') as HTMLElement;
@@ -60,8 +62,6 @@ describe('NexaChat renderer', () => {
   it('can input and send a chat message through the browser fallback API', async () => {
     await renderApp();
 
-    const chat = navModules.find((module) => module.id === 'chat')!;
-    openFeature(chat, chat.tabs.find((tab) => tab.id === 'playground')!);
     const message = 'local fallback send test';
     const input = screen.getByPlaceholderText(translate('zh-CN', 'chat.composer.placeholder'));
     fireEvent.change(input, { target: { value: message } });
@@ -74,14 +74,11 @@ describe('NexaChat renderer', () => {
     expect(screen.getAllByText(translate('zh-CN', 'chat.message.copy')).length).toBeGreaterThan(0);
     expect(screen.getAllByText(translate('zh-CN', 'chat.message.retry')).length).toBeGreaterThan(0);
     expect(screen.getAllByText(translate('zh-CN', 'chat.message.regenerate')).length).toBeGreaterThan(0);
-    expect(screen.getByText(translate('zh-CN', 'chat.compare.title'))).toBeInTheDocument();
   });
 
   it('keeps chat composer multiline and sends only plain Enter', async () => {
     await renderApp();
 
-    const chat = navModules.find((module) => module.id === 'chat')!;
-    openFeature(chat, chat.tabs.find((tab) => tab.id === 'playground')!);
     const composer = screen.getByPlaceholderText(translate('zh-CN', 'chat.composer.placeholder')) as HTMLTextAreaElement;
     expect(composer.tagName).toBe('TEXTAREA');
 
@@ -126,17 +123,16 @@ describe('NexaChat renderer', () => {
     expect(activePanel()).toHaveTextContent(translate('zh-CN', 'settings.security.auditIntegrity'));
   });
 
-  it('gives every module tab a unified page header contract', async () => {
+  it('keeps each module route backed by the registry', async () => {
     await renderApp();
 
     for (const module of navModules) {
       for (const tab of module.tabs) {
         openFeature(module, tab);
         const panel = activePanel();
-        const header = panel.querySelector('.page-header') as HTMLElement;
-        expect(header).toBeTruthy();
         expect(panel).toHaveAttribute('aria-label', tab.label);
-        expect(within(header).getByRole('heading')).toBeInTheDocument();
+        expect(panel).toHaveAttribute('data-module', module.id);
+        expect(panel).toHaveAttribute('data-tab', tab.id);
       }
     }
   });
@@ -158,17 +154,17 @@ describe('IPC authority', () => {
 });
 
 describe('navigation authority', () => {
-  it('keeps only the root alias and normalizes unknown paths to module defaults', () => {
+  it('normalizes root and unknown paths to the chat-first default', () => {
     expect(routeAliasRegistry).toEqual([
       expect.objectContaining({
         from: '/',
-        target: '/workspace/overview',
+        target: '/chat/conversations',
         owner: 'root',
         deleteAfterMilestone: 'round-15-quality-gates',
       }),
     ]);
-    expect(resolveNavigation('/').route).toBe('/workspace/overview');
-    expect(resolveNavigation('/dashboard/overview').route).toBe('/workspace/overview');
+    expect(resolveNavigation('/').route).toBe('/chat/conversations');
+    expect(resolveNavigation('/dashboard/overview').route).toBe('/chat/conversations');
     expect(resolveNavigation('/settings/request-logs').route).toBe('/settings/preferences');
   });
 
@@ -179,7 +175,7 @@ describe('navigation authority', () => {
   });
 
   it('keeps navigation state and provider defaults centralized without fake configured values', () => {
-    expect(navModules).toHaveLength(8);
+    expect(navModules.map((module) => module.id)).toEqual(['chat', 'models', 'knowledge', 'tools', 'gateway', 'data', 'settings']);
     for (const module of navModules) {
       expect(module.uiState).toBeTruthy();
       for (const tab of module.tabs) {

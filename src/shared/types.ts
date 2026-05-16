@@ -144,7 +144,6 @@ export interface NavModule {
 }
 
 export type ModuleId =
-  | 'workspace'
   | 'chat'
   | 'models'
   | 'knowledge'

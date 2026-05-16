@@ -11,10 +11,8 @@ import {
   Database,
   FileCheck,
   FileText,
-  Gauge,
   History,
   KeyRound,
-  LayoutDashboard,
   MessageSquareText,
   MessagesSquare,
   Moon,
@@ -39,14 +37,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { navModules } from '../../shared/navigation';
 import { getThemeClass, resolveThemeMode } from '../../shared/theme';
 import type { AppSnapshot, ModuleId, NavModule, NavTab } from '../../shared/types';
-import { stageLabel, stageState } from './stageStatus';
-import type { Translate } from '../i18n';
 import { translateModule, useI18n } from '../i18n';
 
 const SYSTEM_DARK_QUERY = '(prefers-color-scheme: dark)';
 
 const moduleIcons: Record<ModuleId, LucideIcon> = {
-  workspace: Gauge,
   chat: MessageSquareText,
   models: ServerCog,
   knowledge: BrainCircuit,
@@ -57,7 +52,6 @@ const moduleIcons: Record<ModuleId, LucideIcon> = {
 };
 
 const tabIcons: Record<string, LucideIcon> = {
-  'layout-dashboard': LayoutDashboard,
   activity: Activity,
   history: History,
   'messages-square': MessagesSquare,
@@ -71,7 +65,7 @@ const tabIcons: Record<string, LucideIcon> = {
   'search-check': SearchCheck,
   'plug-zap': PlugZap,
   bot: Bot,
-  gauge: Gauge,
+  gauge: Activity,
   'key-round': KeyRound,
   'scroll-text': ScrollText,
   brackets: Braces,
@@ -109,39 +103,6 @@ function getDefaultModelLabel(snapshot: AppSnapshot, fallback: string) {
     snapshot.models[0]?.displayName ??
     fallback
   );
-}
-
-function getModuleSignal(moduleId: ModuleId, snapshot: AppSnapshot): 'ready' | 'warning' | 'danger' | 'muted' {
-  if (moduleId === 'models') {
-    return snapshot.providers.some((provider) => provider.secretRef && provider.enabled) ? 'ready' : 'warning';
-  }
-  if (moduleId === 'gateway') {
-    return snapshot.dashboard.gatewayStatus.running ? 'ready' : 'muted';
-  }
-  if (moduleId === 'knowledge') {
-    return snapshot.knowledgeFiles.some((file) => file.indexStatus === 'indexed' && !file.deletedAt) ? 'ready' : 'warning';
-  }
-  if (moduleId === 'tools') {
-    return snapshot.executionRuns.some((run) => run.status === 'failed') ? 'danger' : snapshot.mcpServers.length > 0 ? 'ready' : 'muted';
-  }
-  return 'ready';
-}
-
-function statusTextForModule(moduleId: ModuleId, snapshot: AppSnapshot, t: Translate) {
-  if (moduleId === 'models') {
-    const readyProviders = snapshot.providers.filter((provider) => provider.enabled && provider.secretRef).length;
-    return readyProviders > 0 ? t('common.countAvailable', { count: readyProviders }) : t('common.notConfigured');
-  }
-  if (moduleId === 'gateway') {
-    return snapshot.dashboard.gatewayStatus.running ? t('shell.gateway.running') : t('shell.gateway.stopped');
-  }
-  if (moduleId === 'knowledge') {
-    return snapshot.knowledgeFiles.some((file) => file.indexStatus === 'indexed' && !file.deletedAt) ? t('common.indexed') : t('common.notConfigured');
-  }
-  if (moduleId === 'tools') {
-    return snapshot.mcpServers.length > 0 ? t('common.countGranted', { count: snapshot.mcpServers.filter((server) => server.permissionState === 'granted').length }) : t('tools.columns.dryRun');
-  }
-  return t('stage.implemented');
 }
 
 export function AppFrame({
@@ -193,7 +154,6 @@ export function AppFrame({
           {translatedModules.map((module) => {
             const Icon = moduleIcons[module.id] ?? Activity;
             const isActive = module.id === activeModuleId;
-            const signal = getModuleSignal(module.id, snapshot);
             return (
               <button
                 type="button"
@@ -204,58 +164,43 @@ export function AppFrame({
               >
                 <Icon size={18} />
                 <span>{module.shortLabel}</span>
-                <i className={`status-light status-${signal}`} aria-hidden="true" />
               </button>
             );
           })}
         </nav>
       </aside>
 
-      <section className="module-switcher" aria-label={translatedActiveModule.label}>
-        <div className="switcher-head">
-          <div>
-            <span className="eyebrow">{translatedActiveModule.label}</span>
-            <h1>{translatedActiveTab.label}</h1>
-          </div>
-          <StatusPillLite label={stageLabel(translatedActiveTab.stage, t)} state={stageState(translatedActiveTab.stage)} />
-        </div>
-        <div className="module-summary">
-          <span>{translatedActiveModule.description}</span>
-          <strong>{statusTextForModule(activeModuleId, snapshot, t)}</strong>
-        </div>
-        <div className="feature-list" id={`feature-list-${activeModuleId}`}>
-          {translatedActiveModule.tabs.map((tab) => {
-            const Icon = tabIcons[tab.icon ?? ''] ?? ChevronRight;
-            const isActive = tab.id === translatedActiveTab.id;
-            return (
-              <button
-                type="button"
-                className={`feature-row ${isActive ? 'is-active' : ''}`}
-                key={tab.id}
-                aria-current={isActive ? 'page' : undefined}
-                onClick={() => onTabChange(tab.id, activeModuleId)}
-              >
-                <Icon size={16} />
-                <span>{tab.label}</span>
-                <small>{stageLabel(tab.stage, t)}</small>
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
       <main className="work-surface">
         <header className="command-bar">
           <div className="command-context">
-            <StatusDot state={snapshot.dashboard.gatewayStatus.running ? 'ready' : 'muted'} />
             <span>{t('shell.defaultModel', { model: getDefaultModelLabel(snapshot, t('app.rail.unconfigured')) })}</span>
             <span>{snapshot.dashboard.gatewayStatus.running ? t('shell.gateway.running') : t('shell.gateway.stopped')}</span>
           </div>
           <div className="command-actions">
+            {translatedActiveModule.tabs.length > 1 ? (
+              <nav className="top-tabs" aria-label={translatedActiveModule.label}>
+                {translatedActiveModule.tabs.map((tab) => {
+                  const Icon = tabIcons[tab.icon ?? ''] ?? ChevronRight;
+                  const isActive = tab.id === translatedActiveTab.id;
+                  return (
+                    <button
+                      type="button"
+                      className={`top-tab ${isActive ? 'is-active' : ''}`}
+                      key={tab.id}
+                      aria-current={isActive ? 'page' : undefined}
+                      onClick={() => onTabChange(tab.id, activeModuleId)}
+                    >
+                      <Icon size={14} />
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+            ) : null}
             <button type="button" className="ghost-button" aria-label={resolvedTheme === 'dark' ? t('settings.preferences.theme.dark') : t('settings.preferences.theme.light')}>
               {resolvedTheme === 'dark' ? <Moon size={16} /> : <Sun size={16} />}
             </button>
-            <button type="button" className="primary-button" onClick={() => onTabChange('playground', 'chat')}>
+            <button type="button" className="primary-button" onClick={() => onModuleChange('chat')}>
               <Send size={15} />
               {t('shell.openChat')}
             </button>

@@ -14,7 +14,6 @@ const uiSourceFiles = [
   'src/renderer/components/StatusPill.tsx',
   'src/renderer/components/stageStatus.ts',
   'src/renderer/modules/ChatPage.tsx',
-  'src/renderer/modules/DashboardPage.tsx',
   'src/renderer/modules/DataPage.tsx',
   'src/renderer/modules/GatewayPage.tsx',
   'src/renderer/modules/KnowledgePage.tsx',

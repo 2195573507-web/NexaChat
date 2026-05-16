@@ -45,7 +45,7 @@ try {
   await window.locator('.app-frame').waitFor({ timeout: 20_000 });
   await window.locator('.brand-mark').waitFor({ timeout: 5_000 });
   await window.locator('.rail-item').first().waitFor({ timeout: 5_000 });
-  await window.locator('main [role="tabpanel"][data-module="workspace"][data-tab="overview"]').waitFor({ timeout: 5_000 });
+  await window.locator('main [role="tabpanel"][data-module="chat"][data-tab="conversations"]').waitFor({ timeout: 5_000 });
   if (app.windows().length !== 1) {
     throw new Error(`Expected one packaged app window, got ${app.windows().length}.`);
   }
@@ -55,17 +55,17 @@ try {
     const snapshot = api && typeof api.getSnapshot === 'function' ? await api.getSnapshot() : null;
     return {
       hasApi: Boolean(api?.getSnapshot),
-      workspaceId: snapshot?.dashboard?.workspace?.id ?? null,
+      hasLocalData: Boolean(snapshot?.dashboard?.workspace?.id),
       moduleCount: document.querySelectorAll('.rail-item').length,
       body: document.body.innerText,
     };
   });
 
-  if (!state.hasApi || !state.workspaceId) {
+  if (!state.hasApi || !state.hasLocalData) {
     throw new Error(`Packaged preload API check failed: ${JSON.stringify(state)}`);
   }
-  if (state.moduleCount !== 8) {
-    throw new Error(`Expected 8 first-level modules, got ${state.moduleCount}.`);
+  if (state.moduleCount !== 7) {
+    throw new Error(`Expected 7 first-level modules, got ${state.moduleCount}.`);
   }
   if (/(^|\s)\/(workspace|chat|models|knowledge|tools|gateway|data|settings)\//.test(state.body)) {
     throw new Error('Visible route path leaked into the packaged shell.');

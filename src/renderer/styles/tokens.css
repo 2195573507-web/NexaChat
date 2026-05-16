@@ -1,26 +1,27 @@
 :root {
-  color-scheme: light;
-  --color-bg: oklch(0.974 0.006 245);
-  --color-rail: oklch(0.936 0.01 245);
-  --color-surface: oklch(0.992 0.004 245);
-  --color-panel: oklch(0.968 0.006 245);
-  --color-muted: oklch(0.918 0.009 245);
-  --color-border: oklch(0.84 0.012 245);
-  --color-border-strong: oklch(0.72 0.018 245);
-  --color-text: oklch(0.235 0.018 245);
-  --color-text-muted: oklch(0.49 0.022 245);
-  --color-text-subtle: oklch(0.62 0.018 245);
-  --color-primary: oklch(0.52 0.12 225);
-  --color-primary-soft: oklch(0.926 0.026 225);
+  color-scheme: dark;
+  --color-bg: oklch(0.18 0.01 245);
+  --color-rail: oklch(0.145 0.01 245);
+  --color-surface: oklch(0.215 0.012 245);
+  --color-panel: oklch(0.255 0.014 245);
+  --color-muted: oklch(0.302 0.016 245);
+  --color-border: oklch(0.35 0.014 245);
+  --color-border-strong: oklch(0.47 0.018 245);
+  --color-text: oklch(0.92 0.006 245);
+  --color-text-muted: oklch(0.71 0.012 245);
+  --color-text-subtle: oklch(0.57 0.014 245);
+  --color-primary: oklch(0.72 0.105 225);
+  --color-primary-soft: oklch(0.29 0.034 225);
   --color-success: oklch(0.55 0.12 150);
   --color-warning: oklch(0.68 0.12 76);
   --color-danger: oklch(0.56 0.15 28);
   --color-info: oklch(0.58 0.11 220);
-  --color-code: oklch(0.22 0.018 245);
-  --color-code-text: oklch(0.955 0.005 245);
-  --color-on-primary: oklch(0.985 0.004 245);
+  --color-code: oklch(0.135 0.01 245);
+  --color-code-text: oklch(0.94 0.005 245);
+  --color-on-primary: oklch(0.16 0.018 225);
   --shadow-focus: 0 0 0 3px color-mix(in srgb, var(--color-primary) 28%, transparent);
-  --font-sans: Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif;
+  --shadow-panel: 0 16px 44px color-mix(in srgb, var(--color-rail) 42%, transparent);
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif;
   --font-ui: var(--font-sans);
   --font-mono: "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --font-message-writing: "KaiTi", "STKaiti", "Microsoft YaHei UI", "Microsoft YaHei", serif;
@@ -46,8 +47,8 @@
   --space-3: 12px;
   --space-4: 16px;
   --space-5: 20px;
-  --rail-width: 74px;
-  --switcher-width: 286px;
+  --space-6: 24px;
+  --rail-width: 78px;
   font-family: var(--font-ui);
   color: var(--color-text);
   background: var(--color-bg);
@@ -74,4 +75,23 @@
   --color-code: oklch(0.13 0.012 245);
   --color-code-text: oklch(0.94 0.005 245);
   --color-on-primary: oklch(0.16 0.018 225);
+}
+
+.theme-light {
+  color-scheme: light;
+  --color-bg: oklch(0.958 0.006 245);
+  --color-rail: oklch(0.93 0.008 245);
+  --color-surface: oklch(0.985 0.004 245);
+  --color-panel: oklch(0.958 0.006 245);
+  --color-muted: oklch(0.91 0.008 245);
+  --color-border: oklch(0.82 0.012 245);
+  --color-border-strong: oklch(0.70 0.016 245);
+  --color-text: oklch(0.24 0.016 245);
+  --color-text-muted: oklch(0.49 0.02 245);
+  --color-text-subtle: oklch(0.62 0.016 245);
+  --color-primary: oklch(0.52 0.12 225);
+  --color-primary-soft: oklch(0.925 0.025 225);
+  --color-code: oklch(0.22 0.018 245);
+  --color-code-text: oklch(0.955 0.005 245);
+  --color-on-primary: oklch(0.985 0.004 245);
 }

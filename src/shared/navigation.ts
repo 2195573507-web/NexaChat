@@ -86,25 +86,6 @@ function defineModule(definition: ModuleDefinition): NavModule {
 
 export const navModules: NavModule[] = [
   defineModule({
-    id: 'workspace',
-    icon: 'gauge',
-    children: [
-      {
-        id: 'overview',
-        icon: 'layout-dashboard',
-        default: true,
-      },
-      {
-        id: 'activity',
-        icon: 'history',
-      },
-      {
-        id: 'health',
-        icon: 'activity',
-      },
-    ],
-  }),
-  defineModule({
     id: 'chat',
     icon: 'message-square-text',
     children: [
@@ -312,7 +293,7 @@ function alias(from: string, target: string, owner: RouteAliasOwner, reason: str
 }
 
 export const routeAliasRegistry: RouteAliasEntry[] = [
-  alias('/', '/workspace/overview', 'root', 'Root path opens the default workspace overview.'),
+  alias('/', '/chat/conversations', 'root', 'Root path opens the chat surface.'),
 ];
 
 export const routeAliases = Object.fromEntries(routeAliasRegistry.map((entry) => [entry.from, entry.target])) as Record<string, string>;
