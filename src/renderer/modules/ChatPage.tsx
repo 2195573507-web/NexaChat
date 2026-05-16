@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Archive, Copy, Download, Plus, RefreshCcw, RotateCcw, Send, Split, Star, XCircle } from 'lucide-react';
 import type { ContextStrategy, KnowledgeCitation } from '../../shared/types';
 import { EmptyState } from '../components/EmptyState';
+import { ChatInput, MessageBubble, MetricTile } from '../components/ui';
 import { useI18n } from '../i18n';
 import type { TabPageProps } from './shared';
 import { DataTable, StateBadge, TabPanel, contextStrategies, copyText, formatMessageMetadata, getDefaultModel } from './shared';
@@ -81,7 +82,7 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
     return (
       <TabPanel moduleId="chat" tab={activeTab} className="chat-panel">
         <div className="chat-layout">
-          <aside className="conversation-list">
+          <aside className="conversation-list chat-surface-panel">
             <div className="list-header">
               <h2>{t('chat.localConversations')}</h2>
               <button type="button" aria-label={t('chat.newConversation.aria')} onClick={createConversation}>
@@ -107,7 +108,7 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
             ))}
           </aside>
 
-          <section className="message-column">
+          <section className="message-column chat-surface-panel">
             <div className="chat-topline">
               <div>
                 <h2>{activeConversation?.title ?? t('chat.fallbackConversation')}</h2>
@@ -136,79 +137,82 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
                   const citations = snapshot.knowledgeCitations.filter((citation) => citation.messageId === message.id);
                   const parentUser = message.parentMessageId ? messages.find((candidate) => candidate.id === message.parentMessageId) : null;
                   return (
-                    <article className={`message-bubble role-${message.role} status-${message.status}`} key={message.id}>
-                      <div className="message-meta">
-                        <strong>{message.role === 'user' ? t('chat.role.user') : t('chat.role.assistant')}</strong>
-                        {message.modelNameSnapshot ? <span>{message.modelNameSnapshot}</span> : null}
-                        {message.latencyMs ? <span>{message.latencyMs}ms</span> : null}
-                        <span>{message.contextStrategy}</span>
-                        <StateBadge label={statusLabelForMessage(message.status, t)} tone={message.status === 'failed' ? 'error' : message.status === 'cancelled' ? 'warning' : 'muted'} />
-                      </div>
+                    <MessageBubble
+                      key={message.id}
+                      role={message.role}
+                      status={message.status}
+                      actionsLabel={t('chat.message.actions.aria')}
+                      meta={
+                        <>
+                          <strong>{message.role === 'user' ? t('chat.role.user') : t('chat.role.assistant')}</strong>
+                          {message.modelNameSnapshot ? <span>{message.modelNameSnapshot}</span> : null}
+                          {message.latencyMs ? <span>{message.latencyMs}ms</span> : null}
+                          <span>{message.contextStrategy}</span>
+                          <StateBadge label={statusLabelForMessage(message.status, t)} tone={message.status === 'failed' ? 'error' : message.status === 'cancelled' ? 'warning' : 'muted'} />
+                        </>
+                      }
+                      actions={
+                        <>
+                          <button type="button" onClick={() => copyText(message.content)}>
+                            <Copy size={14} /> {t('chat.message.copy')}
+                          </button>
+                          {message.status === 'failed' ? (
+                            <button type="button" onClick={() => onAction(t('chat.toast.retry'), () => api.retryMessage({ messageId: message.id, modelId, contextStrategy }))}>
+                              <RefreshCcw size={14} /> {t('chat.message.retry')}
+                            </button>
+                          ) : null}
+                          {message.role === 'assistant' && message.status === 'completed' && parentUser ? (
+                            <button type="button" onClick={() => onAction(t('chat.toast.regenerate'), () => api.regenerateMessage({ assistantMessageId: message.id, modelId, contextStrategy }))}>
+                              <RotateCcw size={14} /> {t('chat.message.regenerate')}
+                            </button>
+                          ) : null}
+                          {(message.status === 'streaming' || message.status === 'failed') && message.requestLogId ? (
+                            <button type="button" onClick={() => onAction(t('chat.toast.cancelled'), () => api.cancelMessage({ requestLogId: message.requestLogId! }))}>
+                              <XCircle size={14} /> {t('chat.message.cancel')}
+                            </button>
+                          ) : null}
+                        </>
+                      }
+                    >
                       <p>{message.content}</p>
                       {message.errorMessage ? <small>{message.errorMessage}</small> : null}
                       {message.metadataJson ? <small>{formatMessageMetadata(message.metadataJson, t)}</small> : null}
                       {message.contextMessageIdsJson ? <small>{t('chat.message.contextIds', { count: parseJsonArrayCount(message.contextMessageIdsJson) })}</small> : null}
                       {chunks.length > 0 ? <small>{t('chat.message.chunks', { count: chunks.length })}</small> : null}
                       <CitationList citations={citations} />
-                      <div className="message-actions" aria-label={t('chat.message.actions.aria')}>
-                        <button type="button" onClick={() => copyText(message.content)}>
-                          <Copy size={14} /> {t('chat.message.copy')}
-                        </button>
-                        {message.status === 'failed' ? (
-                          <button type="button" onClick={() => onAction(t('chat.toast.retry'), () => api.retryMessage({ messageId: message.id, modelId, contextStrategy }))}>
-                            <RefreshCcw size={14} /> {t('chat.message.retry')}
-                          </button>
-                        ) : null}
-                        {message.role === 'assistant' && message.status === 'completed' && parentUser ? (
-                          <button type="button" onClick={() => onAction(t('chat.toast.regenerate'), () => api.regenerateMessage({ assistantMessageId: message.id, modelId, contextStrategy }))}>
-                            <RotateCcw size={14} /> {t('chat.message.regenerate')}
-                          </button>
-                        ) : null}
-                        {(message.status === 'streaming' || message.status === 'failed') && message.requestLogId ? (
-                          <button type="button" onClick={() => onAction(t('chat.toast.cancelled'), () => api.cancelMessage({ requestLogId: message.requestLogId! }))}>
-                            <XCircle size={14} /> {t('chat.message.cancel')}
-                          </button>
-                        ) : null}
-                      </div>
-                    </article>
+                    </MessageBubble>
                   );
                 })
               )}
             </div>
 
-            <div className="composer">
-              <select value={contextStrategy} onChange={(event) => setContextStrategy(event.target.value as ContextStrategy)} aria-label={t('chat.contextSelect.aria')}>
-                {contextStrategies.map((strategy) => (
-                  <option key={strategy.value} value={strategy.value}>
-                    {t(strategy.labelKey)}
-                  </option>
-                ))}
-              </select>
-              <input
-                value={content}
-                onChange={(event) => setContent(event.target.value)}
-                placeholder={t('chat.composer.placeholder')}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && content.trim()) {
-                    sendCurrentMessage();
-                  }
-                }}
-              />
-              <button type="button" className="primary-button" disabled={!content.trim()} onClick={sendCurrentMessage}>
-                <Send size={16} /> {t('chat.send')}
-              </button>
-            </div>
+            <ChatInput
+              value={content}
+              onChange={setContent}
+              placeholder={t('chat.composer.placeholder')}
+              sendLabel={t('chat.send')}
+              sendIcon={<Send size={16} />}
+              onSend={sendCurrentMessage}
+              contextControl={
+                <select value={contextStrategy} onChange={(event) => setContextStrategy(event.target.value as ContextStrategy)} aria-label={t('chat.contextSelect.aria')}>
+                  {contextStrategies.map((strategy) => (
+                    <option key={strategy.value} value={strategy.value}>
+                      {t(strategy.labelKey)}
+                    </option>
+                  ))}
+                </select>
+              }
+            />
           </section>
 
-          <aside className="chat-context">
+          <aside className="chat-context chat-surface-panel">
             <h2>{t('chat.context.title')}</h2>
             <p>{t('chat.context.note')}</p>
-            <dl>
-              <div><dt>{t('chat.context.knowledgeFiles')}</dt><dd>{t('common.countItems', { count: snapshot.knowledgeFiles.length })}</dd></div>
-              <div><dt>{t('chat.context.toolPermissions')}</dt><dd>{t('common.countGranted', { count: snapshot.mcpServers.filter((server) => server.permissionState === 'granted').length })}</dd></div>
-              <div><dt>{t('chat.context.historyState')}</dt><dd>{t('chat.context.sqlite')}</dd></div>
-              <div><dt>{t('chat.context.currentModel')}</dt><dd>{snapshot.models.find((model) => model.id === modelId)?.displayName ?? t('common.notConfigured')}</dd></div>
-            </dl>
+            <div className="chat-context-metrics">
+              <MetricTile label={t('chat.context.knowledgeFiles')} value={snapshot.knowledgeFiles.length} detail={t('common.countItems', { count: snapshot.knowledgeFiles.length })} />
+              <MetricTile label={t('chat.context.toolPermissions')} value={snapshot.mcpServers.filter((server) => server.permissionState === 'granted').length} detail={t('chat.context.sqlite')} />
+              <MetricTile label={t('chat.context.currentModel')} value={snapshot.models.find((model) => model.id === modelId)?.displayName ?? t('common.notConfigured')} detail={t('chat.context.historyState')} />
+            </div>
             <div className="compare-panel">
               <h3>{t('chat.compare.title')}</h3>
               <p>{t('chat.compare.note')}</p>

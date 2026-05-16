@@ -46,10 +46,7 @@ export function TabPanel({
       data-tab={tab.id}
     >
       <section className="tab-title">
-        <div>
-          <h2>{tab.label}</h2>
-          {tab.description ? <p>{tab.description}</p> : null}
-        </div>
+        <h2>{tab.label}</h2>
         <StateBadge label={stageLabelForUi(tab.stage, t)} tone={tab.stage === 'implemented' ? 'success' : tab.stage === 'reserved' ? 'muted' : 'warning'} />
       </section>
       {children}

@@ -38,7 +38,7 @@ import { getThemeClass, resolveThemeMode } from '../shared/theme';
 import type { AppSnapshot, ModuleId, NavModule, NavTab } from '../shared/types';
 import { ModulePageFrame } from './components/ModulePageFrame';
 import { stageLabel } from './components/StatusPill';
-import { StatusBadge } from './components/ui';
+import { SidePanel, StatusBadge } from './components/ui';
 import { translateModule, useI18n } from './i18n';
 
 const SIDEBAR_EXPANDED_KEY = 'nexachat.sidebar.expandedModuleIds';
@@ -199,6 +199,7 @@ export function AppShell({
             <strong>NexaChat</strong>
             <span>{t('shell.brand.subtitle')}</span>
           </div>
+          <span className={`brand-health ${snapshot.dashboard.gatewayStatus.running ? 'is-running' : ''}`} aria-label={snapshot.dashboard.gatewayStatus.running ? t('shell.gateway.running') : t('shell.gateway.stopped')} />
         </div>
 
         <nav className="module-nav" aria-label={t('shell.productModules.aria')}>
@@ -263,11 +264,14 @@ export function AppShell({
       <div className="shell-main">
         <header className="topbar">
           <div className="topbar-context">
-            <strong>{translatedActiveModule.label}</strong>
-            <span>{translatedActiveTab.label}</span>
-            <span>{t('shell.defaultModel', { model: getDefaultModelLabel(snapshot, t('app.rail.unconfigured')) })}</span>
+            <span className="topbar-kicker">{translatedActiveModule.label}</span>
+            <strong>{translatedActiveTab.label}</strong>
             <StatusBadge
-              label={t('shell.gateway', { state: snapshot.dashboard.gatewayStatus.running ? t('shell.gateway.running') : t('shell.gateway.stopped') })}
+              label={t('shell.defaultModel', { model: getDefaultModelLabel(snapshot, t('app.rail.unconfigured')) })}
+              tone="muted"
+            />
+            <StatusBadge
+              label={snapshot.dashboard.gatewayStatus.running ? t('shell.gateway.running') : t('shell.gateway.stopped')}
               tone={snapshot.dashboard.gatewayStatus.running ? 'success' : 'muted'}
             />
           </div>
@@ -282,7 +286,11 @@ export function AppShell({
         <ModulePageFrame activeModule={translatedActiveModule} activeTab={translatedActiveTab}>
           <div className="content-grid">
             <main className="content-area">{children}</main>
-            {rightRail ? <aside className="right-rail">{rightRail}</aside> : null}
+            {rightRail ? (
+              <SidePanel className="right-rail" title={translatedActiveTab.label} description={translatedActiveModule.description}>
+                {rightRail}
+              </SidePanel>
+            ) : null}
           </div>
         </ModulePageFrame>
       </div>

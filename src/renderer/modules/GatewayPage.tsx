@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Copy, KeyRound, Play, RefreshCw, ToggleLeft, ToggleRight, XCircle } from 'lucide-react';
 import { GATEWAY_DEFAULT_KEY_POLICY, GATEWAY_ENDPOINT, GATEWAY_SCOPES, type GatewayScope } from '../../shared/gatewayRuntime';
 import { GATEWAY_DOCS } from '../../shared/uiCopy';
-import { FormField } from '../components/ui';
+import { FormField, GatewayStatusCard, MetricTile, PageSection } from '../components/ui';
 import { useI18n } from '../i18n';
 import type { TabPageProps } from './shared';
 import { DataTable, StateBadge, TabPanel, copyText, getDefaultModel, statusLabel } from './shared';
@@ -262,20 +262,38 @@ curl http://${status.bindHost}:${status.port}${GATEWAY_ENDPOINT.chatCompletions}
 
   return (
     <TabPanel moduleId="gateway" tab={activeTab}>
-      <section className="panel">
-        <div className="panel-header">
-          <div>
-            <h2>{t('gateway.overview.title')}</h2>
-            <p>{t('gateway.overview.note', { host: status.bindHost, port: status.port })}</p>
-          </div>
+      <section className="gateway-console">
+        <GatewayStatusCard
+          status={status}
+          defaultModel={defaultModel?.displayName ?? t('common.notConfigured')}
+          keyCount={t('common.countAvailable', { count: snapshot.gatewayKeys.filter((key) => !key.revokedAt).length })}
+          actions={
           <button type="button" className="primary-button" onClick={() => onAction(status.running ? t('gateway.toast.stopped') : t('gateway.toast.started'), () => api.toggleGateway(!status.running))}>
             <Play size={16} /> {status.running ? t('gateway.stop') : t('gateway.start')}
           </button>
+          }
+        />
+        <div className="gateway-endpoint-console">
+          <div>
+            <h3>{t('gateway.overview.title')}</h3>
+            <p>{t('gateway.overview.note', { host: status.bindHost, port: status.port })}</p>
+          </div>
+          <div className="endpoint-list">
+            {status.endpoints.map((endpoint) => (
+              <code key={endpoint}>{endpoint}</code>
+            ))}
+          </div>
         </div>
+      </section>
+      <section className="summary-grid gateway-summary-grid">
+        <MetricTile label={t('gateway.keyCount')} value={snapshot.gatewayKeys.filter((key) => !key.revokedAt).length} detail={t('gateway.keys.title')} tone="info" />
+        <MetricTile label={t('observability.summary.requests')} value={snapshot.observability.summary.requestCount} detail={t('observability.summary.successRate', { value: Math.round(snapshot.observability.summary.successRate * 100) })} tone="success" />
+        <MetricTile label={t('gateway.recentError')} value={status.recentError ?? t('common.none')} detail={t('gateway.redaction.note')} tone={status.recentError ? 'danger' : 'neutral'} />
+      </section>
+      <PageSection title={t('gateway.providerRoute')} description={t('gateway.providerRoute.note')} className="gateway-route-panel">
         <div className="endpoint-list">
-          {status.endpoints.map((endpoint) => (
-            <code key={endpoint}>{endpoint}</code>
-          ))}
+          <code>{defaultModel?.displayName ?? t('common.notConfigured')}</code>
+          <code>{defaultModel ? snapshot.providers.find((provider) => provider.id === defaultModel.providerId)?.name ?? defaultModel.providerId : t('common.notConfigured')}</code>
         </div>
         <dl className="detail-list">
           <div><dt>{t('gateway.defaultModel')}</dt><dd>{defaultModel?.displayName ?? t('common.notConfigured')}</dd></div>
@@ -283,7 +301,7 @@ curl http://${status.bindHost}:${status.port}${GATEWAY_ENDPOINT.chatCompletions}
           <div><dt>{t('gateway.keyCount')}</dt><dd>{t('common.countAvailable', { count: snapshot.gatewayKeys.filter((key) => !key.revokedAt).length })}</dd></div>
           <div><dt>{t('gateway.recentError')}</dt><dd>{status.recentError ?? t('common.none')}</dd></div>
         </dl>
-      </section>
+      </PageSection>
     </TabPanel>
   );
 }

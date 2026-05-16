@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { NavModule, NavTab } from '../../shared/types';
 import { StatusPill } from './StatusPill';
+import { PageHeader } from './ui';
 
 interface ModulePageFrameProps {
   activeModule: NavModule;
@@ -15,17 +16,18 @@ export function ModulePageFrame({
 }: ModulePageFrameProps) {
   return (
     <>
-      <div className="module-header">
-        <div>
-          <span className="module-kicker">{activeModule.label}</span>
-          <h1>{activeTab.label}</h1>
-          <p>{activeTab.featureBoundary ?? activeTab.description}</p>
-        </div>
-        <div className="module-stage-stack" aria-label={`${activeModule.label} ${activeTab.label}`}>
-          <StatusPill stage={activeModule.stage} />
-          <StatusPill stage={activeTab.stage} />
-        </div>
-      </div>
+      <PageHeader
+        className="module-header"
+        eyebrow={activeModule.label}
+        title={activeTab.label}
+        description={activeTab.featureBoundary ?? activeTab.description}
+        meta={
+          <div className="module-stage-stack" aria-label={`${activeModule.label} ${activeTab.label}`}>
+            <StatusPill stage={activeModule.stage} />
+            <StatusPill stage={activeTab.stage} />
+          </div>
+        }
+      />
 
       {children}
     </>

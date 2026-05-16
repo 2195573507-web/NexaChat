@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { DEFAULT_MODEL_FORM, DEFAULT_PROVIDER_FORM } from '../../shared/providerCatalog';
 import type { ProviderType } from '../../shared/types';
-import { FormField } from '../components/ui';
+import { FormField, MetricTile, PageSection, ProviderCard } from '../components/ui';
 import { useI18n } from '../i18n';
 import type { TabPageProps } from './shared';
 import { DataTable, StateBadge, TabPanel, getDefaultModel, healthTone, modelCapabilityLabels, providerTypeLabel, providerTypes, statusLabel } from './shared';
@@ -110,10 +110,14 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
 
   return (
     <TabPanel moduleId="models" tab={activeTab}>
-      <section className="two-column">
-        <div className="panel">
-          <h2>{t('models.provider.title')}</h2>
-          <p>{t('models.provider.note')}</p>
+      <section className="models-command-center">
+        <MetricTile label={t('models.providerList')} value={snapshot.providers.length} detail={t('dashboard.metric.enabled', { count: snapshot.providers.filter((provider) => provider.enabled).length })} tone="info" />
+        <MetricTile label={t('models.catalog.title')} value={snapshot.models.length} detail={t('dashboard.metric.healthy', { count: snapshot.models.filter((model) => model.healthStatus === 'healthy').length })} tone="success" />
+        <MetricTile label={t('models.defaultModel')} value={defaultModel?.displayName ?? t('common.notConfigured')} detail={snapshot.providers.find((provider) => provider.id === snapshot.dashboard.workspace.defaultProviderId)?.name ?? t('common.notConfigured')} tone={defaultModel ? 'neutral' : 'warning'} />
+      </section>
+
+      <section className="two-column models-two-column">
+        <PageSection title={t('models.provider.title')} description={t('models.provider.note')} className="provider-setup-panel">
           <div className="form-grid">
             <FormField label={t('models.name')} help={t('models.name.help')}>
               <input value={providerName} onChange={(event) => setProviderName(event.target.value)} placeholder={t('models.name.placeholder')} />
@@ -148,23 +152,35 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
               <Plus size={16} /> {t('models.addProvider')}
             </button>
           </div>
-        </div>
-        <div className="panel">
-          <h2>{t('models.providerList')}</h2>
-          <DataTable
-            columns={[t('models.name'), t('models.type'), t('models.columns.secretRef'), t('models.columns.baseUrl'), t('models.columns.health'), t('gateway.columns.actions')]}
-            rows={snapshot.providers.map((provider) => [
-              provider.name,
-              providerTypeLabel(provider.type, t),
-              provider.secretRef ? t('common.saved') : t('common.notConfigured'),
-              provider.baseUrl,
-              <StateBadge key={`${provider.id}-health`} label={provider.healthStatus} tone={healthTone(provider.healthStatus)} />,
-              <button type="button" key={provider.id} onClick={() => onAction(t('models.toast.tested'), () => api.testProvider(provider.id))}>
-                {t('models.testConnection')}
-              </button>,
-            ])}
-          />
-        </div>
+        </PageSection>
+        <PageSection title={t('models.providerList')} description={t('models.router.note')} className="provider-list-panel">
+          <div className="provider-card-list">
+            {snapshot.providers.map((provider) => (
+              <ProviderCard
+                key={provider.id}
+                name={provider.name}
+                type={providerTypeLabel(provider.type, t)}
+                baseUrl={provider.baseUrl}
+                secretState={provider.secretRef ? t('common.saved') : t('common.notConfigured')}
+                secretLabel={t('models.columns.secretRef')}
+                baseUrlLabel={t('models.columns.baseUrl')}
+                healthLabel={t('models.columns.health')}
+                health={<StateBadge label={provider.healthStatus} tone={healthTone(provider.healthStatus)} />}
+                actions={
+                  <button type="button" onClick={() => onAction(t('models.toast.tested'), () => api.testProvider(provider.id))}>
+                    {t('models.testConnection')}
+                  </button>
+                }
+              />
+            ))}
+          </div>
+          {snapshot.providers.length === 0 ? (
+            <div className="empty-state">
+              <h3>{t('dashboard.setup.providerMissing')}</h3>
+              <p>{t('dashboard.defaultModel.missing')}</p>
+            </div>
+          ) : null}
+        </PageSection>
       </section>
     </TabPanel>
   );

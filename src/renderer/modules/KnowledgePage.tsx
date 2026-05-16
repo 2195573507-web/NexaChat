@@ -3,7 +3,7 @@ import { FilePlus2, RefreshCw, RotateCcw, Search, Trash2 } from 'lucide-react';
 import { KNOWLEDGE_RUNTIME_POLICY } from '../../shared/knowledgeRuntime';
 import { FORM_DEFAULTS } from '../../shared/uiCopy';
 import type { KnowledgeFile, KnowledgeRetrievalResult } from '../../shared/types';
-import { FormField } from '../components/ui';
+import { FormField, MetricTile, PageSection } from '../components/ui';
 import { useI18n } from '../i18n';
 import type { TabPageProps } from './shared';
 import { DataTable, StateBadge, TabPanel, statusLabel } from './shared';
@@ -118,18 +118,24 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
 
   return (
     <TabPanel moduleId="knowledge" tab={activeTab}>
-      <section className="panel">
-        <div className="panel-header">
-          <div>
-            <h2>{t('knowledge.files.title')}</h2>
-            <p>{t('knowledge.files.note')}</p>
-          </div>
-          <StateBadge label={t('knowledge.index.healthValue', totals)} tone={totals.files > 0 ? 'success' : 'warning'} />
+      <section className="knowledge-flow">
+        <MetricTile label={t('knowledge.columns.parseStatus')} value={snapshot.knowledgeFiles.filter((file) => file.parseStatus === 'indexed').length} detail={t('knowledge.files.title')} tone="info" />
+        <MetricTile label={t('knowledge.columns.indexStatus')} value={indexedFiles.length} detail={t('knowledge.index.healthValue', totals)} tone={indexedFiles.length ? 'success' : 'warning'} />
+        <MetricTile label={t('knowledge.columns.embeddingStatus')} value={activeChunks.length} detail={t('knowledge.strategy.lexical')} tone="warning" />
+        <MetricTile label={t('knowledge.citations.title', { count: totals.citations })} value={totals.citations} detail={t('knowledge.retrieval.title')} />
+      </section>
+      <PageSection title={t('knowledge.files.title')} description={t('knowledge.files.note')} className="knowledge-import-panel" actions={<StateBadge label={t('knowledge.index.healthValue', totals)} tone={totals.files > 0 ? 'success' : 'warning'} />}>
+        <div className="knowledge-pipeline">
+          {[t('data.import.steps.detect'), t('data.import.steps.preview'), t('knowledge.columns.parseStatus'), t('knowledge.columns.indexStatus'), t('knowledge.retrieval.title')].map((step, index) => (
+            <span key={step}>{index + 1}. {step}</span>
+          ))}
         </div>
-        <div className="form-grid single-column">
-          <FormField label={t('knowledge.import.name')} help={t('knowledge.import.name.help')}>
-            <input value={importName} onChange={(event) => setImportName(event.target.value)} placeholder={t('knowledge.import.name.placeholder')} />
-          </FormField>
+        <div className="knowledge-import-grid">
+          <div>
+            <FormField label={t('knowledge.import.name')} help={t('knowledge.import.name.help')}>
+              <input value={importName} onChange={(event) => setImportName(event.target.value)} placeholder={t('knowledge.import.name.placeholder')} />
+            </FormField>
+          </div>
           <FormField label={t('knowledge.import.content')} help={t('knowledge.import.content.help')}>
             <textarea className="manifest-input knowledge-import-input" value={importContent} onChange={(event) => setImportContent(event.target.value)} />
           </FormField>
@@ -148,8 +154,8 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
             <FilePlus2 size={16} /> {t('knowledge.import.create')}
           </button>
         </div>
-      </section>
-      <section className="panel">
+      </PageSection>
+      <PageSection title={t('knowledge.chunks.title')} description={t('knowledge.chunks.note')} className="knowledge-files-panel">
         <DataTable
           columns={[t('knowledge.columns.file'), t('knowledge.columns.type'), t('knowledge.columns.size'), t('knowledge.columns.parseStatus'), t('knowledge.columns.indexStatus'), t('knowledge.columns.chunks'), t('knowledge.columns.errorAction')]}
           rows={snapshot.knowledgeFiles.map((file) => [
@@ -175,7 +181,7 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
             </div>,
           ])}
         />
-      </section>
+      </PageSection>
     </TabPanel>
   );
 

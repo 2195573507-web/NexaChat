@@ -1,5 +1,99 @@
 # NexaChat Project Progress
 
+## 2026-05-16 Product UI Redesign Actual Closure
+
+本轮实际重做原因:
+
+- 当前 UI 的主要问题不是颜色或圆角细节，而是整体方向太像后台管理系统、太像功能面板集合，首页缺少产品入口感，聊天页没有核心 AI 工作台质感，模型、网关、知识库、工具页的主任务流不够清晰。
+- 本轮目标是保留现有功能契约、路由、IPC、Store、SQLite、Provider、Gateway、Knowledge、Agent 数据链路，同时把 NexaChat 重做成更像成熟本地优先、多模型桌面 AI 工作台的产品 UI。
+
+技能和设计结论:
+
+- 已先使用 `using-superpowers`；单数 `using-superpower` 路径不存在，已确认。
+- 已使用 `impeccable` 作为 UI 设计、实现和验收前置。项目没有 `PRODUCT.md` / `DESIGN.md`，所以按 `product` register 执行: 设计服务于任务流，优先桌面应用效率、克制色彩、稳定组件词汇、低噪音状态表达、清晰空态/禁用态/错误态，不使用 Liquid Glass、重毛玻璃、大面积渐变、营销页结构或装饰动画。
+- 设计原则: 单一侧边栏导航、顶部低噪音上下文、页面有主任务锚点、模块之间有不同信息结构、卡片只用于真正需要框定的对象，所有未完成能力必须显示为未配置、未启用、待实现或 dry-run。
+
+本次重做范围:
+
+- 全局 Shell: 重新整理 AppShell、侧边栏、顶部上下文、右侧上下文面板、页面容器和浅色/深色/系统主题 token。
+- 首页: 改为工作台入口，突出系统可用性、默认模型、网关状态、最近活动和下一步动作，不再是四块普通卡片堆叠。
+- 聊天页: 保留三栏契约，但改为会话列表、消息主区、上下文指标和突出输入区的 AI 工作台结构。
+- 模型页: Provider 接入状态、模型数量、默认模型、健康状态和测试调用前置，不再只是表单加表格。
+- 网关页: 重做为开发者控制台式结构，突出本地兼容网关状态、监听地址、Key、模型路由、请求/用量和错误状态。
+- 知识库页: 突出导入、解析、分块、索引、检索链路，并把 lexical fallback / embedding 等能力状态表达清楚。
+- Agent / 工具页: 区分 MCP 注册、权限、approval、dry-run 和真实执行边界，不再把所有操作揉成按钮堆。
+- 组件体系: 新增并复用 `PageHeader`、`PageSection`、`Toolbar`、`ActionCard`、`MetricTile`、`SidePanel`、`ChatInput`、`MessageBubble`、`ProviderCard`、`GatewayStatusCard` 等基础组件。
+
+修改文件:
+
+- `src/renderer/AppShell.tsx`
+- `src/renderer/components/ModulePageFrame.tsx`
+- `src/renderer/components/ui.tsx`
+- `src/renderer/modules/DashboardPage.tsx`
+- `src/renderer/modules/ChatPage.tsx`
+- `src/renderer/modules/ModelsPage.tsx`
+- `src/renderer/modules/GatewayPage.tsx`
+- `src/renderer/modules/KnowledgePage.tsx`
+- `src/renderer/modules/ToolsPage.tsx`
+- `src/renderer/modules/shared.tsx`
+- `src/renderer/styles.css`
+- `tests/ui-smoke.spec.ts`
+- `PROJECT_PROGRESS.md`
+
+保留的功能契约:
+
+- 未重写主进程、数据库、IPC、Provider、Gateway、Knowledge、Agent 执行服务。
+- 保留 `src/shared/navigation.ts` 作为唯一导航/路由注册源，保留现有一级模块和二级页面关系。
+- 保留聊天发送、模型选择、Provider 测试、Gateway 开关和 Key 管理、知识库导入/重建/删除、MCP 权限、Agent dry-run、数据导入/备份/恢复/回滚、设置和审计链路。
+- 保留浅色、深色、系统主题切换，以及现有 i18n/状态数据来源。
+
+删除或替换的旧 UI 结构:
+
+- 没有恢复 `.module-tabs` 或 `.module-subnav-panel` 横向主导航。
+- 没有新增双重导航，也没有裸露内部路由路径。
+- 旧式密集面板、普通卡片堆叠、表格优先布局被替换为页面主任务结构。
+- 装饰性渐变和玻璃效果没有进入最终 CSS；背景改为 token 驱动的面层和轻量状态色。
+- 多套重复的卡片、徽标、输入和消息样式被集中到共享组件。
+
+结构重组边界:
+
+- 结构重组: Shell、首页、聊天页、模型页、网关页、知识库页、Tools/MCP 页。
+- 视觉重做但功能链路保持: 数据页、设置页、右侧上下文面板、表格和状态组件。
+- 未触碰业务层: 主进程、SQLite schema、Provider/Gateway 服务、Knowledge/Agent 运行时。
+
+测试结果:
+
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test`: passed, 19 files / 58 tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run test:ui-smoke`: passed, 16 Playwright tests, including new assertions for `.workbench-hero`, `.chat-input`, `.message-bubble`, `.models-command-center`, `.provider-card`, `.gateway-status-card`, `.gateway-console`, `.knowledge-flow`, `.knowledge-pipeline`, `.tools-control-strip`, `.tools-boundary-grid`.
+- `npm.cmd run test:electron-smoke`: passed.
+- `npm.cmd run scan:quality`: passed.
+- `npm.cmd run package:release`: passed.
+- `npm.cmd run test:package-smoke`: passed.
+- `npm.cmd run test:installer-smoke`: passed.
+- `npm.cmd run shortcut:package`: passed.
+- `npm.cmd run test:shortcut-readback:packaged`: passed.
+- `git diff --check`: passed with LF/CRLF conversion warnings only.
+
+桌面入口:
+
+- 已重新生成 release 包和 installer script。
+- 已重新关联桌面快捷方式到 packaged 入口。
+- 已通过 COM readback 验证 TargetPath、Arguments、WorkingDirectory、IconLocation 与 packaged 入口预期一致。
+
+剩余问题:
+
+- `DataPage`、`SettingsPage` 仍主要沿用旧布局词汇，功能链路稳定但还没有达到首页、聊天、模型、网关、知识库、工具页的产品级结构密度。
+- i18n 字典中仍有历史 mojibake 文本，本轮没有扩大到全量文案修复。
+- 真正的上游 Provider 转发、完整 RAG/vector/OCR、真实 MCP 执行、Agent sandbox 执行仍是规划或环境受限能力，UI 已按未配置/待实现/dry-run 表达，不伪装完成。
+
+下一轮 UI 打磨建议:
+
+- 继续做 Data / Settings / Observability 的产品化结构重组，把导入、备份、恢复、安全、审计、反馈、评测从表格优先改为主任务流优先。
+- 为 ProviderCard、GatewayStatusCard、MessageBubble、ChatInput 增加更细的空态、错误态和 loading/skeleton 状态回归。
+- 做一次真实截图视觉验收记录，覆盖浅色、深色、系统主题、1040 宽桌面下的首页和聊天页。
+
 ## 2026-05-16 UI Full Redesign Implementation Closure
 
 This round executed `docs/build-plans/00-modular-refactor-master-plan/ui-full-redesign-plan.md` as a source-code UI rebuild and closeout pass. The real repository root was confirmed with `git rev-parse --show-toplevel`: `D:/NexaChat`. All files and generated verification artifacts stayed under the repository root except the intentional Windows desktop shortcut update at `C:\Users\至亲\Desktop\NexaChat.lnk`.
@@ -365,7 +459,7 @@ Key changes:
 - Content-area second-level navigation is visible through `ModulePageFrame` and synchronized with sidebar active state.
 - Added `src/renderer/modules/modulePageRegistry.tsx`.
 - Updated unit tests for alias metadata, alias resolution, unique tab routes, and page registry alignment.
-- Updated UI smoke to assert `.module-subnav-panel` and `.module-tabs` are visible and route-synced.
+- Historical note: this older round temporarily asserted `.module-subnav-panel` and `.module-tabs` visibility; the 2026-05-16 Product UI Redesign Actual Closure supersedes that direction and now asserts those old horizontal navigation surfaces stay absent.
 
 Verification:
 
@@ -921,7 +1015,7 @@ Follow-up visibility fix after review:
 
 - Reworked `ModuleSubNav` from a thin horizontal tab row into a visible module-level secondary navigation panel.
 - Added the "二级导航" summary, current subpage name/description, larger subpage cards, clearer active indicator, and permission/stage cues.
-- Updated UI smoke assertions to verify the secondary navigation panel itself is visible and synchronized with the active route.
+- Historical note: this older secondary navigation panel direction was superseded by the 2026-05-16 Product UI Redesign Actual Closure, which keeps sidebar child navigation as the only second-level navigation surface.
 - Ran a local visual smoke screenshot check for `/gateway/keys`, confirming the new panel is visible in the running renderer.
 
 Current verified results:

@@ -10,6 +10,7 @@ import {
   Settings2,
 } from 'lucide-react';
 import { EmptyState } from '../components/EmptyState';
+import { ActionCard, MetricTile, PageSection, Toolbar } from '../components/ui';
 import { useI18n } from '../i18n';
 import type { TabPageProps } from './shared';
 import { DataTable, ListRows, Metric, StateBadge, TabPanel, getDefaultModel, healthTone } from './shared';
@@ -136,49 +137,59 @@ export function DashboardPage({ activeTab, snapshot, onOpenModule }: TabPageProp
   return (
     <TabPanel moduleId="workspace" tab={activeTab} className="workbench-page">
       <section className="workbench-overview" aria-label={t('dashboard.home.aria')}>
-        <section className="workbench-section workbench-summary" aria-labelledby="workbench-summary-title">
-          <div className="section-header">
-            <div>
-              <h2 id="workbench-summary-title">{t('dashboard.overview.title')}</h2>
-              <p>{t('dashboard.overview.note')}</p>
+        <section className="workbench-hero" aria-labelledby="workbench-summary-title">
+          <div className="workbench-hero-main">
+            <div className="section-header">
+              <div>
+                <span className="page-eyebrow">{dashboard.workspace.name}</span>
+                <h2 id="workbench-summary-title">{t('dashboard.overview.title')}</h2>
+                <p>{t('dashboard.overview.note')}</p>
+              </div>
+              <StateBadge label={dashboard.gatewayStatus.running ? t('dashboard.gateway.running') : t('dashboard.gateway.stopped')} tone={dashboard.gatewayStatus.running ? 'success' : 'warning'} />
             </div>
-            <StateBadge label={dashboard.gatewayStatus.running ? t('dashboard.gateway.running') : t('dashboard.gateway.stopped')} tone={dashboard.gatewayStatus.running ? 'success' : 'warning'} />
+            <div className="readiness-list">
+              <div>
+                <span>{t('dashboard.defaultModel')}</span>
+                <strong>{defaultModel?.displayName ?? t('common.notConfigured')}</strong>
+                <p>{defaultProvider?.name ?? t('dashboard.defaultModel.missing')}</p>
+              </div>
+              <div>
+                <span>{t('dashboard.localGateway')}</span>
+                <strong>{dashboard.gatewayStatus.running ? t('shell.gateway.running') : t('shell.gateway.stopped')}</strong>
+                <p>
+                  {dashboard.gatewayStatus.bindHost}:{dashboard.gatewayStatus.port}
+                </p>
+              </div>
+              <div>
+                <span>{t('dashboard.metric.auditHealth')}</span>
+                <strong>{countHealthy(snapshot, t)}</strong>
+                <p>{latestAudit?.action ?? t('dashboard.activity.noAudit')}</p>
+              </div>
+            </div>
           </div>
-          <div className="summary-grid">
-            <article>
-              <span>{t('dashboard.workspace')}</span>
-              <strong>{dashboard.workspace.name}</strong>
-              <p>{t('dashboard.workspace.note')}</p>
-            </article>
-            <article>
-              <span>{t('dashboard.defaultModel')}</span>
-              <strong>{defaultModel?.displayName ?? t('common.notConfigured')}</strong>
-              <p>{defaultProvider?.name ?? t('dashboard.defaultModel.missing')}</p>
-            </article>
-            <article>
-              <span>{t('dashboard.localGateway')}</span>
-              <strong>{dashboard.gatewayStatus.running ? t('shell.gateway.running') : t('shell.gateway.stopped')}</strong>
-              <p>
-                {dashboard.gatewayStatus.bindHost}:{dashboard.gatewayStatus.port}
-              </p>
-            </article>
+          <div className="next-step-panel">
+            <div>
+              <span className="page-eyebrow">{t('dashboard.actions.title')}</span>
+              <h3>{defaultModel ? t('dashboard.action.chat') : t('dashboard.action.provider')}</h3>
+              <p>{defaultModel ? t('dashboard.actions.note') : t('dashboard.defaultModel.missing')}</p>
+            </div>
+            <Toolbar align="start">
+              <button type="button" className="primary-button" onClick={() => onOpenModule({ moduleId: defaultModel ? 'chat' : 'models', tabId: defaultModel ? 'playground' : 'providers' })}>
+                {defaultModel ? <MessageSquareText size={16} /> : <ServerCog size={16} />}
+                {defaultModel ? t('dashboard.action.chat') : t('dashboard.action.provider')}
+              </button>
+            </Toolbar>
           </div>
         </section>
 
-        <section className="workbench-section" aria-labelledby="workbench-metrics-title">
-          <div className="section-header">
-            <div>
-              <h2 id="workbench-metrics-title">{t('dashboard.metrics.title')}</h2>
-              <p>{t('dashboard.metrics.note')}</p>
-            </div>
+        <PageSection title={t('dashboard.metrics.title')} description={t('dashboard.metrics.note')} className="workbench-section">
+          <div className="metric-river">
+            <MetricTile label={t('dashboard.metric.localConversations')} value={snapshot.conversations.length} detail={t('common.messageCount', { count: snapshot.messages.length })} tone="info" />
+            <MetricTile label={t('dashboard.metric.todayRequests')} value={dashboard.usageToday.requests} detail={latestRequest ? latestRequest.status : t('dashboard.noRequest')} tone={latestRequest?.status === 'failed' ? 'danger' : 'neutral'} />
+            <MetricTile label={t('dashboard.metric.tokenUsage')} value={tokenTotal} detail={t('observability.summary.tokenBreakdown', { input: dashboard.usageToday.inputTokens, output: dashboard.usageToday.outputTokens })} />
+            <MetricTile label={t('dashboard.metric.knowledgeFiles')} value={snapshot.knowledgeFiles.length} detail={t('dashboard.metric.chunks', { count: snapshot.knowledgeFiles.reduce((sum, file) => sum + file.chunkCount, 0) })} tone="success" />
           </div>
-          <div className="overview-grid">
-            <Metric title={t('dashboard.metric.localConversations')} value={snapshot.conversations.length} detail={t('common.messageCount', { count: snapshot.messages.length })} />
-            <Metric title={t('dashboard.metric.todayRequests')} value={dashboard.usageToday.requests} detail={latestRequest ? latestRequest.status : t('dashboard.noRequest')} />
-            <Metric title={t('dashboard.metric.tokenUsage')} value={tokenTotal} detail={t('observability.summary.tokenBreakdown', { input: dashboard.usageToday.inputTokens, output: dashboard.usageToday.outputTokens })} />
-            <Metric title={t('dashboard.metric.auditHealth')} value={latestAudit?.action ?? t('dashboard.activity.noAudit')} detail={countHealthy(snapshot, t)} />
-          </div>
-        </section>
+        </PageSection>
 
         <section className="workbench-section" aria-labelledby="workbench-actions-title">
           <div className="section-header">
@@ -191,9 +202,13 @@ export function DashboardPage({ activeTab, snapshot, onOpenModule }: TabPageProp
             {actionEntries.map((entry) => {
               const Icon = entry.icon;
               return (
-                <button type="button" key={entry.label} onClick={() => onOpenModule(entry.target)}>
-                  <Icon size={16} /> {entry.label}
-                </button>
+                <ActionCard
+                  key={entry.label}
+                  title={entry.label}
+                  description={t('dashboard.actions.note')}
+                  icon={<Icon size={17} />}
+                  onClick={() => onOpenModule(entry.target)}
+                />
               );
             })}
           </div>

@@ -99,6 +99,8 @@ test('browser renderer exposes eight expandable modules and can send chat throug
   await expect(page.getByRole('button', { name: new RegExp(translate('zh-CN', 'chat.exportConversation')) })).toBeVisible();
   await expect(page.getByText(translate('zh-CN', 'chat.message.copy')).first()).toBeVisible();
   await expect(page.getByText(translate('zh-CN', 'chat.compare.title'))).toBeVisible();
+  await expect(page.locator('.chat-input')).toBeVisible();
+  await expect(page.locator('.message-bubble').first()).toBeVisible();
   await expectNoHorizontalOverflow(page, '.app-shell');
   await expectNoHorizontalOverflow(page, '.content-grid');
   await expectNoHorizontalOverflow(page, '.chat-layout');
@@ -115,10 +117,15 @@ test('model gateway data and settings key flows stay real on new routes', async 
 
   await openFeature(page, models, models.tabs.find((tab) => tab.id === 'providers')!);
   await expect(page.locator('main [data-tab="providers"]').getByRole('heading', { name: translate('zh-CN', 'models.provider.title') }).first()).toBeVisible();
+  await expect(page.locator('main [data-tab="providers"] .models-command-center')).toBeVisible();
+  await expect(page.locator('main [data-tab="providers"] .provider-card').first()).toBeVisible();
   await openFeature(page, models, models.tabs.find((tab) => tab.id === 'catalog')!);
   await expect(page.locator('main [data-tab="catalog"]').getByRole('heading', { name: translate('zh-CN', 'models.create.title') }).first()).toBeVisible();
   await expect(page.getByPlaceholder(translate('zh-CN', 'models.modelName.placeholder'))).toHaveValue('');
 
+  await openFeature(page, gateway, gateway.tabs.find((tab) => tab.id === 'overview')!);
+  await expect(page.locator('main [data-tab="overview"] .gateway-status-card')).toBeVisible();
+  await expect(page.locator('main [data-tab="overview"] .gateway-console')).toBeVisible();
   await openFeature(page, gateway, gateway.tabs.find((tab) => tab.id === 'keys')!);
   await expect(page.locator('main [data-tab="keys"]').getByRole('heading', { name: 'Gateway API Key' }).first()).toBeVisible();
   await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'gateway.generateKey')) }).click();
@@ -198,6 +205,8 @@ test('workspace home has four clean product areas and real quick entries', async
   await page.goto('/workspace/overview');
 
   await expect(page.getByRole('region', { name: translate('zh-CN', 'dashboard.home.aria') })).toBeVisible();
+  await expect(page.locator('.workbench-hero')).toBeVisible();
+  await expect(page.locator('.metric-river')).toBeVisible();
   await expect(page.getByRole('heading', { name: translate('zh-CN', 'dashboard.overview.title') })).toBeVisible();
   await expect(page.getByRole('heading', { name: translate('zh-CN', 'dashboard.metrics.title') })).toBeVisible();
   await expect(page.getByRole('heading', { name: translate('zh-CN', 'dashboard.actions.title') })).toBeVisible();
@@ -331,6 +340,8 @@ test('data mobility backup restore and rollback use structured Round 12 records'
 test('knowledge import retrieval rebuild delete and chat citations use one RAG chain', async ({ page }) => {
   const knowledge = navModules.find((module) => module.id === 'knowledge')!;
   await page.goto('/knowledge/files');
+  await expect(page.locator('main [data-tab="files"] .knowledge-flow')).toBeVisible();
+  await expect(page.locator('main [data-tab="files"] .knowledge-pipeline')).toBeVisible();
   await expect(page.getByLabel(translate('zh-CN', 'knowledge.import.name'))).toHaveValue('');
   await expect(page.getByLabel(translate('zh-CN', 'knowledge.import.content'))).toHaveValue('');
   await page.getByLabel(translate('zh-CN', 'knowledge.import.name')).fill('round-09-smoke.md');
@@ -361,6 +372,8 @@ test('knowledge import retrieval rebuild delete and chat citations use one RAG c
 test('tools run center uses unified execution trace approval chain', async ({ page }) => {
   const tools = navModules.find((module) => module.id === 'tools')!;
   await page.goto('/tools/mcp');
+  await expect(page.locator('main [data-tab="mcp"] .tools-control-strip')).toBeVisible();
+  await expect(page.locator('main [data-tab="mcp"] .tools-boundary-grid')).toBeVisible();
   await expect(page.getByRole('button', { name: new RegExp(translate('zh-CN', 'tools.mcp.register')) })).toBeDisabled();
   await page.goto('/tools/runs');
   await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'tools.execution.runStatusRead')) }).click();

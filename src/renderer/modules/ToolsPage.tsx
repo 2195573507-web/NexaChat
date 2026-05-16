@@ -1,6 +1,7 @@
 import { Play, ShieldCheck } from 'lucide-react';
 import { EXECUTION_TOOL_IDS } from '../../shared/executionRuntime';
 import { MCP_EXAMPLE_ENDPOINT } from '../../shared/uiCopy';
+import { MetricTile, PageSection } from '../components/ui';
 import { useI18n } from '../i18n';
 import type { TabPageProps } from './shared';
 import { DataTable, StateBadge, TabPanel, healthTone, statusLabel } from './shared';
@@ -109,9 +110,29 @@ export function ToolsPage({ activeTab, snapshot, api, onAction }: TabPageProps) 
 
   return (
     <TabPanel moduleId="tools" tab={activeTab}>
-      <section className="panel">
-        <h2>{t('tools.mcp.title')}</h2>
-        <p>{t('tools.mcp.note')}</p>
+      <section className="tools-control-strip">
+        <MetricTile label={t('tools.mcp.title')} value={snapshot.mcpServers.length} detail={t('common.countGranted', { count: snapshot.mcpServers.filter((server) => server.permissionState === 'granted').length })} tone="info" />
+        <MetricTile label={t('tools.agent.title')} value={snapshot.agents.length} detail={t('tools.agent.note')} />
+        <MetricTile label={t('tools.runs.title')} value={snapshot.executionRuns.length} detail={t('tools.execution.sandbox.fixtureOnly')} tone="warning" />
+      </section>
+      <PageSection title={t('tools.mcp.title')} description={t('tools.mcp.note')} className="tools-boundary-panel">
+        <div className="tools-boundary-grid">
+          <div>
+            <span className="page-eyebrow">{t('tools.columns.status')}</span>
+            <h3>{MCP_EXAMPLE_ENDPOINT ? t('common.available') : t('common.notConfigured')}</h3>
+            <p>{t('tools.mcp.register.disabled')}</p>
+          </div>
+          <div>
+            <span className="page-eyebrow">{t('tools.columns.permission')}</span>
+            <h3>{t('tools.grant')} / {t('tools.deny')}</h3>
+            <p>{t('nav.tools.mcp.boundary')}</p>
+          </div>
+          <div>
+            <span className="page-eyebrow">{t('tools.columns.approval')}</span>
+            <h3>{t('tools.execution.sandbox.fixtureOnly')}</h3>
+            <p>{t('nav.tools.runs.boundary')}</p>
+          </div>
+        </div>
         <button type="button" disabled={!MCP_EXAMPLE_ENDPOINT} title={t('tools.mcp.register.disabled')} onClick={() => onAction(t('tools.toast.mcpRegistered'), () => api.createMcpServer(t('tools.mcp.seedName'), 'http', MCP_EXAMPLE_ENDPOINT))}>
           {t('tools.mcp.register')}
         </button>
@@ -128,7 +149,7 @@ export function ToolsPage({ activeTab, snapshot, api, onAction }: TabPageProps) 
             </div>,
           ])}
         />
-      </section>
+      </PageSection>
     </TabPanel>
   );
 }
