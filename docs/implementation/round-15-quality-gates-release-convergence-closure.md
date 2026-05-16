@@ -4,6 +4,8 @@ Date: 2026-05-16
 
 Status: Completed as implementation, verification, closeout, push, and remote confirmation; delivery commit `938d017ceede16475369a537227b86be7096b9cc`; closeout commit `4715788e416f97b79328413c3821287cfcafce0b`.
 
+Current relevance note: this closeout is historical. Its route-alias statement was later superseded by the chat-first mainline: `/` now resolves to `/chat/conversations`, and Workspace/Dashboard are not current entry points.
+
 ## Root-Cause And Chain Review
 
 Round 15 addressed the release risk that tests existed but were still spread across individual scripts and previous round habits. Bugs could escape through stale docs, duplicate routes, lingering route aliases, raw UI text, route leaks, unsafe shell/code patterns, secret-like fixtures outside tests, package entry drift, or shortcut smoke cleanup races.

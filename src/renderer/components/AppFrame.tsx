@@ -137,9 +137,10 @@ export function AppFrame({
 
   return (
     <div
-      className={`app-frame ${themeClass} density-${snapshot.uiPreferences.density} font-${snapshot.uiPreferences.fontMode}`}
+      className={`app-frame ${themeClass} density-${snapshot.uiPreferences.density} font-${snapshot.uiPreferences.fontMode} ${snapshot.uiPreferences.advancedMode ? 'mode-advanced' : 'mode-ordinary'}`}
       data-theme-mode={snapshot.uiPreferences.theme}
       data-resolved-theme={resolvedTheme}
+      data-user-mode={snapshot.uiPreferences.advancedMode ? 'advanced' : 'ordinary'}
     >
       <aside className="module-rail" aria-label={t('shell.sidebar.aria')}>
         <div className="brand-lockup">
@@ -438,7 +439,7 @@ export function ToggleRow({
 }) {
   return (
     <label className="toggle-row">
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+      <input type="checkbox" checked={checked} aria-label={title} onChange={(event) => onChange(event.target.checked)} />
       <span>
         <strong>{title}</strong>
         {description ? <small>{description}</small> : null}

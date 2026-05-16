@@ -21,6 +21,16 @@ export const GATEWAY_ENDPOINTS = [
 ] as const;
 export type GatewayEndpoint = (typeof GATEWAY_ENDPOINTS)[number];
 
+export const GATEWAY_AVAILABLE_ENDPOINTS = [
+  GATEWAY_ENDPOINT.models,
+  GATEWAY_ENDPOINT.chatCompletions,
+  GATEWAY_ENDPOINT.embeddings,
+] as const;
+
+export const GATEWAY_RESERVED_ENDPOINTS = [
+  GATEWAY_ENDPOINT.responses,
+] as const;
+
 export const GATEWAY_ENDPOINT_SCOPES = {
   '/v1/models': 'models:read',
   '/v1/chat/completions': 'chat:write',

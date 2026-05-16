@@ -2,7 +2,9 @@
 
 ## Overview
 
-NexaChat uses a local-first layered architecture. UI calls typed IPC clients. Main-process services own business logic. Repositories own SQLite access. Gateway owns request execution. Provider adapters own protocol differences.
+NexaChat uses a local-first layered architecture. UI calls typed IPC clients. Provider adapters own protocol differences, and the local Gateway is an independent core module.
+
+Current source fact: `src/main/services/store.ts` still owns the aggregate `NexaStore` service for most business logic, SQLite access, security checks, audit writes, and snapshot assembly. The service names in this diagram are extraction targets and boundaries for future refactors, not proof that those standalone services are already fully split.
 
 ```mermaid
 flowchart TD
@@ -107,4 +109,3 @@ Security service stores API keys and gateway keys with Electron safeStorage / sy
 ## UI Through IPC
 
 Renderer cannot read SQLite or secrets directly. It calls typed IPC methods exposed by preload. Main process validates inputs, applies permission/security policy, and returns safe DTOs.
-

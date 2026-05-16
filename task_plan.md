@@ -70,6 +70,7 @@ At least three agents were launched concurrently before implementation work cont
 - Full App Round 13 Observability/usage/logs/feedback/evaluation: complete as implementation, verification, closeout, push, and remote confirmation; delivery commit `8a94f74892705d39e4107c3c24a0878bb9a36f09`; closeout commit `d84b413dc4967b44d88a62f182f6577423691688`; remote-confirmation commit `932ecbcb91b6d3c9c8d27857d89890b4f3b4d9d6`.
 - Full App Round 14 Desktop experience/packaging/shortcut/release: complete as implementation, verification, closeout, push, and remote confirmation; delivery commit `936cb659e7932ae134d9666653582abca815813e`; closeout commit `f059b4de966023961b7105a729453caa24f0ec2a`; hash-backfill commit `ceb302c5907cafcfac5b9f7d48945763781f6fde`; remote confirmed at `4715788e416f97b79328413c3821287cfcafce0b` before final acceptance commit.
 - Full App Round 15 Test system/quality gates/release convergence: complete as implementation, verification, closeout, push, and remote confirmation; `npm.cmd run verify:release` passed; delivery commit `938d017ceede16475369a537227b86be7096b9cc`; closeout commit `4715788e416f97b79328413c3821287cfcafce0b`.
+- Architecture mainline implementation round: in progress on 2026-05-16. Scope includes Chat lightweight task entry, persisted advanced mode, Gateway available/reserved endpoint separation, Store facade boundary metadata, docs cleanup, tests, commit, and push. A standalone simple home is still future unless later implemented as a separate source/test/docs change.
 - Phase 1: complete.
 - Phase 2: complete.
 - Phase 3: complete.
@@ -92,12 +93,12 @@ At least three agents were launched concurrently before implementation work cont
 - Implemented the Round 10 execution model with tools, runs, steps, trace events, approval requests, safe fixtures, and Run Center UI.
 - Implemented the Round 11 security model with permission authority, local owner session, RBAC/ACL evaluation, main-process IPC/Store enforcement, audit hash-chain integrity, redacted export/search, and Settings visibility.
 - Implemented the Round 12 data mobility model with versioned manifests, conflict records, encrypted backup records, restore preflight, migration records, rollback records, redacted export packages, and structured Data UI pages.
-- Implemented renderer shell, dashboard, chat, model center, knowledge, tools/MCP/Agent, gateway, data config, and settings/security pages.
+- Implemented renderer shell, chat, model center, knowledge, tools/MCP/Agent, gateway, data config, and settings/security pages. Dashboard/Workspace are historical planning contexts, not current first-level modules.
 - Implemented browser fallback API for Vite/Playwright tests.
 - Added Vitest and Playwright smoke tests.
 - Completed Iteration 01 core-flow closure: workspace/default model status, chat route trace, Provider key input and actionable test failures, gateway one-time key display/revoke, knowledge retry/failure states, MCP permission approval, Agent dry-run preview, request/usage/gateway/audit logs, import manifest validation and restore preview.
 - Completed Iteration 01 UI closure: tighter desktop-tool layout, default-model-aware topbar, unified status badges, table long-text handling, earlier right-rail collapse, chat responsive constraints, and 1040 x 680 overflow smoke coverage.
-- Completed Iteration 02 navigation/module decomposition closure: route-aware `/<module>/<tab>` state, controlled second-level tabs, focused tab panels for all eight modules, contextual right rail, shared planned/reserved placeholders, environment-limited parameter template boundary, and all-tab UI smoke coverage.
+- Completed Iteration 02 navigation/module decomposition closure as historical context. Current source facts have since superseded that eight-module structure with 7 chat-first modules and `/ -> /chat/conversations`.
 
 Historical context note: references above to eight modules, Workspace, Dashboard, or `/workspace` record earlier implementation rounds. They must not be used as current architecture facts. The current root route is `/chat/conversations`, and Workspace/Dashboard are not current first-level modules.
 
@@ -110,7 +111,7 @@ Historical context note: references above to eight modules, Workspace, Dashboard
 
 ## Next Task Direction
 
-1. Phase 1: Chat mainline and simple home design or Chat empty-state implementation.
+1. Phase 1: Standalone simple home design only if it remains chat-first and receives source, tests, and docs in the same round. The current implemented entry is Chat quick actions, not a separate home route.
 2. Phase 2: Provider / Model real invocation chain polish and recovery.
 3. Phase 3: Gateway hardening and external compatibility.
 4. Phase 4: Knowledge Base / RAG expansion beyond the current text-like lexical path.

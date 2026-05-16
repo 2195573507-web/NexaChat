@@ -205,6 +205,7 @@ function runAdditiveMigrations(db: DatabaseSync): void {
   addColumnIfMissing(db, 'audit_logs', 'previous_hash', 'TEXT');
   addColumnIfMissing(db, 'audit_logs', 'entry_hash', 'TEXT');
   addColumnIfMissing(db, 'audit_logs', 'integrity_state', "TEXT NOT NULL DEFAULT 'verified'");
+  addColumnIfMissing(db, 'ui_preferences', 'advanced_mode', 'INTEGER NOT NULL DEFAULT 0');
 }
 
 function runPreSchemaMigrations(db: DatabaseSync): void {

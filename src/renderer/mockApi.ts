@@ -74,6 +74,7 @@ import { normalizeThemeMode } from '../shared/theme';
 import { EXECUTION_TOOL_IDS, TOOL_FIXTURES, normalizeApprovalDecision, normalizeExecutionStartInput } from '../shared/executionRuntime';
 import { SECURITY_PERMISSION_KEYS } from '../shared/securityRuntime';
 import { DATA_MANIFEST_VERSION, DATA_CONFIRMATION_PHRASES, stableHash } from '../shared/dataRuntime';
+import { GATEWAY_AVAILABLE_ENDPOINTS } from '../shared/gatewayRuntime';
 import {
   KNOWLEDGE_RUNTIME_POLICY,
   chunkKnowledgeText,
@@ -349,7 +350,7 @@ function createSeedState(): MockState {
       running: true,
       port: 8787,
       bindHost: '127.0.0.1',
-      endpoints: ['/v1/chat/completions', '/v1/responses', '/v1/embeddings'],
+      endpoints: [...GATEWAY_AVAILABLE_ENDPOINTS],
       recentError: null,
     },
     gatewayKeys: [
@@ -467,6 +468,7 @@ function createSeedState(): MockState {
       fontMode: 'system',
       language: 'zh-CN',
       reducedMotion: false,
+      advancedMode: false,
     },
   };
 }
@@ -1490,7 +1492,7 @@ export function createMockApi(): AppApi {
     },
 
     async saveUiPreferences(preferences: UiPreferences) {
-      state.uiPreferences = { ...preferences, theme: normalizeThemeMode(preferences.theme) };
+      state.uiPreferences = { ...preferences, theme: normalizeThemeMode(preferences.theme), advancedMode: Boolean(preferences.advancedMode) };
       pushAudit('settings.saveUiPreferences', 'settings', 'uiPreferences', state.uiPreferences);
       return clone(state.uiPreferences);
     },

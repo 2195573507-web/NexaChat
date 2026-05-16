@@ -738,6 +738,7 @@ CREATE TABLE IF NOT EXISTS ui_preferences (
   font_mode TEXT NOT NULL,
   language TEXT NOT NULL,
   reduced_motion INTEGER NOT NULL,
+  advanced_mode INTEGER NOT NULL DEFAULT 0,
   updated_at INTEGER NOT NULL
 );
 `;

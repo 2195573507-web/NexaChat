@@ -90,6 +90,49 @@ describe('Round 8 gateway runtime authority', () => {
     expect(store.getProviders().some((provider) => provider.name === 'Imported Round 8 Provider' && provider.enabled)).toBe(false);
     expect(store.getModels().some((model) => model.name === 'imported-chat' && model.enabled)).toBe(false);
   });
+
+  it('separates available gateway endpoints from reserved responses and serves embeddings', async () => {
+    const { store } = await import('../src/main/services/store');
+    const { createLocalGatewayServer } = await import('../src/main/services/localGateway');
+    const created = store.createGatewayKey({
+      name: 'Round mainline endpoint key',
+      scopes: ['models:read', 'embeddings:write'],
+      quotaLimit: 10,
+      rateLimitPerMinute: 10,
+    });
+    gateway = createLocalGatewayServer();
+    const url = await listen(gateway);
+
+    expect(store.getGatewayStatus().endpoints).toEqual(['/v1/models', '/v1/chat/completions', '/v1/embeddings']);
+    expect(store.getGatewayStatus().endpoints).not.toContain('/v1/responses');
+
+    const reserved = await fetch(`${url}/v1/responses`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${created.key}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ input: 'reserved' }),
+    });
+    const reservedBody = await reserved.json() as { error: { type: string } };
+    expect(reserved.status).toBe(501);
+    expect(reservedBody.error.type).toBe('reserved_endpoint');
+
+    const embeddings = await fetch(`${url}/v1/embeddings`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${created.key}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ input: ['hello', 'nexachat'] }),
+    });
+    const embeddingsBody = await embeddings.json() as { object: string; data: Array<{ embedding: number[] }>; nexachat: { strategy: string } };
+    expect(embeddings.status).toBe(200);
+    expect(embeddingsBody.object).toBe('list');
+    expect(embeddingsBody.data).toHaveLength(2);
+    expect(embeddingsBody.data[0].embedding.length).toBeGreaterThan(0);
+    expect(embeddingsBody.nexachat.strategy).toBe('lexical');
+  });
 });
 
 async function status(baseUrl: string, key: string | null): Promise<number> {

@@ -33,7 +33,7 @@ Each component definition includes purpose, module, input data, interaction beha
 - States: normal, gateway offline, sync/loading.
 - Acceptance: no cluttered action dumping.
 
-## ModuleTabs
+## TopTabs
 
 - Purpose: second-level navigation.
 - Module: all modules.
@@ -41,6 +41,8 @@ Each component definition includes purpose, module, input data, interaction beha
 - Interaction: switch tab.
 - States: active, hover, disabled, planned.
 - Acceptance: each module shows required tabs.
+
+Historical note: the old `ModuleTabs` component name and `.module-tabs` CSS class are superseded. Current UI uses `.top-tabs`; `.module-tabs` and `.module-subnav-panel` must remain absent.
 
 ## PageHeader
 
@@ -54,7 +56,7 @@ Each component definition includes purpose, module, input data, interaction beha
 ## StatusCard
 
 - Purpose: display status such as gateway/model/knowledge health.
-- Module: dashboard, gateway, model, knowledge.
+- Module: chat, gateway, model, knowledge.
 - Input data: status, label, summary, action.
 - Interaction: open detail or repair action.
 - States: ok, warning, error, loading, empty.
@@ -63,7 +65,7 @@ Each component definition includes purpose, module, input data, interaction beha
 ## MetricCard
 
 - Purpose: show usage, tokens, cost estimate, latency.
-- Module: dashboard, logs.
+- Module: gateway, settings, observability surfaces.
 - Input data: metric value, unit, period, trend.
 - Interaction: filter or drill down.
 - States: loading, empty, estimate.
@@ -72,7 +74,7 @@ Each component definition includes purpose, module, input data, interaction beha
 ## DataTable
 
 - Purpose: dense list/table display.
-- Module: model, logs, files, gateway, audit.
+- Module: models, knowledge files, gateway, settings audit.
 - Input data: rows, columns, filters, selection.
 - Interaction: sort, filter, row action, detail open.
 - States: loading, empty, error, selected.
@@ -117,7 +119,7 @@ Each component definition includes purpose, module, input data, interaction beha
 ## HealthBadge
 
 - Purpose: compact health indication.
-- Module: model, gateway, dashboard.
+- Module: models, gateway, chat.
 - Input data: status, latency, last checked.
 - Interaction: tooltip, open diagnostics.
 - States: healthy, degraded, offline, unknown.

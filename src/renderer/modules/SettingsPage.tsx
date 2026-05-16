@@ -256,10 +256,17 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
             <option value="reduced">{t('settings.preferences.motion.reduced')}</option>
           </select>}
         />
+        <ToggleRow
+          title={t('settings.preferences.advancedMode')}
+          description={t('settings.preferences.advancedMode.note')}
+          checked={prefs.advancedMode}
+          onChange={(checked) => setPrefs({ ...prefs, advancedMode: checked })}
+        />
       </ConfigList>
       <ConfigDetail title={t('settings.preferences.title')} description={t('nav.settings.preferences.boundary')}>
         <StatusPillLite label={prefs.theme} state="info" />
         <StatusPillLite label={prefs.language} state="info" />
+        <StatusPillLite label={prefs.advancedMode ? t('settings.preferences.advancedMode') : t('settings.preferences.ordinaryMode')} state="info" />
       </ConfigDetail>
       </div>
     </TabPanel>

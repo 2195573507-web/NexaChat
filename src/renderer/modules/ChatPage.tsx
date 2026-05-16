@@ -1,5 +1,5 @@
-import { Copy, GitCompareArrows, MessageSquarePlus, Pin, RefreshCw, RotateCcw, Search, Send, SlidersHorizontal, Star, XCircle } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { BookOpenText, Copy, DatabaseBackup, GitCompareArrows, KeyRound, MessageSquarePlus, Pin, RefreshCw, RotateCcw, Search, Send, ServerCog, Settings, SlidersHorizontal, Star, XCircle } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { ContextStrategy, Conversation, Message, Model } from '../../shared/types';
 import { ChatInput, CommandButton, EmptyBlock, MessageBubble, StatusPillLite } from '../components/AppFrame';
 import { useI18n } from '../i18n';
@@ -36,7 +36,7 @@ function getGroupedConversations(conversations: Conversation[], query: string) {
   ];
 }
 
-export function ChatPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
+export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: TabPageProps) {
   const { t } = useI18n();
   const [activeConversationId, setActiveConversationId] = useState(snapshot.conversations[0]?.id ?? '');
   const [draft, setDraft] = useState('');
@@ -47,6 +47,7 @@ export function ChatPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
   const [detailOpen, setDetailOpen] = useState(false);
 
   const defaultModel = getDefaultModel(snapshot);
+  const advancedMode = snapshot.uiPreferences.advancedMode;
   const selectedModel = snapshot.models.find((model) => model.id === selectedModelId) ?? defaultModel;
   const activeConversation = snapshot.conversations.find((conversation) => conversation.id === activeConversationId) ?? snapshot.conversations[0];
   const messages = getConversationMessages(snapshot.messages, activeConversation?.id);
@@ -68,6 +69,8 @@ export function ChatPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
     const conversation = await api.createConversation(t('chat.seed.newConversation'));
     setActiveConversationId(conversation.id);
   };
+
+  const createConversationFromQuickAction = () => onAction(t('chat.toast.created'), createConversationAndSelect);
 
   const sendCurrentMessage = async () => {
     const content = draft.trim();
@@ -137,12 +140,23 @@ export function ChatPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
                   <option value={strategy.value} key={strategy.value}>{t(strategy.labelKey)}</option>
                 ))}
               </select>
-              <button type="button" className="ghost-button" onClick={() => setDetailOpen((current) => !current)} aria-pressed={detailOpen}>
-                <SlidersHorizontal size={15} />
-                {t('chat.context.title')}
-              </button>
+              {advancedMode ? (
+                <button type="button" className="ghost-button" onClick={() => setDetailOpen((current) => !current)} aria-pressed={detailOpen}>
+                  <SlidersHorizontal size={15} />
+                  {t('chat.context.title')}
+                </button>
+              ) : null}
             </div>
           </header>
+
+          <div className="chat-quick-actions" aria-label={t('chat.quickActions.aria')}>
+            <QuickAction icon={<MessageSquarePlus size={16} />} title={t('chat.quickActions.newChat')} detail={t('chat.quickActions.newChat.detail')} onClick={createConversationFromQuickAction} />
+            <QuickAction icon={<ServerCog size={16} />} title={t('chat.quickActions.chooseModel')} detail={t('chat.quickActions.chooseModel.detail')} onClick={() => onOpenModule({ moduleId: 'models', tabId: 'providers' })} />
+            <QuickAction icon={<BookOpenText size={16} />} title={t('chat.quickActions.knowledge')} detail={t('chat.quickActions.knowledge.detail')} onClick={() => onOpenModule({ moduleId: 'knowledge', tabId: 'files' })} />
+            <QuickAction icon={<KeyRound size={16} />} title={t('chat.quickActions.gateway')} detail={t('chat.quickActions.gateway.detail')} onClick={() => onOpenModule({ moduleId: 'gateway', tabId: 'overview' })} />
+            <QuickAction icon={<DatabaseBackup size={16} />} title={t('chat.quickActions.importConfig')} detail={t('chat.quickActions.importConfig.detail')} onClick={() => onOpenModule({ moduleId: 'data', tabId: 'import' })} />
+            <QuickAction icon={<Settings size={16} />} title={t('chat.quickActions.settings')} detail={t('chat.quickActions.settings.detail')} onClick={() => onOpenModule({ moduleId: 'settings', tabId: 'preferences' })} />
+          </div>
 
           <div className="message-timeline">
             {messages.length > 0 ? (
@@ -196,7 +210,7 @@ export function ChatPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
           />
         </section>
 
-        {detailOpen ? (
+        {advancedMode && detailOpen ? (
           <aside className="chat-detail-panel">
             <section>
               <h2>{t('chat.context.title')}</h2>
@@ -239,6 +253,18 @@ export function ChatPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
         ) : null}
       </div>
     </TabPanel>
+  );
+}
+
+function QuickAction({ icon, title, detail, onClick }: { icon: ReactNode; title: string; detail: string; onClick: () => void }) {
+  return (
+    <button type="button" className="chat-quick-action" onClick={onClick}>
+      <span className="quick-action-icon">{icon}</span>
+      <span>
+        <strong>{title}</strong>
+        <small>{detail}</small>
+      </span>
+    </button>
   );
 }
 

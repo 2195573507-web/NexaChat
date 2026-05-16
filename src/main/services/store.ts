@@ -70,9 +70,9 @@ import {
   type KnowledgeScoredChunkInput,
 } from '../../shared/knowledgeRuntime.js';
 import {
+  GATEWAY_AVAILABLE_ENDPOINTS,
   GATEWAY_BIND_HOST,
   GATEWAY_DEFAULT_KEY_POLICY,
-  GATEWAY_ENDPOINTS,
   GATEWAY_ERROR_CODES,
   GATEWAY_PORT,
   GATEWAY_RATE_WINDOW_MS,
@@ -698,7 +698,7 @@ export class NexaStore {
       running: this.gatewayEnabled,
       port: GATEWAY_PORT,
       bindHost: GATEWAY_BIND_HOST,
-      endpoints: [...GATEWAY_ENDPOINTS],
+      endpoints: [...GATEWAY_AVAILABLE_ENDPOINTS],
       recentError: this.gatewayRecentError,
     };
   }
@@ -963,7 +963,7 @@ export class NexaStore {
   getUiPreferences(): UiPreferences {
     const row = this.db.prepare('SELECT * FROM ui_preferences WHERE id = ?').get(DEFAULT_PREFS_ID);
     if (!row) {
-      return { theme: 'system', density: 'comfortable', fontMode: 'system', language: 'zh-CN', reducedMotion: false };
+      return { theme: 'system', density: 'comfortable', fontMode: 'system', language: 'zh-CN', reducedMotion: false, advancedMode: false };
     }
     return mapUiPreferences(row as Record<string, unknown>);
   }
@@ -1810,12 +1810,13 @@ export class NexaStore {
     const normalizedPreferences: UiPreferences = {
       ...preferences,
       theme: normalizeThemeMode(preferences.theme),
+      advancedMode: Boolean(preferences.advancedMode),
     };
     this.db
       .prepare(
-        `INSERT INTO ui_preferences (id, theme, density, font_mode, language, reduced_motion, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET theme = excluded.theme, density = excluded.density, font_mode = excluded.font_mode, language = excluded.language, reduced_motion = excluded.reduced_motion, updated_at = excluded.updated_at`,
+        `INSERT INTO ui_preferences (id, theme, density, font_mode, language, reduced_motion, advanced_mode, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET theme = excluded.theme, density = excluded.density, font_mode = excluded.font_mode, language = excluded.language, reduced_motion = excluded.reduced_motion, advanced_mode = excluded.advanced_mode, updated_at = excluded.updated_at`,
       )
       .run(
         DEFAULT_PREFS_ID,
@@ -1824,6 +1825,7 @@ export class NexaStore {
         normalizedPreferences.fontMode,
         normalizedPreferences.language,
         normalizedPreferences.reducedMotion ? 1 : 0,
+        normalizedPreferences.advancedMode ? 1 : 0,
         timestamp,
       );
     this.audit('ui.preferences.updated', 'ui_preferences', DEFAULT_PREFS_ID, normalizedPreferences);
@@ -2561,6 +2563,7 @@ export class NexaStore {
         fontMode: 'system',
         language: 'zh-CN',
         reducedMotion: false,
+        advancedMode: false,
       });
     }
 

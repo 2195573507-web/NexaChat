@@ -990,6 +990,7 @@ export interface UiPreferences {
   fontMode: 'system' | 'kaiti';
   language: 'zh-CN' | 'en-US';
   reducedMotion: boolean;
+  advancedMode: boolean;
 }
 
 export interface DashboardSummary {

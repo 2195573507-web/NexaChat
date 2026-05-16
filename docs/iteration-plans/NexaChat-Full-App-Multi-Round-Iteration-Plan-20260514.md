@@ -8,6 +8,8 @@ Scope: 全 App 架构治理、功能补全、UI 重整、工程质量、测试�
 
 Status: Authoritative roadmap for future implementation rounds. This file is a plan artifact only. It does not change business code.
 
+Current relevance note, 2026-05-16: this older multi-round plan is superseded for navigation and product-entry facts by the chat-first 7-module mainline. Current source facts are Chat / Models / Knowledge Base / Tools / Gateway / Data / Settings, `/` -> `/chat/conversations`, Gateway as an independent core module, Tools / Agent / MCP as experimental, Knowledge Base text-like only, and `NexaStore` as the current aggregate service. Workspace/Dashboard and older 8-module references below are historical planning context.
+
 ## 0. Execution Record For This Planning Round
 
 - Confirmed project root: `D:\NexaChat` from `git rev-parse --show-toplevel`.

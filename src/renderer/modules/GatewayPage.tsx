@@ -1,6 +1,6 @@
 import { Copy, KeyRound, Play, Power, RotateCcw, ShieldAlert } from 'lucide-react';
 import { useState } from 'react';
-import { GATEWAY_DEFAULT_KEY_POLICY, GATEWAY_ENDPOINT, GATEWAY_ENDPOINTS } from '../../shared/gatewayRuntime';
+import { GATEWAY_AVAILABLE_ENDPOINTS, GATEWAY_DEFAULT_KEY_POLICY, GATEWAY_ENDPOINT, GATEWAY_RESERVED_ENDPOINTS } from '../../shared/gatewayRuntime';
 import { GATEWAY_DOCS, FORM_DEFAULTS } from '../../shared/uiCopy';
 import { ActivityList, CommandButton, ConfigDetail, ConfigList, CopyableCommand, DataRows, EmptyBlock, Field, InlineNotice, PageHeader, StatusPillLite, ToolSection } from '../components/AppFrame';
 import { useI18n } from '../i18n';
@@ -133,14 +133,14 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
           <CopyableCommand value={chatCommand} label={t('app.error.copy')} />
           <ToolSection title={t('gateway.docs.security')} description={t('gateway.docs.note', { host: snapshot.dashboard.gatewayStatus.bindHost, port: snapshot.dashboard.gatewayStatus.port })}>
             <div className="endpoint-list">
-              {GATEWAY_ENDPOINTS.map((endpoint) => (
+              {GATEWAY_AVAILABLE_ENDPOINTS.map((endpoint) => (
                 <code key={endpoint}>{endpoint}</code>
               ))}
             </div>
           </ToolSection>
         </ConfigList>
         <ConfigDetail title={t('nav.gateway.docs.label')} description={t('nav.gateway.docs.boundary')}>
-          <InlineNotice tone="warning" title={t('stage.reserved')} detail={GATEWAY_ENDPOINT.responses} />
+          <InlineNotice tone="warning" title={t('gateway.reserved.title')} detail={GATEWAY_RESERVED_ENDPOINTS.join(', ')} />
           <CommandButton icon={<Copy size={15} />} onClick={() => void navigator.clipboard?.writeText(chatCommand)}>{t('app.error.copy')}</CommandButton>
         </ConfigDetail>
         </div>
@@ -180,6 +180,7 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
             { label: t('gateway.defaultModel'), value: defaultModel?.displayName ?? t('common.notConfigured') },
             { label: t('gateway.keyCount'), value: snapshot.gatewayKeys.length },
             { label: t('settings.about.bindHost'), value: endpointBase },
+            { label: t('gateway.reserved.title'), value: GATEWAY_ENDPOINT.responses },
             { label: t('gateway.recentError'), value: snapshot.dashboard.gatewayStatus.recentError ?? t('common.none') },
           ]}
         />

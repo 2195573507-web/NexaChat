@@ -7,6 +7,7 @@ import { IPC_CHANNELS, IPC_CHANNEL_LIST, assertIpcPayload, isIpcChannel } from '
 import { translate } from '../src/shared/i18n';
 import { navModules, resolveNavigation, routeAliasRegistry } from '../src/shared/navigation';
 import { DEFAULT_MODEL_FORM, DEFAULT_PROVIDER_FORM, PROVIDER_CATALOG } from '../src/shared/providerCatalog';
+import { GATEWAY_AVAILABLE_ENDPOINTS, GATEWAY_RESERVED_ENDPOINTS } from '../src/shared/gatewayRuntime';
 import type { NavModule, NavTab } from '../src/shared/types';
 
 beforeEach(() => {
@@ -52,6 +53,9 @@ describe('NexaChat renderer', () => {
     expect(document.querySelectorAll('.module-subnav-panel')).toHaveLength(0);
     expect(activePanel()).toHaveAttribute('data-module', 'chat');
     expect(activePanel()).toHaveAttribute('data-tab', 'conversations');
+    expect(document.querySelector('.chat-quick-actions')).toBeInTheDocument();
+    expect(document.querySelector('.chat-detail-panel')).not.toBeInTheDocument();
+    expect(document.querySelector('.app-frame')).toHaveAttribute('data-user-mode', 'ordinary');
 
     for (const module of navModules) {
       const rail = document.querySelector('.module-rail') as HTMLElement;
@@ -113,10 +117,14 @@ describe('NexaChat renderer', () => {
     openFeature(gateway, gateway.tabs.find((tab) => tab.id === 'keys')!);
     expect(activePanel()).toHaveAttribute('data-tab', 'keys');
     expect(activePanel()).toHaveTextContent(translate('zh-CN', 'gateway.keys.title'));
+    openFeature(gateway, gateway.tabs.find((tab) => tab.id === 'docs')!);
+    expect(activePanel()).toHaveTextContent(GATEWAY_AVAILABLE_ENDPOINTS[0]);
+    expect(activePanel()).toHaveTextContent(GATEWAY_RESERVED_ENDPOINTS[0]);
 
     openFeature(settings, settings.tabs.find((tab) => tab.id === 'preferences')!);
     expect(activePanel()).toHaveAttribute('data-tab', 'preferences');
     expect(activePanel()).toHaveTextContent(translate('zh-CN', 'settings.preferences.title'));
+    expect(within(activePanel()).getByText(translate('zh-CN', 'settings.preferences.advancedMode'))).toBeInTheDocument();
     openFeature(settings, settings.tabs.find((tab) => tab.id === 'security')!);
     expect(activePanel()).toHaveAttribute('data-tab', 'security');
     expect(activePanel()).toHaveTextContent(translate('zh-CN', 'settings.security.title'));
@@ -135,6 +143,27 @@ describe('NexaChat renderer', () => {
         expect(panel).toHaveAttribute('data-tab', tab.id);
       }
     }
+  });
+
+  it('persists advanced mode and reveals chat technical detail only when enabled', async () => {
+    await renderApp();
+
+    expect(document.querySelector('.app-frame')).toHaveAttribute('data-user-mode', 'ordinary');
+    expect(screen.queryByRole('button', { name: translate('zh-CN', 'chat.context.title') })).not.toBeInTheDocument();
+
+    const settings = navModules.find((module) => module.id === 'settings')!;
+    openFeature(settings, settings.tabs.find((tab) => tab.id === 'preferences')!);
+    fireEvent.click(within(activePanel()).getByLabelText(translate('zh-CN', 'settings.preferences.advancedMode')));
+    fireEvent.click(screen.getByRole('button', { name: translate('zh-CN', 'settings.preferences.save') }));
+
+    await waitFor(() => {
+      expect(document.querySelector('.app-frame')).toHaveAttribute('data-user-mode', 'advanced');
+    });
+
+    const chat = navModules.find((module) => module.id === 'chat')!;
+    openFeature(chat, chat.tabs.find((tab) => tab.id === 'conversations')!);
+    fireEvent.click(screen.getByRole('button', { name: translate('zh-CN', 'chat.context.title') }));
+    expect(document.querySelector('.chat-detail-panel')).toBeInTheDocument();
   });
 });
 
@@ -202,5 +231,7 @@ describe('navigation authority', () => {
       apiKey: '',
     });
     expect(DEFAULT_MODEL_FORM).toEqual({ name: '' });
+    expect(GATEWAY_AVAILABLE_ENDPOINTS).toEqual(['/v1/models', '/v1/chat/completions', '/v1/embeddings']);
+    expect(GATEWAY_RESERVED_ENDPOINTS).toEqual(['/v1/responses']);
   });
 });

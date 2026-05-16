@@ -751,5 +751,6 @@ export function mapUiPreferences(row: Row): UiPreferences {
     fontMode: String(row.font_mode) as UiPreferences['fontMode'],
     language: String(row.language) as UiPreferences['language'],
     reducedMotion: bool(row.reduced_motion),
+    advancedMode: bool(row.advanced_mode),
   };
 }

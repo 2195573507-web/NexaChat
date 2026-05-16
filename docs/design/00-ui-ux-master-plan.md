@@ -30,34 +30,35 @@ Create a desktop UI that makes NexaChat feel like a calm, reliable, local-first 
 
 ## Information Architecture
 
-First-level navigation is capped at 8:
+Current first-level navigation is exactly 7 top-level modules:
 
-1. 工作台
-2. 对话
-3. 模型
-4. 知识库
-5. 工具与 Agent
-6. 本地网关
-7. 数据配置
-8. 设置与安全
+1. Chat
+2. Models
+3. Knowledge Base
+4. Tools
+5. Gateway
+6. Data
+7. Settings
 
-Canonical module string for validation: 工作台 / 对话 / 模型 / 知识库 / 工具与 Agent / 本地网关 / 数据配置 / 设置与安全.
+Canonical module string for validation: Chat / Models / Knowledge Base / Tools / Gateway / Data / Settings.
+
+The root route `/` resolves to `/chat/conversations`. Workspace and Dashboard are historical planning contexts, not current product modules or entry points. A later simple home may exist only as a lightweight chat-first entry or Chat empty state; it must not restore Dashboard-first navigation.
 
 ## Main Navigation
 
-Use a fixed left sidebar with icon + label mode. Compact width is about 72px; expanded width is about 220px. Navigation source should be configuration-driven in future implementation, for example `src/renderer/navigation/moduleGroups.ts`, where each module provides `label`, `route`, `icon`, `children`, `permission`, and `status`.
+Use a fixed left sidebar with icon + label mode. Navigation source is the shared registry in `src/shared/navigation.ts`, where each module provides `label`, `route`, `icon`, `children`, `permission`, and `status`.
 
 ## Page Layout Strategy
 
 - Main shell: left navigation, topbar, page tabs, main content, optional right detail rail.
-- Chat page: left conversation list, center message area, right parameter/context panel.
+- Chat page: left conversation list, center message area, task-oriented quick actions, and an advanced-only parameter/context panel.
 - Configuration pages: list/detail split view, not modal-first forms.
 - Tables: dense but readable, with filters and row actions.
 - Cards: individual repeated items only; do not put cards inside cards.
 
 ## Component Strategy
 
-Use shared primitives: AppShell, Sidebar, Topbar, ModuleTabs, PageHeader, DataTable, ConfigForm, SecretInput, HealthBadge, ChatLayout, MessageBubble, LogViewer, ImportWizard, RouteRuleEditor, EmptyState, LoadingState, ErrorState, Toast, and reserved CommandPalette.
+Use shared primitives: AppFrame, Sidebar/module rail, Topbar, top tabs, PageHeader, ConfigList, ConfigDetail, ChatLayout, MessageBubble, ChatInput, EmptyState, LoadingState, ErrorState, Toast, and reserved CommandPalette. Old `.module-tabs` and `.module-subnav-panel` surfaces must not return.
 
 ## Design System Strategy
 
@@ -71,6 +72,8 @@ Define tokens for color, typography, spacing, radius, border, shadow, layout, st
 - Wide layout target: 1440 x 900.
 - Only one main window opens on startup.
 - No extra onboarding or status popups at launch.
+- Ordinary mode exposes task entries such as new chat, continue conversation, choose model, knowledge Q&A, import config, gateway status, and preferences.
+- Advanced mode may expose provider id, model id, gateway endpoint, request logs, traces, permissions, and ACL details.
 - Future shortcut must be verified after a runnable app exists.
 
 ## Empty / Loading / Error States
@@ -113,7 +116,9 @@ Do not hardcode navigation behavior in Sidebar. Future implementation should def
 
 ## UI Acceptance Criteria
 
-- 8 first-level modules maximum.
+- Exactly 7 first-level modules are visible: Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings.
+- `/` resolves to `/chat/conversations`.
+- Workspace/Dashboard-first navigation and `/workspace` as a main entry do not return.
 - Page hierarchy is visible.
 - Chat page remains usable at minimum desktop window size.
 - Provider configuration is clear and testable.

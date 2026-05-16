@@ -10,8 +10,8 @@ Current status: Round 0-15 implementation history exists, but the active archite
 - The real first-level modules are 7 modules: Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings.
 - The root route `/` currently resolves to `/chat/conversations`.
 - Workspace and Dashboard are not the current product entry point or first-level module.
-- Simple home is a later product target, not a completed current capability.
-- Ordinary mode should organize work by user tasks. Advanced mode should reveal technical details without creating a second implementation path.
+- Chat now includes lightweight task quick actions. A standalone simple home remains a later product target, not a completed current capability.
+- Ordinary mode organizes work by user tasks. Advanced mode persists in UI preferences and reveals technical details without creating a second implementation path.
 - Gateway is an independent core module, not an internal-only implementation detail.
 - Agent, Tools, and MCP are experimental capabilities and must not be described as unrestricted execution.
 - `NexaStore` is still the current centralized aggregate service in `src/main/services/store.ts`; service splitting is a target route, not the current source fact.
@@ -20,6 +20,7 @@ Current status: Round 0-15 implementation history exists, but the active archite
 
 - Electron desktop shell with one main window, packaged Windows launch, installer-script smoke, startup diagnostics, and a verified desktop shortcut.
 - React renderer with route-aware pages under the 7 current modules: Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings.
+- Chat-first entry with quick actions for new chat, model selection, knowledge Q&A, Gateway status, config import, and preferences while keeping `/` routed to `/chat/conversations`.
 - Unified authorities for navigation, IPC, API contracts, i18n, theme tokens, Provider runtime, Gateway runtime, Knowledge runtime, execution runtime, security, data mobility, observability, desktop entry, and quality gates.
 - Live Chinese/English switching, dark/light/system theme switching, compact flat desktop-tool styling, and UI smoke coverage for route leakage and horizontal overflow.
 - Main-process SQLite schema and local Store for providers, models, conversations, message chunks, request logs, usage, Gateway keys/logs, knowledge files/chunks/lexical embeddings, execution runs, audit logs, backups, observability records, and UI preferences.
@@ -33,7 +34,7 @@ Current status: Round 0-15 implementation history exists, but the active archite
 
 ## Planned Capabilities
 
-- Simple home or Chat empty-state entry design that keeps `/` and Chat routing explicit.
+- Standalone simple home design that keeps `/` and Chat routing explicit if it is added later.
 - Provider and Model invocation polish across real upstream configurations, streaming lifecycle, and user-facing recovery.
 - Gateway hardening around compatibility, logs, scope policy, and external integration guidance.
 - Knowledge Base expansion toward richer RAG, stronger embeddings, rerank, and additional parser classes.
@@ -45,7 +46,7 @@ Current status: Round 0-15 implementation history exists, but the active archite
 - `/v1/responses` is not complete; it is reserved and should be documented as 501 behavior.
 - Tools/Agent/MCP does not execute arbitrary real MCP tools, arbitrary code, or a release-grade Agent sandbox.
 - Release-grade signed installer security and broad external sandbox guarantees are not current facts.
-- Future service names such as chat service, router service, and security service are extraction targets, while `NexaStore` remains the current aggregate source.
+- Future service names such as ChatService, ModelService, GatewayService, KnowledgeService, ToolService, DataService, SecurityService, and ObservabilityService are extraction targets, while `NexaStore` remains the current aggregate source.
 
 ## Release Gate
 

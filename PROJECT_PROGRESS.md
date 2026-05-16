@@ -1386,3 +1386,103 @@ Next recommended execution:
 
 - Start from Phase 0 if the next round should clean stale Workspace/Dashboard or 8-module documentation.
 - Start from Phase 1 if the next round should implement the simple home / chat-first mainline experience.
+
+## 2026-05-16 Architecture Mainline Implementation Round
+
+本轮目标:
+
+- 按 `docs/build-plans/00-modular-refactor-master-plan/architecture-mainline-iteration-plan.md` 推进 Phase 0-3，并补充 Phase 4 验证、Phase 5 留痕、Phase 6 Git 收尾。
+- 将源码、路由、UI、Gateway 契约、Store 拆分准备、测试和文档继续收敛到 chat-first 主线。
+
+实际项目根目录:
+
+- `git rev-parse --show-toplevel`: `D:/NexaChat`.
+
+当前分支和起始 commit:
+
+- Branch: `main`.
+- Start commit: `f555185 docs: align architecture documentation with chat-first mainline`.
+- User-provided background commit was `8ba7b9e316c92864088d97752a689d6fa2313c85`; the local branch had already advanced to `f555185` before this round began.
+
+修改文件列表:
+
+- `src/shared/gatewayRuntime.ts`
+- `src/shared/types.ts`
+- `src/shared/i18n.ts`
+- `src/main/database/schema.ts`
+- `src/main/database/connection.ts`
+- `src/main/repositories/mappers.ts`
+- `src/main/services/store.ts`
+- `src/main/services/storeBoundaries.ts`
+- `src/renderer/components/AppFrame.tsx`
+- `src/renderer/modules/ChatPage.tsx`
+- `src/renderer/modules/GatewayPage.tsx`
+- `src/renderer/modules/SettingsPage.tsx`
+- `src/renderer/mockApi.ts`
+- `src/renderer/styles/pages.css`
+- `tests/app.test.tsx`
+- `tests/gateway-runtime.test.ts`
+- `tests/store-boundaries.test.ts`
+- `docs/architecture/module-relationships.md`
+- `docs/architecture/store-facade-boundaries.md`
+- `docs/design/00-ui-ux-master-plan.md`
+- `docs/design/01-information-architecture.md`
+- `docs/design/04-component-inventory.md`
+- `docs/design/07-ui-acceptance-criteria.md`
+- `docs/implementation/round-02-navigation-ia-closure.md`
+- `docs/implementation/operation-logic-navigation-refactor-closure.md`
+- `docs/implementation/round-15-quality-gates-release-convergence-closure.md`
+- `docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md`
+- `README.md`
+- `README.zh-CN.md`
+- `task_plan.md`
+- `PROJECT_PROGRESS.md`
+
+完成的 Phase:
+
+- Phase 0: Active docs were updated to 7 modules, chat-first, `/ -> /chat/conversations`, Gateway core, Tools/Agent/MCP experimental, Knowledge text-like only, and `NexaStore` aggregate current state. Historical docs received current relevance notes instead of being deleted.
+- Phase 1: Kept `/` routed to `/chat/conversations`; implemented a Chat-first lightweight task entry inside Chat with quick actions for new chat, model selection, knowledge Q&A, Gateway status, config import, and preferences. This is not a standalone simple home route.
+- Phase 2: Separated Gateway available endpoints from reserved endpoints, persisted `advancedMode` in shared UI preferences, gated Chat technical context panel behind advanced mode, and kept 7-module navigation tests.
+- Phase 3: Added pure `STORE_BOUNDARY_MAP` metadata and `docs/architecture/store-facade-boundaries.md` to prepare future service extraction without changing schema behavior or IPC contracts.
+
+没完成的 Phase 和原因:
+
+- A standalone simple home route was not implemented because the safer current step is a Chat lightweight entry while preserving `/ -> /chat/conversations`. It should only be added later with explicit route, UI smoke, Electron smoke, README, and progress updates.
+- Full service extraction from `NexaStore` was not performed because the plan calls for low-risk preparation first and forbids a high-risk big-bang rewrite.
+
+真实能力边界:
+
+- Current Gateway available endpoints are `/v1/models`, `/v1/chat/completions`, and `/v1/embeddings`; `/v1/responses` remains reserved / 501.
+- Knowledge Base remains text-like import, parsing, chunking, lexical embedding, retrieval preview, rebuild/delete, and citations. PDF, Office, OCR, external vector DB, rerank, and full RAG evaluation are future work.
+- Tools / Agent / MCP remains registration, permissions, agent definitions, dry-run, fixture execution, approvals, execution steps, and trace events. Arbitrary MCP executor, arbitrary code execution, and release-grade Agent sandbox are future work.
+- `NexaStore` remains the current aggregate service.
+
+运行过的验证命令和结果:
+
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test -- tests/app.test.tsx tests/gateway-runtime.test.ts tests/store-boundaries.test.ts`: passed, 3 files / 15 tests.
+- `npm.cmd run test`: passed, 20 files / 67 tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run test:ui-smoke`: passed, 7 Playwright tests.
+- `npm.cmd run test:electron-smoke`: passed.
+- `npm.cmd run scan:docs`: passed.
+- `npm.cmd run scan:quality`: passed.
+- `npm.cmd run verify`: passed.
+- `npm.cmd run verify:release`: passed, including typecheck, full unit tests, build, UI smoke, Electron smoke, package release, package smoke, installer smoke, packaged shortcut readback, scanner suite, docs scan, and `git diff --check`.
+- `git diff --check`: passed with LF/CRLF conversion warnings only.
+
+已知风险:
+
+- Historical docs and old progress entries still contain legacy terms by design; they now need current relevance notes when they are likely to mislead.
+- `ui_preferences` migration is additive, but existing user databases still depend on runtime migration order staying intact.
+- Chat quick actions are intentionally lightweight; they do not replace a future standalone simple home.
+
+后续建议:
+
+- If standalone simple home remains desired, implement it as a separate chat-first route decision with source, tests, docs, and smoke coverage in one round.
+- Continue service extraction by moving pure validation/mappers/query helpers first, while keeping IPC contracts stable.
+- Add a docs scanner rule for misleading current-tense Workspace/Dashboard and 8-module claims in active docs.
+
+Commit and push:
+
+- Pending until final verification succeeds.

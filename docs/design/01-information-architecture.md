@@ -2,86 +2,69 @@
 
 ## First-Level Navigation
 
-NexaChat has at most 8 first-level modules:
+NexaChat currently has exactly 7 first-level modules:
 
-1. 工作台
-2. 对话
-3. 模型
-4. 知识库
-5. 工具与 Agent
-6. 本地网关
-7. 数据配置
-8. 设置与安全
+1. Chat
+2. Models
+3. Knowledge Base
+4. Tools
+5. Gateway
+6. Data
+7. Settings
+
+Workspace and Dashboard are historical planning contexts. They are not current product entry points or first-level modules.
 
 ## Second-Level Tabs
 
-### 工作台
+### Chat
 
-- 总览
-- 工作区
-- 最近活动
-- 快捷操作
+- Conversations
+- Playground
+- Context
 
-### 对话
+### Models
 
-- 会话
-- 助手
-- Prompt Lab
-- 多模型对比
-- Artifacts
-- 本地历史
+- Providers
+- Catalog
+- Router
 
-### 模型
+### Knowledge Base
 
-- 供应商
-- 模型列表
-- 能力矩阵
-- 参数模板
-- 健康检测
+- Files
+- Chunks
+- Retrieval
 
-### 知识库
+### Tools
 
-- 文件
-- 知识库
-- 检索设置
-- 上下文
-- 记忆
-
-### 工具与 Agent
-
-- 工具
 - MCP
-- Agent
-- 运行中心
-- 工作流预留
+- Agents
+- Runs
 
-### 本地网关
+### Gateway
 
-- 网关状态
-- API Key
-- 虚拟模型
-- 模型路由
-- 外部接入
-- 网关日志
+- Overview
+- Keys
+- Logs
+- Usage
+- Docs
 
-### 数据配置
+### Data
 
-- 智能导入
-- 导入导出
-- 备份恢复
-- 配置快照
-- 数据清理
+- Import
+- Backup
+- Restore
+- Rollback
+- Diagnostics
 
-### 设置与安全
+### Settings
 
-- 请求日志
-- 用量统计
-- 错误诊断
-- 模型评测
-- 密钥安全
-- 审计
-- 界面设置
-- 系统设置
+- Preferences
+- Security
+- Audit
+- Feedback
+- Evals
+- Privacy
+- About
 
 ## Hierarchy Rules
 
@@ -93,18 +76,19 @@ NexaChat has at most 8 first-level modules:
 
 ## Route Strategy
 
-Future route examples:
+Current route examples:
 
-- `/dashboard/overview`
 - `/chat/conversations`
 - `/models/providers`
 - `/knowledge/files`
 - `/tools/mcp`
-- `/gateway/routes`
+- `/gateway/overview`
 - `/data/import`
 - `/settings/security`
 
 Routes should map to module and tab identity so deep links can restore the right surface.
+
+The root route `/` resolves to `/chat/conversations`. `/workspace/...` and `/dashboard/...` are not current primary routes.
 
 ## Permission And Status Metadata
 
@@ -121,3 +105,8 @@ Each module entry should support:
 
 Planned features should be labeled as planned, not rendered as working controls.
 
+## Capability Boundaries
+
+- Knowledge Base currently supports text-like import, parsing, chunking, lexical embedding, retrieval preview, and citations. PDF, Office, OCR, external vector databases, rerank, and full RAG evaluation are future capabilities.
+- Tools / Agent / MCP are experimental: current scope is registration, permissions, agent definitions, dry-run, fixture execution, approvals, steps, and traces. Arbitrary MCP execution and release-grade Agent sandbox are future capabilities.
+- Gateway is an independent core module with `/v1/models`, `/v1/chat/completions`, and `/v1/embeddings`. `/v1/responses` is reserved and returns 501.

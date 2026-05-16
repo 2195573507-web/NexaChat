@@ -2,6 +2,8 @@
 
 Date: 2026-05-14
 
+Current relevance note: this closeout is historical. The current mainline is chat-first with 7 top-level modules: Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings. `/` resolves to `/chat/conversations`; Workspace/Dashboard are not current entry points.
+
 ## Scope
 
 This closure records the 0.2 operation logic and navigation architecture refactor for NexaChat. The work keeps the existing local-first feature set intact while separating navigation, route identity, module boundaries, page responsibilities, data-entry locations, and unfinished-feature handling.

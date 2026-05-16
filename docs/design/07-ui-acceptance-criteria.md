@@ -2,20 +2,24 @@
 
 ## Navigation Structure
 
-- Exactly the planned 8 first-level modules or fewer are visible.
+- Exactly 7 first-level modules are visible: Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings.
 - Required second-level tabs are defined for each module.
 - Sidebar active state is clear.
 - Navigation is config-driven in design and not hardcoded feature sprawl.
+- `/` opens `/chat/conversations`; `/workspace` is not restored as the main entry.
 
 ## Page Hierarchy
 
-- Topbar, Sidebar, ModuleTabs, main content, and right rail have clear roles.
+- Topbar, sidebar/module rail, top tabs, main content, and optional right rail have clear roles.
 - No page appears as a marketing hero instead of the actual tool.
 - Cards are used for repeated items, not nested page sections.
+- `.module-tabs` and `.module-subnav-panel` are old UI surfaces and must remain absent.
 
 ## Chat Usability
 
-- Chat page has left conversation list, middle message area, top model switching, right parameter/context rail, input box, attachment, send, stop generation, and message action menu.
+- Chat page has left conversation list, middle message area, task-oriented quick actions, top model switching, input box, send, and message action menu.
+- Ordinary mode shows user tasks such as new chat, continue conversation, choose model, knowledge Q&A, import config, gateway status, and preferences.
+- Advanced mode may reveal the parameter/context rail and technical details such as provider id, model id, gateway endpoint, request logs, traces, permissions, and ACL.
 - Streaming output is visible and stoppable.
 - Context overflow warning is visible and actionable.
 - Model switch states local history is retained.
@@ -46,6 +50,7 @@
 - Light, dark, and system themes are planned.
 - High contrast is reserved.
 - Theme changes persist in UI preferences.
+- Advanced mode persists in UI preferences.
 
 ## Font Setting
 
@@ -95,4 +100,10 @@
 - No Liquid Glass default direction.
 - No old sidebar sprawl.
 - No fake workflow/agent completion claim.
+- No Dashboard-first or Workspace-first entry point.
 
+## Capability Boundaries
+
+- Gateway shows `/v1/models`, `/v1/chat/completions`, and `/v1/embeddings` as available endpoints; `/v1/responses` is reserved / 501.
+- Knowledge Base does not claim PDF, Office, OCR, external vector DB, rerank, or full RAG evaluation as current capabilities.
+- Tools / Agent / MCP does not claim arbitrary MCP executor, arbitrary code execution, or release-grade Agent sandbox.

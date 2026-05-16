@@ -4,6 +4,8 @@ Date: 2026-05-14
 
 Status: Completed.
 
+Current relevance note: this closeout is historical. It restored `.module-subnav-panel` and `.module-tabs` during that round, but the current chat-first 7-module UI explicitly keeps those old surfaces absent and uses sidebar + `.top-tabs` instead.
+
 ## Root-Cause And Chain Review
 
 Round 2 addressed the navigation issue found in Round 0 and confirmed by read-only review: `src/shared/navigation.ts` was already the main registry, but route aliases were unowned, content-area secondary navigation was absent, and module page rendering was hidden inside `App.tsx`.

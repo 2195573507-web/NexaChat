@@ -1,63 +1,45 @@
 # Store Facade Boundaries
 
-Date: 2026-05-14
+Current source fact: `src/main/services/store.ts` still owns the aggregate `NexaStore` service. This document and `src/main/services/storeBoundaries.ts` are a low-risk split preparation step, not a completed service split.
 
-Owner round: Round 1, Architecture Boundary Reorganization.
+## Current Boundary
 
-## Current Role
+- `NexaStore` remains the current facade for SQLite access, IPC-facing workflows, seeding, security checks, audit writes, and snapshot assembly.
+- Renderer, preload, IPC channel names, and database schema behavior are unchanged by this boundary map.
+- The boundary map is pure metadata for future extraction planning and tests. It must not be used to claim that ChatService, ModelService, GatewayService, KnowledgeService, ToolService, DataService, SecurityService, or ObservabilityService are already implemented as standalone services.
 
-`src/main/services/store.ts` is currently the factual facade for all main-process business behavior. It owns local data access, seed data, Provider/Model management, Chat, Gateway Key validation, Knowledge records, MCP registry, Agent dry-run, Data import/export previews, UI preferences, secrets, route decisions, and audit append events.
+## Future Targets
 
-This was acceptable for the first runnable desktop build, but it is now too broad for the full-app roadmap.
-
-## Facade Responsibilities To Keep
-
-The `NexaStore` facade may keep:
-
-- IPC-facing orchestration methods that compose multiple domain services.
-- Cross-domain transaction boundaries where one user action writes several tables.
-- Snapshot assembly for renderer refreshes until a dedicated query service exists.
-- Bootstrapping and seed orchestration until migration and first-run services exist.
-
-The facade should not keep:
-
-- Domain validation rules.
-- Secret encoding and key lifecycle internals.
-- Provider adapter invocation logic.
-- Knowledge parsing/indexing logic.
-- Gateway scope/quota policy.
-- Agent/MCP/workflow execution logic.
-- Import/export conflict resolution.
-- Audit integrity and hash-chain logic.
-
-## First Extraction Targets
-
-| Target | Current Source | Extraction Goal |
-| --- | --- | --- |
-| `secretService` | `saveSecret`, `decodeSecretValue`, provider/gateway key writes | One secret authority with redaction and safeStorage boundaries. |
-| `auditService` | `audit` and scattered audit action names | One action registry and append/integrity API. |
-| `providerModelService` | `createProvider`, `createModel`, `testProvider`, model aliases | Provider/model validation and health behavior outside facade. |
-| `conversationService` | `createConversation`, `sendMessage`, message writes | Conversation/message persistence and audit hooks. |
-| `gatewayKeyService` | `createGatewayKey`, `validateGatewayKey`, `recordGatewayLog` | Key lifecycle, scopes, quota, redacted logs. |
-| `knowledgeService` | `createKnowledgeFile`, `retryKnowledgeFile` | File/chunk/index lifecycle. |
-| `mcpService` | MCP create/update permission methods | Registry and permission state. |
-| `agentService` | Agent create/preview methods | Dry-run now, execution model later. |
-| `dataLifecycleService` | import/export/snapshot/restore/diagnostics methods | Manifest, conflict, backup, rollback boundaries. |
+- ChatService: conversations, messages, context strategy, retries, regeneration, export, and multi-model comparison.
+- ModelService: Provider and Model configuration, OpenAI-compatible health checks, and provider adapter invocation policy.
+- GatewayService: local gateway state, API keys, scopes, quotas, logs, `/v1/models`, `/v1/chat/completions`, `/v1/embeddings`, and reserved `/v1/responses` behavior.
+- KnowledgeService: text-like import, parsing, chunking, lexical embedding, retrieval preview, and citations.
+- ToolService: MCP registration, permissions, agent definitions, dry-run, fixture execution, approvals, execution steps, and trace events.
+- DataService: import/export, manifest precheck, snapshot, backup, restore, rollback, and diagnostics.
+- SecurityService: UI preferences, RBAC, ACL, permissions, audit logs, redaction, and integrity checks.
+- ObservabilityService: usage, request logs, provider health, feedback, evals, privacy, and redacted export.
 
 ## Extraction Order
 
-1. Extract pure constants and helper ownership without behavior changes.
-2. Extract secret and audit services because other domains depend on them.
-3. Extract Provider/Model service and keep facade method signatures stable.
-4. Extract Conversation/Chat service after Provider/Model contracts are stable.
-5. Extract Gateway Key and Local Gateway policy after real Provider invocation lands.
-6. Extract Knowledge, MCP, Agent, and Data Lifecycle in their feature rounds.
-7. Replace facade snapshot assembly with a query service once domain repositories exist.
+1. Keep the facade stable and move only pure constants, mappers, validation, and query helpers first.
+2. Extract secret and audit helpers before domains that depend on redaction, permissions, and append-only logs.
+3. Extract ModelService and GatewayService around existing Provider/Gateway runtime contracts without changing IPC method names.
+4. Extract ChatService only after Provider, Model, Gateway, and Knowledge call boundaries are stable.
+5. Extract KnowledgeService, ToolService, DataService, SecurityService, and ObservabilityService one domain at a time with focused tests.
+6. Replace facade snapshot assembly with a query service only after domain services are stable.
 
-## Tests Required For Each Extraction
+## Tests Required For Each Future Extraction
 
-- Existing renderer, UI smoke, and Electron smoke must keep passing.
-- Each extracted service needs unit tests around validation, persistence, and audit/log side effects.
-- IPC contract tests must keep proving renderer/preload/main use the shared channel registry.
-- Migration tests are required before any table shape changes.
+- Existing renderer tests, UI smoke, Electron smoke, and release verification must keep passing.
+- IPC contract tests must prove renderer, preload, and main use the shared API/channel authority.
+- Migration tests are required before any table shape or startup schema behavior changes.
+- Gateway tests must continue covering `/v1/models`, `/v1/chat/completions`, `/v1/embeddings`, and reserved `/v1/responses`.
+- Knowledge tests must keep text-like import/retrieval honest and must not claim PDF, Office, OCR, or external vector DB support before implementation.
+- Tools/Agent tests must keep dry-run, fixture execution, approvals, steps, and traces separate from arbitrary MCP or sandbox claims.
 
+## Non-Goals For This Round
+
+- No database schema rewrite.
+- No IPC contract rename.
+- No duplicate service implementation.
+- No claim that service splitting is complete.
