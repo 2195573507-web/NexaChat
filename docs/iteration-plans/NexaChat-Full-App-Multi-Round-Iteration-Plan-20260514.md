@@ -1183,7 +1183,8 @@ These references guide product and engineering decisions. They are not permissio
   - IconLocation: `D:/NexaChat/assets/app-icon.ico,0`.
   - No shortcut was modified.
 - Acceptance result: Passed for Round 12. Export/import and encrypted backup are structured, redacted, permission-gated, conflict-aware, restore-preflight capable, and rollback-capable without silent overwrite or plaintext secret export.
-- Commit hash: `4554dc4c47ff2dbf62479a786d486a8968dd78c6` for Round 12 delivery; `b064dae1a90df8ec62fb6cd3ddfd96f9007dafe9` records closeout.
+- Commit hash: `4554dc4c47ff2dbf62479a786d486a8968dd78c6` for Round 12 delivery; `b064dae1a90df8ec62fb6cd3ddfd96f9007dafe9` records closeout; `2a14e45598e46fb9697f896a767a3869f0b72433` records closeout-hash backfill.
+- Push result: delivery, closeout, and hash-backfill commits pushed; `origin/main` confirmed at `2a14e45598e46fb9697f896a767a3869f0b72433` before this remote-confirmation ledger update.
 - Remaining issues: None for Round 12. Round 13 owns observability, usage aggregation, feedback, evaluation, trace dashboard, privacy settings, and retention.
 
 ## 19. Round 13: Observability, Usage, Logs, Feedback And Evaluation

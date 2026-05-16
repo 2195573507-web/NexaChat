@@ -70,5 +70,5 @@ Passed at the targeted Round 12 boundary. Export/import and encrypted backup now
 
 - Delivery commit hash: `4554dc4c47ff2dbf62479a786d486a8968dd78c6`.
 - Closeout commit hash: `b064dae1a90df8ec62fb6cd3ddfd96f9007dafe9`.
-- Push result: pending.
+- Push result: delivery, closeout, and hash-backfill commits pushed through Git OpenSSL plus local proxy after direct GitHub HTTPS timed out; `origin/main` confirmed at `2a14e45598e46fb9697f896a767a3869f0b72433` before this remote-confirmation ledger update.
 - Remaining issues: None for Round 12. Round 13 owns observability aggregation, provider health history, feedback, evaluation, trace dashboard, privacy settings, and retention.
