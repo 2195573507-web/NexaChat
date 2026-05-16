@@ -1380,7 +1380,7 @@ These references guide product and engineering decisions. They are not permissio
   - IconLocation resolves to `D:/NexaChat/assets/app-icon.ico,0`.
   - Shortcut was migrated by `npm.cmd run shortcut:package`.
 - Acceptance result: Passed. Packaged app launches, installer smoke passes, shortcut points to the packaged executable, no extra window is created, icon path is verified, startup diagnostics are written, and release artifacts are reproducible from tracked scripts.
-- Commit hash: pending Round 14 delivery commit.
+- Commit hash: delivery `936cb659e7932ae134d9666653582abca815813e`; closeout pending.
 - Remaining issues: None for Round 14. Round 15 owns final quality gates, scanners, release checklist, and convergence audit.
 
 ## 21. Round 15: Test System, Quality Gates And Release Convergence

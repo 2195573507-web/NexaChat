@@ -2,7 +2,7 @@
 
 ## 2026-05-16 Full App Round 14 Desktop Experience, Packaging, Shortcut And Release
 
-Round 14 of `docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md` is completed as implementation and verification; delivery commit is pending.
+Round 14 of `docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md` is completed as implementation and verification; delivery commit is `936cb659e7932ae134d9666653582abca815813e`; closeout and push are pending.
 
 Parallel execution lanes:
 
@@ -46,7 +46,8 @@ Desktop shortcut status:
 
 Git:
 
-- Round 14 delivery commit hash: pending.
+- Round 14 delivery commit hash: `936cb659e7932ae134d9666653582abca815813e`.
+- Round 14 closeout commit hash: pending.
 - Push result: pending.
 
 ## 2026-05-16 Full App Round 13 Observability, Usage, Logs, Feedback And Evaluation
