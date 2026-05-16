@@ -66,6 +66,6 @@ Passed at the Round 8 boundary. A valid Gateway key can call the local Gateway, 
 
 ## Commit
 
-- Delivery commit hash: pending.
-- Push result: pending.
+- Delivery commit hash: `bc5aaf67b245ce4ac1ff21c810eed06cd5cb8fe9`.
+- Push result: pending closeout push confirmation.
 - Remaining issues: None for Round 8. Round 9 owns full Knowledge/RAG, real embeddings, vector index, parser pipeline, citations, and file delete/rebuild behavior.

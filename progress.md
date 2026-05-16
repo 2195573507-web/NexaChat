@@ -341,3 +341,4 @@
 - Ran `git diff --check`: passed with LF/CRLF conversion warnings only.
 - Checked `C:\Users\至亲\Desktop\NexaChat.lnk`: target, arguments, working directory, and icon still point to the current local Electron launch entry.
 - Updated the authoritative blueprint Round 8 execution record, `PROJECT_PROGRESS.md`, matrix, and `docs/implementation/round-08-gateway-api-key-closure.md`; commit hash is pending until Git commit.
+- Committed Round 8 delivery as `bc5aaf67b245ce4ac1ff21c810eed06cd5cb8fe9` and backfilled the hash into the blueprint, matrix, progress, and closure document.

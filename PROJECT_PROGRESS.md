@@ -397,7 +397,7 @@ Desktop shortcut:
 
 Git:
 
-- Round 8 delivery commit hash: pending.
+- Round 8 delivery commit hash: `bc5aaf67b245ce4ac1ff21c810eed06cd5cb8fe9`.
 - Push result: pending.
 
 ## 2026-05-14 UI Shell Redesign
