@@ -2,7 +2,7 @@ import { Activity, Download, Save, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ObservabilityFeedbackLabel, ObservabilityPrivacySettings, UiPreferences } from '../../shared/types';
 import { OBSERVABILITY_EXPORT_SCOPES, OBSERVABILITY_FEEDBACK_LABELS, OBSERVABILITY_RETENTION_POLICIES } from '../../shared/observabilityRuntime';
-import { CommandButton, ConfigDetail, ConfigList, DataRows, Field, InlineNotice, SettingRow, StatusPillLite, ToggleRow, ToolSection } from '../components/AppFrame';
+import { ActivityList, CommandButton, ConfigDetail, ConfigList, DataRows, Field, InlineNotice, PageHeader, SettingRow, StatusPillLite, ToggleRow, ToolSection } from '../components/AppFrame';
 import { useI18n } from '../i18n';
 import { formatDate, healthState, statusLabel, TabPanel, type TabPageProps } from './shared';
 
@@ -19,7 +19,15 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
 
   if (activeTab.id === 'security') {
     return (
-      <TabPanel moduleId="settings" tab={activeTab} className="tool-layout">
+      <TabPanel moduleId="settings" tab={activeTab}>
+        <PageHeader
+          eyebrow={t('settings.security.permissions')}
+          title={t('settings.security.title')}
+          description={activeTab.featureBoundary}
+          status={<StatusPillLite label={statusLabel(snapshot.security.activeSession.state, t)} state={snapshot.security.deniedCount > 0 ? 'warning' : 'ready'} />}
+          actions={<CommandButton icon={<ShieldCheck size={15} />} onClick={() => onAction(t('settings.audit.integrity'), () => api.verifyAuditIntegrity())}>{t('settings.audit.verify')}</CommandButton>}
+        />
+        <div className="tool-layout">
         <ConfigList title={t('settings.security.title')} description={activeTab.featureBoundary}>
           <section className="current-config-strip">
             <div><span className="eyebrow">{t('settings.security.localAdmin')}</span><strong>{snapshot.security.activeUser.displayName}</strong><small>{snapshot.security.activeRole.name}</small></div>
@@ -35,6 +43,7 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
         <ConfigDetail title={t('settings.security.auditIntegrity')} description={t('nav.settings.security.boundary')}>
           <CommandButton icon={<ShieldCheck size={15} />} onClick={() => onAction(t('settings.audit.integrity'), () => api.verifyAuditIntegrity())}>{t('settings.audit.verify')}</CommandButton>
         </ConfigDetail>
+        </div>
       </TabPanel>
     );
   }
@@ -44,7 +53,15 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
       ? snapshot.auditLogs.filter((log) => `${log.action} ${log.actor} ${log.targetType}`.toLowerCase().includes(auditQuery.trim().toLowerCase()))
       : snapshot.auditLogs;
     return (
-      <TabPanel moduleId="settings" tab={activeTab} className="tool-layout">
+      <TabPanel moduleId="settings" tab={activeTab}>
+        <PageHeader
+          eyebrow={t('settings.audit.integrity')}
+          title={t('settings.audit.title')}
+          description={activeTab.featureBoundary}
+          status={<StatusPillLite label={statusLabel(snapshot.auditIntegrity.status, t)} state={snapshot.auditIntegrity.status === 'verified' ? 'ready' : 'warning'} />}
+          actions={<CommandButton icon={<Download size={15} />} onClick={() => onAction(t('settings.audit.exported'), () => api.exportAuditLogs())}>{t('settings.audit.export')}</CommandButton>}
+        />
+        <div className="tool-layout">
         <ConfigList title={t('settings.audit.title')} description={activeTab.featureBoundary}>
           <div className="form-stack">
             <Field label={t('settings.audit.search')}>
@@ -52,18 +69,9 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
             </Field>
             <span className="row-actions">
               <CommandButton icon={<Activity size={15} />} onClick={() => onAction(t('settings.audit.integrity'), () => api.verifyAuditIntegrity())}>{t('settings.audit.verify')}</CommandButton>
-              <CommandButton icon={<Download size={15} />} onClick={() => onAction(t('settings.audit.exported'), () => api.exportAuditLogs())}>{t('settings.audit.export')}</CommandButton>
             </span>
           </div>
-          <div className="activity-list">
-            {visibleLogs.slice(0, 14).map((log) => (
-              <div className="activity-row" key={log.id}>
-                <span className={`status-dot status-${healthState(log.integrityState)}`} />
-                <span>{log.action}</span>
-                <small>{log.actor} / {formatDate(log.createdAt, t)}</small>
-              </div>
-            ))}
-          </div>
+          <ActivityList empty={t('app.recent.empty')} items={visibleLogs.slice(0, 14).map((log) => ({ title: log.action, meta: `${log.actor} / ${formatDate(log.createdAt, t)}`, state: healthState(log.integrityState) }))} />
         </ConfigList>
         <ConfigDetail title={t('settings.audit.integrity')} description={t('nav.settings.audit.boundary')}>
           <DataRows rows={[
@@ -72,13 +80,22 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
             { label: t('common.valueSeparator', { left: 'hash', right: 'entry' }), value: snapshot.auditIntegrity.lastHash ?? t('common.none') },
           ]} />
         </ConfigDetail>
+        </div>
       </TabPanel>
     );
   }
 
   if (activeTab.id === 'feedback') {
     return (
-      <TabPanel moduleId="settings" tab={activeTab} className="tool-layout">
+      <TabPanel moduleId="settings" tab={activeTab}>
+        <PageHeader
+          eyebrow={t('observability.feedback.label')}
+          title={t('observability.feedback.title')}
+          description={activeTab.featureBoundary}
+          status={<StatusPillLite label={snapshot.feedbackItems.length} state="info" />}
+          actions={<CommandButton variant="primary" icon={<Save size={15} />} onClick={() => onAction(t('observability.feedback.created'), () => api.createFeedback({ label: feedbackLabel, notes: feedbackNotes }))}>{t('observability.feedback.create')}</CommandButton>}
+        />
+        <div className="tool-layout">
         <ConfigList title={t('observability.feedback.title')} description={activeTab.featureBoundary}>
           <ToolSection title={t('observability.feedback.create')} description={t('observability.feedback.note')}>
             <div className="form-stack">
@@ -90,23 +107,29 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
               <Field label={t('observability.feedback.notes')}>
                 <textarea value={feedbackNotes} onChange={(event) => setFeedbackNotes(event.target.value)} aria-label={t('observability.feedback.notes')} />
               </Field>
-              <CommandButton variant="primary" icon={<Save size={15} />} onClick={() => onAction(t('observability.feedback.created'), () => api.createFeedback({ label: feedbackLabel, notes: feedbackNotes }))}>{t('observability.feedback.create')}</CommandButton>
             </div>
           </ToolSection>
-          <div className="activity-list">
-            {snapshot.feedbackItems.slice(0, 10).map((item) => <div className="activity-row" key={item.id}><span className="status-dot status-info" /><span>{item.label}</span><small>{item.notes}</small></div>)}
-          </div>
+          <ActivityList empty={t('app.recent.empty')} items={snapshot.feedbackItems.slice(0, 10).map((item) => ({ title: item.label, meta: item.notes, state: 'info' }))} />
         </ConfigList>
         <ConfigDetail title={t('observability.feedback.title')} description={t('nav.settings.feedback.boundary')}>
           <StatusPillLite label={snapshot.feedbackItems.length} state="info" />
         </ConfigDetail>
+        </div>
       </TabPanel>
     );
   }
 
   if (activeTab.id === 'evals') {
     return (
-      <TabPanel moduleId="settings" tab={activeTab} className="tool-layout">
+      <TabPanel moduleId="settings" tab={activeTab}>
+        <PageHeader
+          eyebrow={t('observability.eval.results')}
+          title={t('observability.eval.title')}
+          description={activeTab.featureBoundary}
+          status={<StatusPillLite label={snapshot.evalResults.length} state="info" />}
+          actions={<CommandButton icon={<Activity size={15} />} onClick={snapshot.evalSets[0] ? () => onAction(t('observability.eval.started'), () => api.runEvaluation({ evalSetId: snapshot.evalSets[0].id })) : undefined}>{t('observability.eval.run')}</CommandButton>}
+        />
+        <div className="tool-layout">
         <ConfigList title={t('observability.eval.title')} description={activeTab.featureBoundary}>
           <div className="config-items">
             {snapshot.evalSets.map((set) => (
@@ -116,9 +139,7 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
               </div>
             ))}
           </div>
-          <div className="activity-list">
-            {snapshot.evalResults.slice(0, 8).map((result) => <div className="activity-row" key={result.id}><span className={`status-dot status-${healthState(result.status)}`} /><span>{statusLabel(result.status, t)}</span><small>{result.outputPreview ?? result.errorMessage}</small></div>)}
-          </div>
+          <ActivityList empty={t('app.recent.empty')} items={snapshot.evalResults.slice(0, 8).map((result) => ({ title: statusLabel(result.status, t), meta: result.outputPreview ?? result.errorMessage, state: healthState(result.status) }))} />
         </ConfigList>
         <ConfigDetail title={t('observability.eval.results')} description={t('nav.settings.evals.boundary')}>
           <DataRows rows={[
@@ -126,13 +147,22 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
             { label: t('common.failed'), value: snapshot.evalResults.filter((result) => result.status === 'failed').length },
           ]} />
         </ConfigDetail>
+        </div>
       </TabPanel>
     );
   }
 
   if (activeTab.id === 'observability') {
     return (
-      <TabPanel moduleId="settings" tab={activeTab} className="tool-layout">
+      <TabPanel moduleId="settings" tab={activeTab}>
+        <PageHeader
+          eyebrow={t('observability.privacy.localOnly')}
+          title={t('observability.privacy.title')}
+          description={activeTab.featureBoundary}
+          status={<StatusPillLite label={privacy.retentionPolicy} state="info" />}
+          actions={<CommandButton variant="primary" icon={<Save size={15} />} onClick={() => onAction(t('observability.privacy.saved'), () => api.saveObservabilityPrivacy(privacy))}>{t('observability.privacy.save')}</CommandButton>}
+        />
+        <div className="tool-layout">
         <ConfigList title={t('observability.privacy.title')} description={activeTab.featureBoundary}>
           <SettingRow
             title={t('observability.privacy.retention')}
@@ -145,7 +175,6 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
           <ToggleRow title={t('observability.privacy.includePromptSnippets')} checked={privacy.includePromptSnippets} onChange={(checked) => setPrivacy({ ...privacy, includePromptSnippets: checked })} />
           <ToggleRow title={t('observability.privacy.includeLocalPaths')} checked={privacy.includeLocalPaths} onChange={(checked) => setPrivacy({ ...privacy, includeLocalPaths: checked })} />
           <span className="row-actions">
-            <CommandButton variant="primary" icon={<Save size={15} />} onClick={() => onAction(t('observability.privacy.saved'), () => api.saveObservabilityPrivacy(privacy))}>{t('observability.privacy.save')}</CommandButton>
             <CommandButton icon={<Download size={15} />} onClick={() => onAction(t('observability.export.created'), () => api.exportObservability())}>{t('observability.export.button')}</CommandButton>
           </span>
         </ConfigList>
@@ -156,13 +185,21 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
             { label: t('observability.columns.failures'), value: snapshot.observability.summary.failedRequestCount },
           ]} />
         </ConfigDetail>
+        </div>
       </TabPanel>
     );
   }
 
   if (activeTab.id === 'about') {
     return (
-      <TabPanel moduleId="settings" tab={activeTab} className="tool-layout">
+      <TabPanel moduleId="settings" tab={activeTab}>
+        <PageHeader
+          eyebrow="NexaChat"
+          title={t('settings.about.title')}
+          description={activeTab.featureBoundary}
+          status={<StatusPillLite label={t('settings.about.versionValue')} state="info" />}
+        />
+        <div className="tool-layout">
         <ConfigList title={t('settings.about.title')} description={activeTab.featureBoundary}>
           <DataRows rows={[
             { label: t('settings.about.version'), value: t('settings.about.versionValue') },
@@ -174,12 +211,21 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
         <ConfigDetail title={t('settings.about.desktopEntry')} description={t('settings.about.desktopEntry.note')}>
           <InlineNotice tone="info" title={t('stage.environment-limited')} detail={t('nav.settings.about.boundary')} />
         </ConfigDetail>
+        </div>
       </TabPanel>
     );
   }
 
   return (
-    <TabPanel moduleId="settings" tab={activeTab} className="tool-layout">
+    <TabPanel moduleId="settings" tab={activeTab}>
+      <PageHeader
+        eyebrow={prefs.language}
+        title={t('settings.preferences.title')}
+        description={activeTab.featureBoundary}
+        status={<StatusPillLite label={prefs.theme} state="info" />}
+        actions={<CommandButton variant="primary" icon={<Save size={15} />} onClick={() => onAction(t('settings.preferences.saved'), () => api.saveUiPreferences(prefs))}>{t('settings.preferences.save')}</CommandButton>}
+      />
+      <div className="tool-layout">
       <ConfigList title={t('settings.preferences.title')} description={activeTab.featureBoundary}>
         <SettingRow
           title={t('settings.preferences.theme')}
@@ -210,12 +256,12 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
             <option value="reduced">{t('settings.preferences.motion.reduced')}</option>
           </select>}
         />
-        <CommandButton variant="primary" icon={<Save size={15} />} onClick={() => onAction(t('settings.preferences.saved'), () => api.saveUiPreferences(prefs))}>{t('settings.preferences.save')}</CommandButton>
       </ConfigList>
       <ConfigDetail title={t('settings.preferences.title')} description={t('nav.settings.preferences.boundary')}>
         <StatusPillLite label={prefs.theme} state="info" />
         <StatusPillLite label={prefs.language} state="info" />
       </ConfigDetail>
+      </div>
     </TabPanel>
   );
 }

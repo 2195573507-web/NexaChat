@@ -20,6 +20,7 @@ export function getDatabase(): DatabaseContext {
   mkdirSync(userDataPath, { recursive: true });
   const databasePath = join(userDataPath, 'nexachat.sqlite');
   const db = new DatabaseSync(databasePath);
+  runPreSchemaMigrations(db);
   db.exec(schemaSql);
   runAdditiveMigrations(db);
   context = { db, path: databasePath };
@@ -34,6 +35,7 @@ export function closeDatabase(): void {
 }
 
 function runAdditiveMigrations(db: DatabaseSync): void {
+  migrateWorkspaceColumns(db);
   addColumnIfMissing(db, 'files', 'workspace_id', 'TEXT');
   addColumnIfMissing(db, 'files', 'knowledge_base_id', 'TEXT');
   addColumnIfMissing(db, 'files', 'index_status', "TEXT NOT NULL DEFAULT 'queued'");
@@ -205,10 +207,37 @@ function runAdditiveMigrations(db: DatabaseSync): void {
   addColumnIfMissing(db, 'audit_logs', 'integrity_state', "TEXT NOT NULL DEFAULT 'verified'");
 }
 
+function runPreSchemaMigrations(db: DatabaseSync): void {
+  migrateWorkspaceColumns(db);
+  migrateKnowledgeColumns(db);
+}
+
+function migrateWorkspaceColumns(db: DatabaseSync): void {
+  addColumnIfMissing(db, 'conversations', 'workspace_id', "TEXT NOT NULL DEFAULT 'ws_default'");
+  addColumnIfMissing(db, 'messages', 'workspace_id', "TEXT NOT NULL DEFAULT 'ws_default'");
+  addColumnIfMissing(db, 'usage_records', 'workspace_id', "TEXT NOT NULL DEFAULT 'ws_default'");
+  addColumnIfMissing(db, 'memories', 'workspace_id', "TEXT NOT NULL DEFAULT 'ws_default'");
+}
+
+function migrateKnowledgeColumns(db: DatabaseSync): void {
+  addColumnIfMissing(db, 'files', 'workspace_id', 'TEXT');
+  addColumnIfMissing(db, 'files', 'index_status', "TEXT NOT NULL DEFAULT 'queued'");
+  addColumnIfMissing(db, 'files', 'deleted_at', 'INTEGER');
+  addColumnIfMissing(db, 'knowledge_chunks', 'status', "TEXT NOT NULL DEFAULT 'indexed'");
+}
+
 function addColumnIfMissing(db: DatabaseSync, table: string, column: string, definition: string): void {
+  if (!tableExists(db, table)) {
+    return;
+  }
   const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
   if (rows.some((row) => row.name === column)) {
     return;
   }
   db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
+
+function tableExists(db: DatabaseSync, table: string): boolean {
+  const row = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(table);
+  return Boolean(row);
 }

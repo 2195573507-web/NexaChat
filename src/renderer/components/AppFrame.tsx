@@ -310,19 +310,74 @@ export function CommandButton({
   icon,
   onClick,
   disabled,
+  disabledReason,
   variant = 'default',
 }: {
   children: ReactNode;
   icon?: ReactNode;
   onClick?: () => void;
   disabled?: boolean;
+  disabledReason?: string;
   variant?: 'default' | 'primary' | 'danger' | 'ghost';
 }) {
   return (
-    <button type="button" className={`${variant}-button`} onClick={onClick} disabled={disabled || !onClick}>
+    <button type="button" className={`${variant}-button`} onClick={onClick} disabled={disabled || !onClick} title={disabled ? disabledReason : undefined}>
       {icon}
       {children}
     </button>
+  );
+}
+
+export function PageHeader({
+  eyebrow,
+  title,
+  description,
+  status,
+  actions,
+}: {
+  eyebrow?: ReactNode;
+  title: ReactNode;
+  description?: ReactNode;
+  status?: ReactNode;
+  actions?: ReactNode;
+}) {
+  return (
+    <header className="page-header">
+      <div>
+        {eyebrow ? <span className="eyebrow">{eyebrow}</span> : null}
+        <h2>{title}</h2>
+        {description ? <p>{description}</p> : null}
+      </div>
+      {actions || status ? (
+        <div className="page-primary-actions">
+          {status}
+          {actions}
+        </div>
+      ) : null}
+    </header>
+  );
+}
+
+export function SectionHeader({
+  title,
+  description,
+  actions,
+}: {
+  title?: ReactNode;
+  description?: ReactNode;
+  actions?: ReactNode;
+}) {
+  if (!title && !description && !actions) {
+    return null;
+  }
+  return (
+    <div className="section-head">
+      <div>
+        {title ? <h2>{title}</h2> : null}
+        {description ? <p>{description}</p> : null}
+      </div>
+      {actions ? <div className="section-actions">{actions}</div> : null}
+    </div>
   );
 }
 
@@ -340,16 +395,8 @@ export function ConfigList({
   className?: string;
 }) {
   return (
-    <section className={['config-list', className].filter(Boolean).join(' ')}>
-      {title || description || actions ? (
-        <div className="section-head">
-          <div>
-            {title ? <h2>{title}</h2> : null}
-            {description ? <p>{description}</p> : null}
-          </div>
-          {actions ? <div className="section-actions">{actions}</div> : null}
-        </div>
-      ) : null}
+    <section className={['config-list task-panel', className].filter(Boolean).join(' ')}>
+      <SectionHeader title={title} description={description} actions={actions} />
       {children}
     </section>
   );
@@ -369,16 +416,8 @@ export function ConfigDetail({
   className?: string;
 }) {
   return (
-    <aside className={['config-detail', className].filter(Boolean).join(' ')}>
-      {title || description || actions ? (
-        <div className="section-head">
-          <div>
-            {title ? <h2>{title}</h2> : null}
-            {description ? <p>{description}</p> : null}
-          </div>
-          {actions ? <div className="section-actions">{actions}</div> : null}
-        </div>
-      ) : null}
+    <aside className={['config-detail detail-panel', className].filter(Boolean).join(' ')}>
+      <SectionHeader title={title} description={description} actions={actions} />
       {children}
     </aside>
   );
@@ -397,13 +436,7 @@ export function ToolSection({
 }) {
   return (
     <section className="tool-section">
-      <div className="section-head">
-        <div>
-          <h2>{title}</h2>
-          {description ? <p>{description}</p> : null}
-        </div>
-        {actions ? <div className="section-actions">{actions}</div> : null}
-      </div>
+      <SectionHeader title={title} description={description} actions={actions} />
       {children}
     </section>
   );
@@ -535,6 +568,14 @@ export function EmptyBlock({
   );
 }
 
+export function ErrorState({ title, detail, action }: { title: ReactNode; detail?: ReactNode; action?: ReactNode }) {
+  return <InlineNotice tone="danger" title={title} detail={detail ? <span>{detail}</span> : action ? <span>{action}</span> : undefined} />;
+}
+
+export function LoadingState({ title }: { title: ReactNode }) {
+  return <InlineNotice tone="info" title={title} />;
+}
+
 export function CheckIcon() {
   return <Check size={14} />;
 }
@@ -544,8 +585,10 @@ export function ChatInput({
   placeholder,
   contextControl,
   disabled,
+  disabledReason,
   sendLabel,
   sendIcon,
+  utilityActions,
   onChange,
   onSend,
 }: {
@@ -553,25 +596,34 @@ export function ChatInput({
   placeholder: string;
   contextControl?: ReactNode;
   disabled?: boolean;
+  disabledReason?: string;
   sendLabel: string;
   sendIcon?: ReactNode;
+  utilityActions?: ReactNode;
   onChange: (value: string) => void;
   onSend: () => void;
 }) {
   return (
     <div className="chat-composer">
-      {contextControl ? <div className="composer-context">{contextControl}</div> : null}
-      <input
+      {contextControl || utilityActions ? (
+        <div className="composer-context">
+          {contextControl}
+          {utilityActions ? <span className="composer-utility-actions">{utilityActions}</span> : null}
+        </div>
+      ) : null}
+      <textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         onKeyDown={(event) => {
-          if (event.key === 'Enter' && value.trim() && !disabled) {
+          if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && value.trim() && !disabled) {
+            event.preventDefault();
             onSend();
           }
         }}
+        rows={1}
       />
-      <button type="button" className="primary-button" disabled={disabled || !value.trim()} onClick={onSend}>
+      <button type="button" className="primary-button composer-send" disabled={disabled || !value.trim()} title={disabled ? disabledReason : undefined} onClick={onSend}>
         {sendIcon}
         {sendLabel}
       </button>

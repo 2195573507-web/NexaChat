@@ -2,7 +2,7 @@ import { Copy, KeyRound, Play, Power, RotateCcw, ShieldAlert } from 'lucide-reac
 import { useState } from 'react';
 import { GATEWAY_DEFAULT_KEY_POLICY, GATEWAY_ENDPOINT, GATEWAY_ENDPOINTS } from '../../shared/gatewayRuntime';
 import { GATEWAY_DOCS, FORM_DEFAULTS } from '../../shared/uiCopy';
-import { ActivityList, CommandButton, ConfigDetail, ConfigList, CopyableCommand, DataRows, EmptyBlock, Field, InlineNotice, StatusPillLite, ToolSection } from '../components/AppFrame';
+import { ActivityList, CommandButton, ConfigDetail, ConfigList, CopyableCommand, DataRows, EmptyBlock, Field, InlineNotice, PageHeader, StatusPillLite, ToolSection } from '../components/AppFrame';
 import { useI18n } from '../i18n';
 import { formatDate, getDefaultModel, healthState, statusLabel, TabPanel, type TabPageProps } from './shared';
 
@@ -26,16 +26,21 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
 
   if (activeTab.id === 'keys') {
     return (
-      <TabPanel moduleId="gateway" tab={activeTab} className="tool-layout">
+      <TabPanel moduleId="gateway" tab={activeTab}>
+        <PageHeader
+          eyebrow={t('gateway.docs.security')}
+          title={t('gateway.keys.title')}
+          description={activeTab.featureBoundary}
+          status={<StatusPillLite label={t('gateway.keyCount') + ` ${snapshot.gatewayKeys.length}`} state={snapshot.gatewayKeys.some((key) => key.state === 'active') ? 'ready' : 'warning'} />}
+          actions={<CommandButton variant="primary" icon={<KeyRound size={15} />} onClick={() => onAction(t('gateway.toast.created'), createKey)}>{t('gateway.generateKey')}</CommandButton>}
+        />
+        <div className="tool-layout">
         <ConfigList title={t('gateway.keys.title')} description={activeTab.featureBoundary}>
           <ToolSection title={t('gateway.generateKey')} description={t('gateway.keys.note')}>
             <div className="form-stack">
               <Field label={t('gateway.keyName')}>
                 <input value={keyName} onChange={(event) => setKeyName(event.target.value)} placeholder={t('gateway.defaultKeyName')} />
               </Field>
-              <CommandButton variant="primary" icon={<KeyRound size={15} />} onClick={() => onAction(t('gateway.toast.created'), createKey)}>
-                {t('gateway.generateKey')}
-              </CommandButton>
             </div>
             {oneTimeKey ? (
               <InlineNotice tone="warning" title={t('gateway.oneTimeKey')} detail={<code>{oneTimeKey}</code>} />
@@ -70,6 +75,7 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
             ]}
           />
         </ConfigDetail>
+        </div>
       </TabPanel>
     );
   }
@@ -87,7 +93,14 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
           state: log.statusCode >= 400 ? 'danger' as const : 'ready' as const,
         }));
     return (
-      <TabPanel moduleId="gateway" tab={activeTab} className="tool-layout">
+      <TabPanel moduleId="gateway" tab={activeTab}>
+        <PageHeader
+          eyebrow={activeTab.id === 'usage' ? t('observability.usage.title') : t('nav.gateway.logs.label')}
+          title={activeTab.label}
+          description={activeTab.featureBoundary}
+          status={<StatusPillLite label={activeTab.id === 'usage' ? snapshot.dashboard.usageToday.requests : snapshot.gatewayLogs.length} state="info" />}
+        />
+        <div className="tool-layout">
         <ConfigList title={activeTab.label} description={activeTab.featureBoundary}>
           <ActivityList empty={t('app.recent.empty')} items={logItems} />
         </ConfigList>
@@ -100,13 +113,22 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
             ]}
           />
         </ConfigDetail>
+        </div>
       </TabPanel>
     );
   }
 
   if (activeTab.id === 'docs') {
     return (
-      <TabPanel moduleId="gateway" tab={activeTab} className="tool-layout">
+      <TabPanel moduleId="gateway" tab={activeTab}>
+        <PageHeader
+          eyebrow={t('nav.gateway.docs.label')}
+          title={t('gateway.docs.example')}
+          description={activeTab.featureBoundary}
+          status={<StatusPillLite label={defaultModel?.displayName ?? t('common.notConfigured')} state={defaultModel ? 'ready' : 'warning'} />}
+          actions={<CommandButton icon={<Copy size={15} />} onClick={() => void navigator.clipboard?.writeText(chatCommand)}>{t('app.error.copy')}</CommandButton>}
+        />
+        <div className="tool-layout">
         <ConfigList title={t('gateway.docs.example')} description={activeTab.featureBoundary}>
           <CopyableCommand value={chatCommand} label={t('app.error.copy')} />
           <ToolSection title={t('gateway.docs.security')} description={t('gateway.docs.note', { host: snapshot.dashboard.gatewayStatus.bindHost, port: snapshot.dashboard.gatewayStatus.port })}>
@@ -121,23 +143,27 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
           <InlineNotice tone="warning" title={t('stage.reserved')} detail={GATEWAY_ENDPOINT.responses} />
           <CommandButton icon={<Copy size={15} />} onClick={() => void navigator.clipboard?.writeText(chatCommand)}>{t('app.error.copy')}</CommandButton>
         </ConfigDetail>
+        </div>
       </TabPanel>
     );
   }
 
   return (
-    <TabPanel moduleId="gateway" tab={activeTab} className="tool-layout">
+    <TabPanel moduleId="gateway" tab={activeTab}>
+      <PageHeader
+        eyebrow={endpointBase}
+        title={t('gateway.overview.title')}
+        description={activeTab.featureBoundary}
+        status={<StatusPillLite label={snapshot.dashboard.gatewayStatus.running ? t('shell.gateway.running') : t('shell.gateway.stopped')} state={snapshot.dashboard.gatewayStatus.running ? 'ready' : 'muted'} />}
+        actions={<CommandButton variant={snapshot.dashboard.gatewayStatus.running ? 'danger' : 'primary'} icon={snapshot.dashboard.gatewayStatus.running ? <Power size={15} /> : <Play size={15} />} onClick={() => onAction(snapshot.dashboard.gatewayStatus.running ? t('gateway.toast.stopped') : t('gateway.toast.started'), () => api.toggleGateway(!snapshot.dashboard.gatewayStatus.enabled))}>{snapshot.dashboard.gatewayStatus.running ? t('gateway.stop') : t('gateway.start')}</CommandButton>}
+      />
+      <div className="tool-layout">
       <ConfigList title={t('gateway.overview.title')} description={activeTab.featureBoundary}>
         <section className="gateway-console">
           <div className="gateway-status-block">
             <span className="eyebrow">{t('nav.gateway.overview.label')}</span>
             <strong>{snapshot.dashboard.gatewayStatus.running ? t('shell.gateway.running') : t('shell.gateway.stopped')}</strong>
             <small>{endpointBase}</small>
-          </div>
-          <div className="vertical-actions">
-            <CommandButton variant={snapshot.dashboard.gatewayStatus.running ? 'danger' : 'primary'} icon={snapshot.dashboard.gatewayStatus.running ? <Power size={15} /> : <Play size={15} />} onClick={() => onAction(snapshot.dashboard.gatewayStatus.running ? t('gateway.toast.stopped') : t('gateway.toast.started'), () => api.toggleGateway(!snapshot.dashboard.gatewayStatus.enabled))}>
-              {snapshot.dashboard.gatewayStatus.running ? t('gateway.stop') : t('gateway.start')}
-            </CommandButton>
           </div>
         </section>
         <ToolSection title={t('gateway.docs.security')} description={t('gateway.overview.note', { host: snapshot.dashboard.gatewayStatus.bindHost, port: snapshot.dashboard.gatewayStatus.port })}>
@@ -158,6 +184,7 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
           ]}
         />
       </ConfigDetail>
+      </div>
     </TabPanel>
   );
 }

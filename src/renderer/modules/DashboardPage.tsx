@@ -1,6 +1,6 @@
 import { ArrowRight, KeyRound, MessageSquareText, PlugZap, ServerCog } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { ActivityList, CommandButton, ConfigDetail, ConfigList, DataRows, EmptyBlock, StatusPillLite, ToolSection } from '../components/AppFrame';
+import { ActivityList, CommandButton, ConfigDetail, ConfigList, DataRows, EmptyBlock, PageHeader, StatusPillLite, ToolSection } from '../components/AppFrame';
 import { useI18n } from '../i18n';
 import { formatDate, getDefaultModel, getDefaultProvider, healthState, statusLabel, type TabPageProps } from './shared';
 import { TabPanel } from './shared';
@@ -48,7 +48,14 @@ export function DashboardPage({ activeTab, snapshot, onOpenModule }: TabPageProp
 
   if (activeTab.id === 'activity') {
     return (
-      <TabPanel moduleId="workspace" tab={activeTab} className="tool-layout">
+      <TabPanel moduleId="workspace" tab={activeTab}>
+        <PageHeader
+          eyebrow={t('dashboard.activity.title')}
+          title={activeTab.label}
+          description={activeTab.description}
+          status={<StatusPillLite label={snapshot.auditLogs.length} state={snapshot.auditLogs.length > 0 ? 'info' : 'muted'} />}
+        />
+        <div className="tool-layout">
         <ConfigList title={activeTab.label} description={activeTab.description}>
           <ActivityList
             empty={t('app.recent.empty')}
@@ -68,13 +75,21 @@ export function DashboardPage({ activeTab, snapshot, onOpenModule }: TabPageProp
             ]}
           />
         </ConfigDetail>
+        </div>
       </TabPanel>
     );
   }
 
   if (activeTab.id === 'health') {
     return (
-      <TabPanel moduleId="workspace" tab={activeTab} className="tool-layout">
+      <TabPanel moduleId="workspace" tab={activeTab}>
+        <PageHeader
+          eyebrow={t('observability.health.title')}
+          title={activeTab.label}
+          description={activeTab.description}
+          status={<StatusPillLite label={defaultModel?.displayName ?? t('app.rail.unconfigured')} state={defaultModel ? healthState(defaultModel.healthStatus) : 'warning'} />}
+        />
+        <div className="tool-layout">
         <ConfigList title={activeTab.label} description={activeTab.description}>
           <div className="status-stack">
             <StatusPillLite label={defaultModel?.displayName ?? t('app.rail.unconfigured')} state={defaultModel ? healthState(defaultModel.healthStatus) : 'warning'} />
@@ -99,12 +114,21 @@ export function DashboardPage({ activeTab, snapshot, onOpenModule }: TabPageProp
             ]}
           />
         </ConfigDetail>
+        </div>
       </TabPanel>
     );
   }
 
   return (
-    <TabPanel moduleId="workspace" tab={activeTab} className="tool-layout workbench-home">
+    <TabPanel moduleId="workspace" tab={activeTab} className="workbench-home">
+      <PageHeader
+        eyebrow={activeTab.label}
+        title={t('dashboard.overview.title')}
+        description={activeTab.featureBoundary}
+        status={<StatusPillLite label={readyProviders.length > 0 ? t('common.countAvailable', { count: readyProviders.length }) : t('common.notConfigured')} state={readyProviders.length > 0 ? 'ready' : 'warning'} />}
+        actions={<CommandButton variant="primary" icon={<MessageSquareText size={15} />} onClick={() => onOpenModule({ moduleId: 'chat', tabId: 'playground' })}>{t('shell.openChat')}</CommandButton>}
+      />
+      <div className="tool-layout">
       <ConfigList title={t('dashboard.overview.title')} description={activeTab.featureBoundary}>
         <section className="current-config-strip" aria-label={t('dashboard.home.aria')}>
           <div>
@@ -159,6 +183,7 @@ export function DashboardPage({ activeTab, snapshot, onOpenModule }: TabPageProp
           ]}
         />
       </ConfigDetail>
+      </div>
     </TabPanel>
   );
 }

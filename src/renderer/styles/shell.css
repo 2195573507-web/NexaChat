@@ -95,8 +95,8 @@
 }
 
 .switcher-head h1 {
-  font-size: var(--font-size-xl);
-  line-height: 1.2;
+  font-size: var(--font-size-title);
+  line-height: var(--line-height-tight);
   margin-top: 2px;
   overflow-wrap: anywhere;
 }
@@ -193,6 +193,7 @@
   flex: 1;
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
+  line-height: var(--line-height-control);
 }
 
 .command-actions {

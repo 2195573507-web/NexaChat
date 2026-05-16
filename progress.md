@@ -570,3 +570,20 @@
 - Committed Round 15 closeout as `4715788e416f97b79328413c3821287cfcafce0b`.
 - Pushed Round 14 and Round 15 pending commits with `git push origin main`.
 - Confirmed `origin/main` at `4715788e416f97b79328413c3821287cfcafce0b` with `git ls-remote origin refs/heads/main` before the final acceptance commit.
+
+## 2026-05-16 Packaged Startup Migration Hotfix
+
+- Reproduced the screenshot path as a packaged-app startup failure from `release/win-unpacked/resources/app/dist-electron/main/database/connection.js`.
+- Root cause: `getDatabase()` executed the current `schemaSql` before additive migrations, so existing SQLite tables that lacked new columns could fail during `CREATE INDEX` with `no such column: workspace_id`.
+- Added a pre-schema migration pass in `src/main/database/connection.ts` for legacy workspace and knowledge columns used by current schema indexes.
+- Added `tests/database-migration.test.ts` to create a legacy SQLite file and prove startup migrations add the missing columns before index creation.
+- Ran `npm.cmd run test -- tests/database-migration.test.ts`: passed, 1 file / 1 test.
+- Ran `npm.cmd run typecheck`: passed.
+- Ran `npm.cmd run test`: passed, 19 files / 56 tests.
+- First `npm.cmd run package:release` failed because old `NexaChat.exe` processes still held `release/win-unpacked`; stopped only the release-path NexaChat processes and reran successfully.
+- Ran `npm.cmd run package:release`: passed and regenerated `release/win-unpacked` plus `release/NexaChat-Setup.ps1`.
+- Backed up the real user database to `test-results/actual-userdata-backups/nexachat-20260516-163051.sqlite`.
+- Launched the regenerated packaged executable against the real Electron userData directory; it rendered the workspace panel with `workspaceId=ws_default`, 8 modules, and no `workspace_id` startup error.
+- Confirmed the real `C:\Users\至亲\AppData\Roaming\NexaChat\nexachat.sqlite` now has the migrated `files` and `knowledge_chunks` columns.
+- Ran `npm.cmd run test:desktop-entry`: passed package smoke, installer smoke, and packaged shortcut readback.
+- Ran `git diff --check`: passed with LF/CRLF conversion warning only.

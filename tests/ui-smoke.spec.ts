@@ -74,6 +74,8 @@ async function expectActiveRouteAndPanel(page: Page, module: NavModule, tab: Nav
   const panel = page.locator(`main [role="tabpanel"][data-module="${module.id}"][data-tab="${tab.id}"]`);
   await expect(panel).toBeVisible();
   await expect(panel).toHaveAttribute('aria-label', tab.label);
+  await expect(panel.locator('.page-header')).toBeVisible();
+  await expect(panel.locator('.page-header').getByRole('heading')).toBeVisible();
   await expectNoVisibleRouteLeak(page);
 }
 
@@ -95,12 +97,16 @@ test('browser renderer exposes rebuilt lightweight rail switcher and can send ch
   const chat = navModules.find((module) => module.id === 'chat')!;
   await openFeature(page, chat, chat.tabs.find((tab) => tab.id === 'playground')!);
   const message = 'browser mode send test';
-  await page.getByPlaceholder(translate('zh-CN', 'chat.composer.placeholder')).fill(message);
+  const composer = page.getByPlaceholder(translate('zh-CN', 'chat.composer.placeholder'));
+  await expect(composer).toHaveJSProperty('tagName', 'TEXTAREA');
+  await composer.fill(message);
   await page.getByRole('button', { name: translate('zh-CN', 'chat.send') }).click();
 
   await expect(page.getByText(message, { exact: true })).toBeVisible();
   await expect(page.getByText(/Mock response from nexachat-mock/)).toBeVisible();
   await expect(page.getByText(translate('zh-CN', 'chat.message.copy')).first()).toBeVisible();
+  await expect(page.getByText(translate('zh-CN', 'chat.message.retry')).first()).toBeVisible();
+  await expect(page.getByText(translate('zh-CN', 'chat.message.regenerate')).first()).toBeVisible();
   await expect(page.getByText(translate('zh-CN', 'chat.compare.title'))).toHaveCount(1);
   await expect(page.locator('.chat-composer')).toBeVisible();
   await expect(page.locator('.message-bubble').first()).toBeVisible();
@@ -175,7 +181,7 @@ test('workspace home is a current configuration launcher', async ({ page }) => {
   await expect(page.locator('.current-config-strip')).toBeVisible();
   await expect(page.locator('.switch-grid')).toBeVisible();
   await expect(page.locator('.switch-tile')).toHaveCount(4);
-  await expect(page.getByRole('heading', { name: translate('zh-CN', 'dashboard.overview.title') })).toBeVisible();
+  await expect(page.locator('.page-header').getByRole('heading', { name: translate('zh-CN', 'dashboard.overview.title') })).toBeVisible();
   await expect(page.getByRole('heading', { name: translate('zh-CN', 'dashboard.actions.title') })).toBeVisible();
   await expect(page.getByRole('heading', { name: translate('zh-CN', 'dashboard.activity.title') })).toBeVisible();
   await expect(page.locator(`#feature-list-workspace .feature-row.is-active`)).toContainText(translate('zh-CN', 'nav.workspace.overview.label'));

@@ -30,7 +30,26 @@ export const THEME_TOKEN_CATEGORIES = {
   spacing: ['--space-1', '--space-2', '--space-3', '--space-4', '--space-5'],
   shadow: ['--shadow-focus'],
   layout: ['--rail-width', '--switcher-width'],
-  typography: ['--font-ui', '--font-mono', '--font-size-xs', '--font-size-sm', '--font-size-md', '--font-size-lg', '--font-size-xl']
+  typography: [
+    '--font-sans',
+    '--font-ui',
+    '--font-mono',
+    '--font-message-writing',
+    '--font-size-xs',
+    '--font-size-sm',
+    '--font-size-md',
+    '--font-size-lg',
+    '--font-size-xl',
+    '--font-size-body',
+    '--font-size-control',
+    '--font-size-chat',
+    '--font-size-title',
+    '--line-height-tight',
+    '--line-height-normal',
+    '--line-height-relaxed',
+    '--line-height-control',
+    '--line-height-badge'
+  ]
 } as const;
 
 export const THEME_TOKEN_NAMES = Object.values(THEME_TOKEN_CATEGORIES).flat();

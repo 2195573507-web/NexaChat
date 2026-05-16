@@ -1,8 +1,8 @@
-import { Copy, GitCompareArrows, MessageSquarePlus, Pin, Send, Star } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Copy, GitCompareArrows, MessageSquarePlus, Pin, RefreshCw, RotateCcw, Send, Star, XCircle } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ContextStrategy, Conversation, Message } from '../../shared/types';
 import { ChatInput, MessageBubble } from '../components/AppFrame';
-import { ActivityList, CommandButton, ConfigDetail, ConfigList, DataRows, EmptyBlock, StatusPillLite, ToolSection } from '../components/AppFrame';
+import { ActivityList, CommandButton, ConfigDetail, ConfigList, DataRows, EmptyBlock, PageHeader, SectionHeader, StatusPillLite, ToolSection } from '../components/AppFrame';
 import { useI18n } from '../i18n';
 import {
   contextStrategies,
@@ -35,6 +35,17 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
   const messages = getConversationMessages(snapshot.messages, activeConversation?.id);
   const selectedModelIds = compareModelIds.length > 0 ? compareModelIds : defaultModel ? [defaultModel.id] : [];
 
+  useEffect(() => {
+    if (!activeConversationId && snapshot.conversations[0]) {
+      setActiveConversationId(snapshot.conversations[0].id);
+    }
+  }, [activeConversationId, snapshot.conversations]);
+
+  const createConversationAndSelect = async () => {
+    const conversation = await api.createConversation(t('chat.seed.newConversation'));
+    setActiveConversationId(conversation.id);
+  };
+
   const sendCurrentMessage = async () => {
     const content = draft.trim();
     if (!content) {
@@ -51,11 +62,18 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
 
   if (activeTab.id === 'conversations') {
     return (
-      <TabPanel moduleId="chat" tab={activeTab} className="tool-layout">
+      <TabPanel moduleId="chat" tab={activeTab}>
+        <PageHeader
+          eyebrow={t('chat.localConversations')}
+          title={t('chat.list.title')}
+          description={activeTab.description}
+          status={<StatusPillLite label={snapshot.conversations.length} state={snapshot.conversations.length > 0 ? 'info' : 'muted'} />}
+          actions={<CommandButton variant="primary" icon={<MessageSquarePlus size={15} />} onClick={() => onAction(t('chat.toast.created'), createConversationAndSelect)}>{t('chat.newConversation')}</CommandButton>}
+        />
+        <div className="tool-layout">
         <ConfigList
           title={t('chat.list.title')}
           description={activeTab.description}
-          actions={<CommandButton variant="primary" icon={<MessageSquarePlus size={15} />} onClick={() => onAction(t('chat.toast.created'), () => api.createConversation(t('chat.seed.newConversation')))}>{t('chat.newConversation')}</CommandButton>}
         >
           <div className="config-items">
             {snapshot.conversations.map((conversation) => (
@@ -72,13 +90,21 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
         <ConfigDetail title={t('chat.session.title')} description={t('chat.list.note')}>
           {activeConversation ? <ConversationTools conversation={activeConversation} api={api} onAction={onAction} /> : <EmptyBlock title={t('chat.empty.title')} detail={t('chat.empty.reason')} />}
         </ConfigDetail>
+        </div>
       </TabPanel>
     );
   }
 
   if (activeTab.id === 'context') {
     return (
-      <TabPanel moduleId="chat" tab={activeTab} className="tool-layout">
+      <TabPanel moduleId="chat" tab={activeTab}>
+        <PageHeader
+          eyebrow={t('chat.strategy.title')}
+          title={t('chat.context.title')}
+          description={activeTab.featureBoundary}
+          status={<StatusPillLite label={defaultModel?.displayName ?? t('common.notConfigured')} state={defaultModel ? 'ready' : 'warning'} />}
+        />
+        <div className="tool-layout">
         <ConfigList title={t('chat.context.title')} description={activeTab.featureBoundary}>
           <DataRows
             rows={[
@@ -107,19 +133,23 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
             ]}
           />
         </ConfigDetail>
+        </div>
       </TabPanel>
     );
   }
 
   return (
-    <TabPanel moduleId="chat" tab={activeTab} className="chat-workspace">
+    <TabPanel moduleId="chat" tab={activeTab}>
+      <PageHeader
+        eyebrow={t('chat.localConversations')}
+        title={activeConversation?.title ?? t('chat.seed.newConversation')}
+        description={t('chat.playground.note')}
+        status={<StatusPillLite label={defaultModel?.displayName ?? t('common.notConfigured')} state={defaultModel ? healthState(defaultModel.healthStatus) : 'warning'} />}
+        actions={<CommandButton variant="primary" icon={<MessageSquarePlus size={15} />} onClick={() => onAction(t('chat.toast.created'), createConversationAndSelect)}>{t('chat.newConversation')}</CommandButton>}
+      />
+      <div className="chat-workspace">
       <aside className="conversation-strip">
-        <div className="section-head">
-          <div>
-            <h2>{t('chat.localConversations')}</h2>
-            <p>{t('chat.playground.note')}</p>
-          </div>
-        </div>
+        <SectionHeader title={t('chat.localConversations')} description={t('chat.playground.note')} />
         <div className="conversation-scroll">
           {snapshot.conversations.map((conversation) => (
             <button type="button" className={`conversation-tile ${conversation.id === activeConversation?.id ? 'is-active' : ''}`} key={conversation.id} onClick={() => setActiveConversationId(conversation.id)}>
@@ -152,9 +182,18 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
                 status={message.status}
                 meta={<span>{statusLabel(message.status, t)} / {message.metadataJson ? formatMessageMetadata(message.metadataJson, t) : formatDate(message.createdAt, t)}</span>}
                 actionsLabel={t('chat.message.actions.aria')}
-                actions={<button type="button" className="ghost-button" onClick={() => copyText(message.content)}><Copy size={14} />{t('chat.message.copy')}</button>}
+                actions={
+                  <MessageActions
+                    message={message}
+                    api={api}
+                    onAction={onAction}
+                    contextStrategy={contextStrategy}
+                    modelId={selectedModelIds[0]}
+                  />
+                }
               >
                 <p>{message.content}</p>
+                {message.errorMessage ? <small>{message.errorMessage}</small> : null}
               </MessageBubble>
             ))
           ) : (
@@ -175,6 +214,7 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
           sendLabel={t('chat.send')}
           sendIcon={<Send size={15} />}
           disabled={!defaultModel}
+          disabledReason={t('common.notConfigured')}
           onChange={setDraft}
           onSend={() => onAction(t('chat.toast.sent'), sendCurrentMessage)}
         />
@@ -215,7 +255,46 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
           }))}
         />
       </ConfigDetail>
+      </div>
     </TabPanel>
+  );
+}
+
+function MessageActions({
+  message,
+  api,
+  onAction,
+  contextStrategy,
+  modelId,
+}: {
+  message: Message;
+  api: TabPageProps['api'];
+  onAction: TabPageProps['onAction'];
+  contextStrategy: ContextStrategy;
+  modelId?: string;
+}) {
+  const { t } = useI18n();
+  const cancellable = Boolean(message.requestLogId && (message.status === 'streaming' || message.status === 'draft' || message.status === 'failed'));
+  return (
+    <>
+      <button type="button" className="ghost-button" onClick={() => copyText(message.content)}><Copy size={14} />{t('chat.message.copy')}</button>
+      {message.role === 'assistant' ? (
+        <button type="button" className="ghost-button" onClick={() => onAction(t('chat.toast.regenerate'), () => api.regenerateMessage({ assistantMessageId: message.id, modelId, contextStrategy }))}>
+          <RefreshCw size={14} />
+          {t('chat.message.regenerate')}
+        </button>
+      ) : null}
+      <button type="button" className="ghost-button" onClick={() => onAction(t('chat.toast.retry'), () => api.retryMessage({ messageId: message.id, modelId, contextStrategy }))}>
+        <RotateCcw size={14} />
+        {t('chat.message.retry')}
+      </button>
+      {cancellable && message.requestLogId ? (
+        <button type="button" className="ghost-button" onClick={() => onAction(t('chat.toast.cancelled'), () => api.cancelMessage({ requestLogId: message.requestLogId! }))}>
+          <XCircle size={14} />
+          {t('chat.message.cancel')}
+        </button>
+      ) : null}
+    </>
   );
 }
 

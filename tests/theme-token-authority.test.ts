@@ -27,6 +27,18 @@ function tokenDefinitionLine(line: string) {
   return /^\s*--[\w-]+:\s*.+;\s*$/.test(line);
 }
 
+function allowedGlobalTypographyLine(line: string) {
+  return /^\s*font-family:\s*var\(--font-(sans|ui|mono|message-writing)\);/.test(line);
+}
+
+function allowedLineHeightLine(line: string) {
+  return /^\s*line-height:\s*var\(--line-height-[\w-]+\);/.test(line);
+}
+
+function allowedColorMixLine(line: string) {
+  return /color-mix\(in srgb,\s*var\(--color-[\w-]+\)/.test(line) && !/#[0-9A-Fa-f]{3,8}|oklch\(|rgb\(|hsl\(|:\s*(white|black)\b/.test(line);
+}
+
 function selectorBlock(selector: string) {
   const css = stylesCss();
   const match = css.match(new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([\\s\\S]*?)\\n\\}`));
@@ -58,6 +70,12 @@ describe('theme token authority', () => {
     }
   });
 
+  it('does not leave renderer CSS tokens undeclared in the shared registry', () => {
+    const cssTokens = Array.from(new Set(stylesCss().match(/--[a-z0-9-]+(?=\s*:)/g) ?? []));
+
+    expect(cssTokens.sort()).toEqual([...THEME_TOKEN_NAMES].sort());
+  });
+
   it('defines every color token in both light root and dark override scopes', () => {
     const rootBlock = selectorBlock(':root');
     const darkBlock = selectorBlock('.theme-dark');
@@ -72,8 +90,9 @@ describe('theme token authority', () => {
   it('keeps literal colors inside token definitions only', () => {
     const violations = styleLines()
       .map((line, index) => ({ line, lineNumber: index + 1 }))
-      .filter(({ line }) => /#[0-9A-Fa-f]{3,8}|:\s*(white|black)\b/.test(line))
-      .filter(({ line }) => !tokenDefinitionLine(line));
+      .filter(({ line }) => /#[0-9A-Fa-f]{3,8}|oklch\(|rgb\(|hsl\(|:\s*(white|black)\b/.test(line))
+      .filter(({ line }) => !tokenDefinitionLine(line))
+      .filter(({ line }) => !allowedColorMixLine(line));
 
     expect(violations).toEqual([]);
   });
@@ -94,5 +113,23 @@ describe('theme token authority', () => {
       .filter(({ line }) => !tokenDefinitionLine(line));
 
     expect(violations).toEqual([]);
+  });
+
+  it('keeps font family and line height usage on shared typography tokens', () => {
+    const violations = styleLines()
+      .map((line, index) => ({ line, lineNumber: index + 1 }))
+      .filter(({ line }) => /font-family:|line-height:/.test(line))
+      .filter(({ line }) => !tokenDefinitionLine(line))
+      .filter(({ line }) => !allowedGlobalTypographyLine(line))
+      .filter(({ line }) => !allowedLineHeightLine(line));
+
+    expect(violations).toEqual([]);
+  });
+
+  it('keeps the KaiTi preference scoped to message writing surfaces', () => {
+    const css = stylesCss();
+
+    expect(css).toContain('.font-kaiti .message-content p,\n.font-kaiti .chat-composer textarea');
+    expect(css).not.toMatch(/\.font-kaiti\s+(?!\.message-content p|\.chat-composer textarea)/);
   });
 });

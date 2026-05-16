@@ -195,3 +195,10 @@
 - Legacy route aliases had reached their Round 15 deletion milestone. Keeping them would preserve old route chains and make duplicate-link scans less meaningful, so only the root fallback remains.
 - The unsigned PowerShell installer script is accepted as the current local installer artifact because `npm.cmd run test:installer-smoke` and `npm.cmd run test:desktop-entry` verify it. A future signed/NSIS installer should be added as a new release-hardening task, not silently implied by Round 15.
 - Electron smoke cleanup is part of release quality. Reusing `closeElectronApp()` across smoke scripts reduces false failures from leftover smoke processes and keeps package/installer/shortcut checks independent.
+
+## Packaged Startup Migration Hotfix Findings
+
+- Existing SQLite databases can fail before additive migrations when `schemaSql` creates indexes that reference columns added in later rounds. Pre-schema migrations must cover any legacy table column referenced by current `CREATE INDEX` statements.
+- The screenshot error was consistent with a partially migrated packaged userData database: core workspace columns already existed, but legacy `files` and `knowledge_chunks` tables were still missing columns required by current startup schema/index creation.
+- `release/win-unpacked` cannot be regenerated while a prior packaged `NexaChat.exe` process is still running. Check for `ExecutablePath` under `D:\NexaChat\release\win-unpacked\*`, stop those NexaChat processes only, then rerun `npm.cmd run package:release`.
+- For this class of bug, the strongest verification is launching `release\win-unpacked\NexaChat.exe` against the real Electron userData directory after backing up `nexachat.sqlite`, then confirming the app renders and the database columns are present.

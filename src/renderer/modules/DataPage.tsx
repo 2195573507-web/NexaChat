@@ -2,7 +2,7 @@ import { Archive, DatabaseBackup, FileCheck, RotateCcw, ShieldAlert } from 'luci
 import { useState } from 'react';
 import { DATA_CONFIRMATION_PHRASES, DATA_WIZARD_STEPS } from '../../shared/dataRuntime';
 import { FORM_DEFAULTS } from '../../shared/uiCopy';
-import { ActivityList, CommandButton, ConfigDetail, ConfigList, CopyableCommand, DataRows, EmptyBlock, Field, InlineNotice, StatusPillLite, ToolSection } from '../components/AppFrame';
+import { ActivityList, CommandButton, ConfigDetail, ConfigList, CopyableCommand, DataRows, EmptyBlock, Field, InlineNotice, PageHeader, StatusPillLite, ToolSection } from '../components/AppFrame';
 import { useI18n } from '../i18n';
 import { formatDate, healthState, statusLabel, TabPanel, type TabPageProps } from './shared';
 
@@ -18,16 +18,21 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
 
   if (activeTab.id === 'backup') {
     return (
-      <TabPanel moduleId="data" tab={activeTab} className="tool-layout">
+      <TabPanel moduleId="data" tab={activeTab}>
+        <PageHeader
+          eyebrow={t('data.export.create')}
+          title={t('data.backup.title')}
+          description={activeTab.featureBoundary}
+          status={<StatusPillLite label={latestBackup?.profile ?? t('common.none')} state={latestBackup ? 'ready' : 'muted'} />}
+          actions={<CommandButton variant="primary" icon={<Archive size={15} />} disabled={!backupPassphrase} onClick={() => onAction(t('data.toast.backupCreated'), () => api.createEncryptedBackup({ profile: 'encrypted-full', passphrase: backupPassphrase }))}>{t('data.backup.create')}</CommandButton>}
+        />
+        <div className="tool-layout">
         <ConfigList title={t('data.backup.title')} description={activeTab.featureBoundary}>
           <ToolSection title={t('data.backup.create')} description={t('data.backup.note')}>
             <div className="form-stack">
               <Field label={t('data.backup.passphrase')}>
                 <input value={backupPassphrase} onChange={(event) => setBackupPassphrase(event.target.value)} type="password" />
               </Field>
-              <CommandButton variant="primary" icon={<Archive size={15} />} disabled={!backupPassphrase} onClick={() => onAction(t('data.toast.backupCreated'), () => api.createEncryptedBackup({ profile: 'encrypted-full', passphrase: backupPassphrase }))}>
-                {t('data.backup.create')}
-              </CommandButton>
             </div>
           </ToolSection>
           <ActivityList
@@ -46,22 +51,28 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
             { label: t('data.backup.passphrase'), value: latestBackup?.encrypted ? t('common.yes') : t('common.no') },
           ]} />
         </ConfigDetail>
+        </div>
       </TabPanel>
     );
   }
 
   if (activeTab.id === 'restore') {
     return (
-      <TabPanel moduleId="data" tab={activeTab} className="tool-layout">
+      <TabPanel moduleId="data" tab={activeTab}>
+        <PageHeader
+          eyebrow={t('data.restore.preflight')}
+          title={t('data.restore.title')}
+          description={activeTab.featureBoundary}
+          status={<StatusPillLite label={latestBackup ? t('common.available') : t('common.none')} state={latestBackup ? 'ready' : 'warning'} />}
+          actions={<CommandButton variant="primary" icon={<FileCheck size={15} />} disabled={!latestBackup || !restorePassphrase} onClick={() => onAction(t('data.toast.restoreCreated'), () => api.createRestorePreflight({ backupId: latestBackup?.id, passphrase: restorePassphrase }))}>{t('data.restore.preflight')}</CommandButton>}
+        />
+        <div className="tool-layout">
         <ConfigList title={t('data.restore.title')} description={activeTab.featureBoundary}>
           <ToolSection title={t('data.restore.preflight')} description={t('data.restore.note')}>
             <div className="form-stack">
               <Field label={t('data.restore.passphrase')}>
                 <input value={restorePassphrase} onChange={(event) => setRestorePassphrase(event.target.value)} type="password" />
               </Field>
-              <CommandButton variant="primary" icon={<FileCheck size={15} />} disabled={!latestBackup || !restorePassphrase} onClick={() => onAction(t('data.toast.restoreCreated'), () => api.createRestorePreflight({ backupId: latestBackup?.id, passphrase: restorePassphrase }))}>
-                {t('data.restore.preflight')}
-              </CommandButton>
             </div>
           </ToolSection>
           <JobList snapshot={snapshot} />
@@ -69,22 +80,28 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
         <ConfigDetail title={t('data.conflicts.title')} description={t('nav.data.restore.boundary')}>
           <ActivityList empty={t('shared.empty.reason')} items={snapshot.dataConflicts.slice(0, 8).map((conflict) => ({ title: conflict.importName, meta: conflict.type, state: conflict.resolved ? 'ready' : 'warning' }))} />
         </ConfigDetail>
+        </div>
       </TabPanel>
     );
   }
 
   if (activeTab.id === 'rollback') {
     return (
-      <TabPanel moduleId="data" tab={activeTab} className="tool-layout">
+      <TabPanel moduleId="data" tab={activeTab}>
+        <PageHeader
+          eyebrow={t('common.required')}
+          title={t('data.rollback.title')}
+          description={activeTab.featureBoundary}
+          status={<StatusPillLite label={rollback?.state ? statusLabel(rollback.state, t) : t('common.none')} state={rollback?.state === 'available' ? 'warning' : 'muted'} />}
+          actions={<CommandButton variant="danger" icon={<RotateCcw size={15} />} disabled={!rollback || rollbackPhrase !== DATA_CONFIRMATION_PHRASES.rollback} onClick={() => onAction(t('data.toast.rollbackApplied'), () => api.applyDataRollback({ rollbackId: rollback?.id ?? '', confirmationPhrase: rollbackPhrase }))}>{t('data.rollback.apply')}</CommandButton>}
+        />
+        <div className="tool-layout">
         <ConfigList title={t('data.rollback.title')} description={activeTab.featureBoundary}>
           <InlineNotice tone="warning" title={t('common.required')} detail={DATA_CONFIRMATION_PHRASES.rollback} />
           <div className="form-stack">
             <Field label={t('data.rollback.confirmPhrase')}>
               <input value={rollbackPhrase} onChange={(event) => setRollbackPhrase(event.target.value)} />
             </Field>
-            <CommandButton variant="danger" icon={<RotateCcw size={15} />} disabled={!rollback || rollbackPhrase !== DATA_CONFIRMATION_PHRASES.rollback} onClick={() => onAction(t('data.toast.rollbackApplied'), () => api.applyDataRollback({ rollbackId: rollback?.id ?? '', confirmationPhrase: rollbackPhrase }))}>
-              {t('data.rollback.apply')}
-            </CommandButton>
           </div>
           <ActivityList empty={t('shared.empty.reason')} items={snapshot.rollbackRecords.map((record) => ({ title: record.id, meta: statusLabel(record.state, t), state: healthState(record.state) }))} />
         </ConfigList>
@@ -94,28 +111,43 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
             { label: t('common.completed'), value: snapshot.rollbackRecords.filter((record) => record.state === 'applied').length },
           ]} />
         </ConfigDetail>
+        </div>
       </TabPanel>
     );
   }
 
   if (activeTab.id === 'diagnostics' || activeTab.id === 'cleanup') {
     return (
-      <TabPanel moduleId="data" tab={activeTab} className="tool-layout">
+      <TabPanel moduleId="data" tab={activeTab}>
+        <PageHeader
+          eyebrow={t('stage.environment-limited')}
+          title={activeTab.label}
+          description={activeTab.featureBoundary}
+          status={<StatusPillLite label={t('stage.environment-limited')} state="warning" />}
+          actions={<CommandButton variant="primary" icon={<ShieldAlert size={15} />} onClick={() => onAction(t('data.toast.diagnosticsExported'), () => api.exportDiagnostics())}>{t('data.diagnostics.export')}</CommandButton>}
+        />
+        <div className="tool-layout">
         <ConfigList title={activeTab.label} description={activeTab.featureBoundary}>
-          <CommandButton variant="primary" icon={<ShieldAlert size={15} />} onClick={() => onAction(t('data.toast.diagnosticsExported'), () => api.exportDiagnostics())}>
-            {t('data.diagnostics.export')}
-          </CommandButton>
           <JobList snapshot={snapshot} />
         </ConfigList>
         <ConfigDetail title={t('stage.environment-limited')} description={t('nav.data.cleanup.boundary')}>
           <InlineNotice tone="warning" title={t('stage.environment-limited')} detail={activeTab.featureBoundary} />
         </ConfigDetail>
+        </div>
       </TabPanel>
     );
   }
 
   return (
-    <TabPanel moduleId="data" tab={activeTab} className="tool-layout">
+    <TabPanel moduleId="data" tab={activeTab}>
+      <PageHeader
+        eyebrow={DATA_WIZARD_STEPS.join(' / ')}
+        title={t('data.import.title')}
+        description={activeTab.featureBoundary}
+        status={<StatusPillLite label={latestReadyImport ? t('common.available') : t('common.queued')} state={latestReadyImport ? 'ready' : 'muted'} />}
+        actions={<CommandButton variant="primary" icon={<FileCheck size={15} />} disabled={!manifestText.trim()} onClick={() => onAction(t('data.toast.importPreflighted'), () => api.validateImportManifest(manifestText))}>{t('data.import.preflight')}</CommandButton>}
+      />
+      <div className="tool-layout">
       <ConfigList title={t('data.import.title')} description={activeTab.featureBoundary}>
         <ToolSection title={t('data.import.preflight')} description={t('data.import.note')}>
           <div className="wizard-steps">
@@ -126,9 +158,6 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
               <textarea value={manifestText} onChange={(event) => setManifestText(event.target.value)} aria-label={t('data.import.aria')} />
             </Field>
             <span className="row-actions">
-              <CommandButton variant="primary" icon={<FileCheck size={15} />} disabled={!manifestText.trim()} onClick={() => onAction(t('data.toast.importPreflighted'), () => api.validateImportManifest(manifestText))}>
-                {t('data.import.preflight')}
-              </CommandButton>
               <CommandButton icon={<DatabaseBackup size={15} />} disabled={!latestReadyImport} onClick={() => onAction(t('data.toast.importApplied'), () => api.applyImportPlan(latestReadyImport?.id ?? '', { mode: 'apply-metadata', confirmationPhrase: DATA_CONFIRMATION_PHRASES.applyImport }))}>
                 {t('data.import.apply')}
               </CommandButton>
@@ -145,6 +174,7 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
           { label: t('data.migration.summary.round12'), value: snapshot.migrationRuns[0]?.status ?? t('common.none') },
         ]} />
       </ConfigDetail>
+      </div>
     </TabPanel>
   );
 }

@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import type { KnowledgeFile, KnowledgeRetrievalResult } from '../../shared/types';
 import { KNOWLEDGE_RUNTIME_POLICY } from '../../shared/knowledgeRuntime';
 import { FORM_DEFAULTS } from '../../shared/uiCopy';
-import { ActivityList, CommandButton, ConfigDetail, ConfigList, DataRows, EmptyBlock, Field, InlineNotice, StatusPillLite, ToolSection } from '../components/AppFrame';
+import { ActivityList, CommandButton, ConfigDetail, ConfigList, DataRows, EmptyBlock, Field, InlineNotice, PageHeader, StatusPillLite, ToolSection } from '../components/AppFrame';
 import { useI18n } from '../i18n';
 import { formatDate, healthState, statusLabel, TabPanel, type TabPageProps } from './shared';
 
@@ -24,7 +24,14 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
 
   if (activeTab.id === 'chunks') {
     return (
-      <TabPanel moduleId="knowledge" tab={activeTab} className="tool-layout">
+      <TabPanel moduleId="knowledge" tab={activeTab}>
+        <PageHeader
+          eyebrow={t('knowledge.index.title')}
+          title={t('knowledge.chunks.title')}
+          description={activeTab.featureBoundary}
+          status={<StatusPillLite label={t('common.countConfigured', { count: totals.chunks })} state={totals.chunks > 0 ? 'ready' : 'muted'} />}
+        />
+        <div className="tool-layout">
         <ConfigList title={t('knowledge.chunks.title')} description={activeTab.featureBoundary}>
           <ActivityList
             empty={t('shared.empty.reason')}
@@ -44,6 +51,7 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
             ]}
           />
         </ConfigDetail>
+        </div>
       </TabPanel>
     );
   }
@@ -51,24 +59,24 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
   if (activeTab.id === 'retrieval') {
     const latest = retrieval?.citations ?? snapshot.knowledgeCitations.slice(0, 8);
     return (
-      <TabPanel moduleId="knowledge" tab={activeTab} className="tool-layout">
+      <TabPanel moduleId="knowledge" tab={activeTab}>
+        <PageHeader
+          eyebrow={t('knowledge.strategy.lexical')}
+          title={t('knowledge.retrieval.title')}
+          description={activeTab.featureBoundary}
+          status={<StatusPillLite label={indexedFiles.length > 0 ? t('common.indexed') : t('common.notConfigured')} state={indexedFiles.length > 0 ? 'ready' : 'warning'} />}
+          actions={<CommandButton variant="primary" icon={<Search size={15} />} disabled={!query.trim() || indexedFiles.length === 0} disabledReason={indexedFiles.length === 0 ? t('knowledge.retrieval.dependency') : undefined} onClick={() => onAction(t('knowledge.toast.retrieved'), async () => {
+            const result = await api.previewKnowledgeRetrieval({ query, topK: KNOWLEDGE_RUNTIME_POLICY.defaultTopK, strategy: 'lexical' });
+            setRetrieval(result);
+          })}>{t('knowledge.retrieval.run')}</CommandButton>}
+        />
+        <div className="tool-layout">
         <ConfigList title={t('knowledge.retrieval.title')} description={activeTab.featureBoundary}>
           <ToolSection title={t('knowledge.retrieval.query')} description={t('knowledge.retrieval.note')}>
             <div className="form-stack">
               <Field label={t('knowledge.retrieval.query')}>
                 <textarea value={query} onChange={(event) => setQuery(event.target.value)} aria-label={t('knowledge.retrieval.query')} />
               </Field>
-              <CommandButton
-                variant="primary"
-                icon={<Search size={15} />}
-                disabled={!query.trim() || indexedFiles.length === 0}
-                onClick={() => onAction(t('knowledge.toast.retrieved'), async () => {
-                  const result = await api.previewKnowledgeRetrieval({ query, topK: KNOWLEDGE_RUNTIME_POLICY.defaultTopK, strategy: 'lexical' });
-                  setRetrieval(result);
-                })}
-              >
-                {t('knowledge.retrieval.run')}
-              </CommandButton>
             </div>
           </ToolSection>
           <ActivityList
@@ -84,12 +92,21 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
           <StatusPillLite label={t('knowledge.strategy.lexical')} state="warning" />
           <InlineNotice tone="warning" title={t('common.required')} detail={t('knowledge.retrieval.dependency')} />
         </ConfigDetail>
+        </div>
       </TabPanel>
     );
   }
 
   return (
-    <TabPanel moduleId="knowledge" tab={activeTab} className="tool-layout">
+    <TabPanel moduleId="knowledge" tab={activeTab}>
+      <PageHeader
+        eyebrow={t('knowledge.index.title')}
+        title={t('knowledge.files.title')}
+        description={activeTab.featureBoundary}
+        status={<StatusPillLite label={indexedFiles.length > 0 ? t('common.indexed') : t('common.notConfigured')} state={indexedFiles.length > 0 ? 'ready' : 'warning'} />}
+        actions={<CommandButton variant="primary" icon={<FilePlus size={15} />} disabled={!importName.trim() || !importContent.trim()} onClick={() => onAction(t('knowledge.toast.created'), () => api.createKnowledgeFile({ name: importName.trim(), type: 'text/markdown', content: importContent }))}>{t('knowledge.import.create')}</CommandButton>}
+      />
+      <div className="tool-layout">
       <ConfigList title={t('knowledge.files.title')} description={activeTab.featureBoundary}>
         <section className="current-config-strip">
           <div><span className="eyebrow">{t('knowledge.columns.file')}</span><strong>{totals.files}</strong><small>{t('common.countConfigured', { count: indexedFiles.length })}</small></div>
@@ -105,14 +122,6 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
             <Field label={t('knowledge.import.content')}>
               <textarea value={importContent} onChange={(event) => setImportContent(event.target.value)} aria-label={t('knowledge.import.content')} />
             </Field>
-            <CommandButton
-              variant="primary"
-              icon={<FilePlus size={15} />}
-              disabled={!importName.trim() || !importContent.trim()}
-              onClick={() => onAction(t('knowledge.toast.created'), () => api.createKnowledgeFile({ name: importName.trim(), type: 'text/markdown', content: importContent }))}
-            >
-              {t('knowledge.import.create')}
-            </CommandButton>
           </div>
         </ToolSection>
 
@@ -133,6 +142,7 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
         />
         <InlineNotice tone="info" title={t('stage.environment-limited')} detail={t('knowledge.chunks.note')} />
       </ConfigDetail>
+      </div>
     </TabPanel>
   );
 }

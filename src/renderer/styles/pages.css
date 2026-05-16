@@ -1,6 +1,8 @@
 .page-stack {
   min-width: 0;
   min-height: 0;
+  display: grid;
+  gap: var(--space-4);
 }
 
 .tool-layout {
@@ -18,7 +20,7 @@
 
 .current-config-strip > div,
 .gateway-status-block,
-.route-chain > div {
+.workflow-chain > div {
   min-width: 0;
   display: grid;
   gap: 3px;
@@ -66,16 +68,16 @@
 }
 
 .status-stack,
-.route-chain {
+.workflow-chain {
   display: grid;
   gap: var(--space-3);
 }
 
-.route-chain {
+.workflow-chain {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.route-chain span {
+.workflow-chain span {
   width: 24px;
   height: 24px;
   border-radius: var(--radius-pill);
@@ -90,7 +92,7 @@
   display: grid;
   grid-template-columns: minmax(210px, 260px) minmax(0, 1fr) minmax(250px, 310px);
   gap: var(--space-3);
-  min-height: calc(100vh - 96px);
+  min-height: calc(100vh - 184px);
 }
 
 .conversation-strip,
@@ -171,6 +173,7 @@
 
 .message-bubble {
   max-width: min(78%, 760px);
+  min-width: min(240px, 100%);
   display: grid;
   gap: var(--space-2);
   border: 1px solid var(--color-border);
@@ -201,14 +204,51 @@
 .message-content p {
   white-space: pre-wrap;
   color: var(--color-text);
+  font-size: var(--font-size-chat);
+  line-height: var(--line-height-relaxed);
 }
 
 .chat-composer {
   display: grid;
-  grid-template-columns: minmax(130px, 170px) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-2);
   padding: var(--space-3);
   border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.composer-context {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.composer-context select {
+  max-width: 220px;
+}
+
+.composer-utility-actions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.chat-composer textarea {
+  min-height: 44px;
+  max-height: 168px;
+  resize: vertical;
+  font-size: var(--font-size-chat);
+  line-height: var(--line-height-relaxed);
+}
+
+.composer-send {
+  min-height: 44px;
+  align-self: end;
 }
 
 .compare-model-list label {
@@ -241,8 +281,8 @@
 }
 
 .font-kaiti .message-content p,
-.font-kaiti .chat-composer input {
-  font-family: KaiTi, STKaiti, "Microsoft YaHei UI", "Microsoft YaHei", serif;
+.font-kaiti .chat-composer textarea {
+  font-family: var(--font-message-writing);
 }
 
 @media (max-width: 1320px) {
@@ -258,13 +298,13 @@
 
 @media (max-width: 1040px) {
   .current-config-strip,
-  .route-chain,
+  .workflow-chain,
   .switch-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .chat-workspace {
-    min-height: calc(100vh - 88px);
+    min-height: calc(100vh - 176px);
   }
 
   .conversation-strip {
@@ -273,5 +313,14 @@
 
   .chat-composer {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .composer-context {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .composer-context select {
+    max-width: none;
   }
 }

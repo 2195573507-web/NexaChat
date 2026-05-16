@@ -72,7 +72,31 @@ describe('NexaChat renderer', () => {
     });
     expect(screen.getByText(/Mock response from nexachat-mock/)).toBeInTheDocument();
     expect(screen.getAllByText(translate('zh-CN', 'chat.message.copy')).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(translate('zh-CN', 'chat.message.retry')).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(translate('zh-CN', 'chat.message.regenerate')).length).toBeGreaterThan(0);
     expect(screen.getByText(translate('zh-CN', 'chat.compare.title'))).toBeInTheDocument();
+  });
+
+  it('keeps chat composer multiline and sends only plain Enter', async () => {
+    await renderApp();
+
+    const chat = navModules.find((module) => module.id === 'chat')!;
+    openFeature(chat, chat.tabs.find((tab) => tab.id === 'playground')!);
+    const composer = screen.getByPlaceholderText(translate('zh-CN', 'chat.composer.placeholder')) as HTMLTextAreaElement;
+    expect(composer.tagName).toBe('TEXTAREA');
+
+    const initialMessageCount = document.querySelectorAll('.message-bubble').length;
+    fireEvent.change(composer, { target: { value: 'line one' } });
+    fireEvent.keyDown(composer, { key: 'Enter', shiftKey: true });
+    expect(document.querySelectorAll('.message-bubble')).toHaveLength(initialMessageCount);
+
+    fireEvent.change(composer, { target: { value: 'line one\nline two' } });
+    fireEvent.keyDown(composer, { key: 'Enter', shiftKey: false });
+
+    await waitFor(() => {
+      expect(document.querySelectorAll('.message-bubble').length).toBeGreaterThan(initialMessageCount);
+    });
+    expect(Array.from(document.querySelectorAll('.message-bubble.role-user p')).some((element) => element.textContent === 'line one\nline two')).toBe(true);
   });
 
   it('shows model gateway and settings key areas on canonical routes', async () => {
@@ -100,6 +124,21 @@ describe('NexaChat renderer', () => {
     expect(activePanel()).toHaveAttribute('data-tab', 'security');
     expect(activePanel()).toHaveTextContent(translate('zh-CN', 'settings.security.title'));
     expect(activePanel()).toHaveTextContent(translate('zh-CN', 'settings.security.auditIntegrity'));
+  });
+
+  it('gives every module tab a unified page header contract', async () => {
+    await renderApp();
+
+    for (const module of navModules) {
+      for (const tab of module.tabs) {
+        openFeature(module, tab);
+        const panel = activePanel();
+        const header = panel.querySelector('.page-header') as HTMLElement;
+        expect(header).toBeTruthy();
+        expect(panel).toHaveAttribute('aria-label', tab.label);
+        expect(within(header).getByRole('heading')).toBeInTheDocument();
+      }
+    }
   });
 });
 

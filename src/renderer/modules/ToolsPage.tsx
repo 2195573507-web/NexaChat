@@ -2,7 +2,7 @@ import { Bot, Check, Play, PlugZap, ShieldCheck, X } from 'lucide-react';
 import { useState } from 'react';
 import { EXECUTION_TOOL_IDS } from '../../shared/executionRuntime';
 import { MCP_EXAMPLE_ENDPOINT } from '../../shared/uiCopy';
-import { ActivityList, CommandButton, ConfigDetail, ConfigList, DataRows, EmptyBlock, Field, InlineNotice, StatusPillLite, ToolSection } from '../components/AppFrame';
+import { ActivityList, CommandButton, ConfigDetail, ConfigList, DataRows, EmptyBlock, Field, InlineNotice, PageHeader, StatusPillLite, ToolSection } from '../components/AppFrame';
 import { useI18n } from '../i18n';
 import { formatDate, healthState, statusLabel, TabPanel, type TabPageProps } from './shared';
 
@@ -15,7 +15,15 @@ export function ToolsPage({ activeTab, snapshot, api, onAction }: TabPageProps) 
 
   if (activeTab.id === 'agents') {
     return (
-      <TabPanel moduleId="tools" tab={activeTab} className="tool-layout">
+      <TabPanel moduleId="tools" tab={activeTab}>
+        <PageHeader
+          eyebrow={t('tools.columns.dryRun')}
+          title={t('tools.agent.title')}
+          description={activeTab.featureBoundary}
+          status={<StatusPillLite label={snapshot.agents.length} state={snapshot.agents.length > 0 ? 'ready' : 'muted'} />}
+          actions={<CommandButton variant="primary" icon={<Bot size={15} />} disabled={!agentName.trim() || !agentGoal.trim()} onClick={() => onAction(t('tools.toast.agentSaved'), () => api.createAgent(agentName.trim(), agentGoal.trim()))}>{t('tools.agent.create')}</CommandButton>}
+        />
+        <div className="tool-layout">
         <ConfigList title={t('tools.agent.title')} description={activeTab.featureBoundary}>
           <ToolSection title={t('tools.agent.create')} description={t('tools.agent.note')}>
             <div className="form-stack">
@@ -25,9 +33,6 @@ export function ToolsPage({ activeTab, snapshot, api, onAction }: TabPageProps) 
               <Field label={t('tools.columns.goal')}>
                 <textarea value={agentGoal} onChange={(event) => setAgentGoal(event.target.value)} />
               </Field>
-              <CommandButton variant="primary" icon={<Bot size={15} />} disabled={!agentName.trim() || !agentGoal.trim()} onClick={() => onAction(t('tools.toast.agentSaved'), () => api.createAgent(agentName.trim(), agentGoal.trim()))}>
-                {t('tools.agent.create')}
-              </CommandButton>
             </div>
           </ToolSection>
           <div className="config-items">
@@ -52,18 +57,24 @@ export function ToolsPage({ activeTab, snapshot, api, onAction }: TabPageProps) 
             { label: t('tools.execution.trace'), value: snapshot.executionTraceEvents.length },
           ]} />
         </ConfigDetail>
+        </div>
       </TabPanel>
     );
   }
 
   if (activeTab.id === 'runs') {
     return (
-      <TabPanel moduleId="tools" tab={activeTab} className="tool-layout">
+      <TabPanel moduleId="tools" tab={activeTab}>
+        <PageHeader
+          eyebrow={t('tools.execution.approvals')}
+          title={t('tools.runs.title')}
+          description={activeTab.featureBoundary}
+          status={<StatusPillLite label={snapshot.executionRuns.length} state={snapshot.executionRuns.length > 0 ? 'info' : 'muted'} />}
+          actions={<CommandButton variant="primary" icon={<Play size={15} />} onClick={() => onAction(t('tools.toast.executionStarted'), () => api.startExecutionRun({ kind: 'tool', mode: 'preview', toolId: EXECUTION_TOOL_IDS.statusRead, inputJson: '{}' }))}>{t('tools.execution.runStatusRead')}</CommandButton>}
+        />
+        <div className="tool-layout">
         <ConfigList title={t('tools.runs.title')} description={activeTab.featureBoundary}>
           <div className="switch-grid">
-            <CommandButton variant="primary" icon={<Play size={15} />} onClick={() => onAction(t('tools.toast.executionStarted'), () => api.startExecutionRun({ kind: 'tool', mode: 'preview', toolId: EXECUTION_TOOL_IDS.statusRead, inputJson: '{}' }))}>
-              {t('tools.execution.runStatusRead')}
-            </CommandButton>
             <CommandButton icon={<ShieldCheck size={15} />} onClick={() => onAction(t('tools.toast.executionStarted'), () => api.startExecutionRun({ kind: 'tool', mode: 'preview', toolId: EXECUTION_TOOL_IDS.echo, inputJson: '{}' }))}>
               {t('tools.execution.runEchoApproval')}
             </CommandButton>
@@ -92,12 +103,21 @@ export function ToolsPage({ activeTab, snapshot, api, onAction }: TabPageProps) 
             {snapshot.approvalRequests.every((approval) => approval.status !== 'pending') ? <EmptyBlock title={t('app.status.idle')} detail={t('tools.execution.approvals')} /> : null}
           </div>
         </ConfigDetail>
+        </div>
       </TabPanel>
     );
   }
 
   return (
-    <TabPanel moduleId="tools" tab={activeTab} className="tool-layout">
+    <TabPanel moduleId="tools" tab={activeTab}>
+      <PageHeader
+        eyebrow="MCP"
+        title={t('tools.mcp.title')}
+        description={activeTab.featureBoundary}
+        status={<StatusPillLite label={t('common.countGranted', { count: snapshot.mcpServers.filter((server) => server.permissionState === 'granted').length })} state={snapshot.mcpServers.some((server) => server.permissionState === 'granted') ? 'ready' : 'muted'} />}
+        actions={<CommandButton variant="primary" icon={<PlugZap size={15} />} disabled={!serverName.trim() || !serverTarget.trim()} onClick={() => onAction(t('tools.toast.mcpRegistered'), () => api.createMcpServer(serverName.trim(), 'http', serverTarget.trim()))}>{t('tools.mcp.register')}</CommandButton>}
+      />
+      <div className="tool-layout">
       <ConfigList title={t('tools.mcp.title')} description={activeTab.featureBoundary}>
         <section className="current-config-strip">
           <div><span className="eyebrow">MCP</span><strong>{snapshot.mcpServers.length}</strong><small>{t('common.countGranted', { count: snapshot.mcpServers.filter((server) => server.permissionState === 'granted').length })}</small></div>
@@ -113,14 +133,6 @@ export function ToolsPage({ activeTab, snapshot, api, onAction }: TabPageProps) 
             <Field label={t('tools.columns.transport')}>
               <input value={serverTarget} onChange={(event) => setServerTarget(event.target.value)} />
             </Field>
-            <CommandButton
-              variant="primary"
-              icon={<PlugZap size={15} />}
-              disabled={!serverName.trim() || !serverTarget.trim()}
-              onClick={() => onAction(t('tools.toast.mcpRegistered'), () => api.createMcpServer(serverName.trim(), 'http', serverTarget.trim()))}
-            >
-              {t('tools.mcp.register')}
-            </CommandButton>
           </div>
         </ToolSection>
 
@@ -150,6 +162,7 @@ export function ToolsPage({ activeTab, snapshot, api, onAction }: TabPageProps) 
           { label: t('tools.execution.trace'), value: snapshot.executionTraceEvents.length },
         ]} />
       </ConfigDetail>
+      </div>
     </TabPanel>
   );
 }

@@ -2,99 +2,69 @@
 
 ## Color Tokens
 
-### Light Theme
+Runtime color values live in `src/renderer/styles/tokens.css` and are registered in `src/shared/theme.ts`.
 
-- `color-bg`: `#F7F8FA`
-- `color-surface`: `#FFFFFF`
-- `color-surface-muted`: `#F1F3F5`
-- `color-border`: `#DDE1E6`
-- `color-text`: `#1F2328`
-- `color-text-muted`: `#667085`
-- `color-text-subtle`: `#98A2B3`
-- `color-primary`: `#2563EB`
-- `color-info`: `#0EA5E9`
-- `color-success`: `#16A34A`
-- `color-warning`: `#D97706`
-- `color-error`: `#DC2626`
+Use semantic variables such as `--color-bg`, `--color-rail`, `--color-surface`, `--color-panel`, `--color-muted`, `--color-border`, `--color-border-strong`, `--color-text`, `--color-text-muted`, `--color-text-subtle`, `--color-primary`, `--color-primary-soft`, `--color-success`, `--color-warning`, `--color-danger`, `--color-info`, `--color-code`, `--color-code-text`, and `--color-on-primary`.
 
-### Dark Theme
-
-- `color-bg`: `#111318`
-- `color-surface`: `#171A21`
-- `color-surface-muted`: `#20242D`
-- `color-border`: `#303642`
-- `color-text`: `#F2F4F7`
-- `color-text-muted`: `#B4BCC8`
-- `color-text-subtle`: `#7D8794`
-- `color-primary`: `#60A5FA`
-- `color-info`: `#38BDF8`
-- `color-success`: `#4ADE80`
-- `color-warning`: `#FBBF24`
-- `color-error`: `#F87171`
+Do not add raw color values in page or component CSS. State tints may use `color-mix()` only when the mix derives from existing tokens.
 
 ## Typography Tokens
 
-- `font-ui`: `"Inter", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif`
-- `font-cn`: `"Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif`
-- `font-mono`: `"JetBrains Mono", "Cascadia Code", "SFMono-Regular", Consolas, monospace`
-- `font-kaiti`: `"KaiTi", "STKaiti", "楷体", "楷体_GB2312", serif`
+- `--font-sans`: Inter first when installed, then native Windows/macOS/Linux UI and Chinese system fallbacks.
+- `--font-ui`: alias to `--font-sans` for app controls.
+- `--font-mono`: code, model IDs, provider IDs, API keys, endpoints, JSON, logs, and filesystem paths.
+- `--font-message-writing`: optional message-writing font used only when `.font-kaiti` is enabled.
 
 Size tokens:
 
-- `text-xs`: 12px
-- `text-sm`: 13px
-- `text-md`: 14px
-- `text-lg`: 16px
-- `text-title`: 20px
-- `text-page-title`: 24px
+- `--font-size-xs`: 12px
+- `--font-size-sm`: 13px
+- `--font-size-md`: 14px
+- `--font-size-lg`: 16px
+- `--font-size-xl`: 21px
+- `--font-size-body`: body text.
+- `--font-size-control`: buttons, inputs, labels.
+- `--font-size-chat`: chat message reading text.
+- `--font-size-title`: page and panel title text.
+
+Line-height tokens:
+
+- `--line-height-tight`
+- `--line-height-normal`
+- `--line-height-relaxed`
+- `--line-height-control`
+- `--line-height-badge`
 
 Do not scale fonts by viewport width.
 
 ## Spacing Tokens
 
-- `space-1`: 4px
-- `space-2`: 8px
-- `space-3`: 12px
-- `space-4`: 16px
-- `space-5`: 20px
-- `space-6`: 24px
-- `space-8`: 32px
+- `--space-1`: 4px
+- `--space-2`: 8px
+- `--space-3`: 12px
+- `--space-4`: 16px
+- `--space-5`: 20px
+
+Use spacing tokens through shared shell, component, and page styles instead of page-local one-off values.
 
 ## Radius Tokens
 
-- `radius-xs`: 4px
-- `radius-sm`: 6px
-- `radius-md`: 8px
-- `radius-lg`: 10px for menus/dialogs only
+- `--radius-sm`: compact controls.
+- `--radius-md`: standard panels and cards.
+- `--radius-pill`: badges and status pills.
 
 Cards should stay at 8px or less unless a future design system changes it.
 
 ## Shadow Tokens
 
-- `shadow-none`
-- `shadow-menu`: small elevation for menus.
-- `shadow-dialog`: controlled elevation for confirmations.
+- `--shadow-focus`: focus ring only.
 
 Main panels should rely on borders and surfaces rather than large shadows.
 
-## Border Tokens
-
-- `border-default`
-- `border-subtle`
-- `border-focus`
-- `border-error`
-- `border-warning`
-- `border-success`
-
 ## Layout Tokens
 
-- `sidebar-collapsed`: 72px
-- `sidebar-expanded`: 220px
-- `topbar-height`: 48px
-- `conversation-list-width`: 300px
-- `right-rail-width`: 360px
-- `window-default`: 1280 x 820
-- `window-min`: 1040 x 680
+- `--rail-width`: compact module rail width.
+- `--switcher-width`: left task switcher width.
 
 ## Component States
 
@@ -118,12 +88,12 @@ Every interactive component supports:
 
 ## Density Modes
 
-- Comfortable: larger gaps, 40px controls, roomier rows.
-- Compact: smaller gaps, 32-36px controls, denser lists.
+- Comfortable: larger gaps, roomier rows.
+- Compact: smaller gaps, denser lists.
 
 ## Icon Style
 
-Linear, simple, consistent. No emojis as UI icons. Use one icon family in implementation.
+Use one linear icon family in implementation. No emojis as UI icons.
 
 ## Explicit Anti-Patterns
 
@@ -132,4 +102,4 @@ Linear, simple, consistent. No emojis as UI icons. Use one icon family in implem
 - Do not use large-scale glassmorphism.
 - Do not make the UI dominated by a single purple/blue gradient family.
 - Primary color is for selected state, buttons, links, and status highlights only.
-
+- Do not add raw `font-family`, `font-size`, `line-height`, or raw color values outside the token system.

@@ -1241,3 +1241,56 @@ Next UI polish:
 - Add screenshots to the UI acceptance record for light, dark, and system theme at multiple widths.
 - Tighten Data and Settings pages further into task-first maintenance flows.
 - Add more explicit empty, loading, error, and disabled substates for Provider, Gateway, Knowledge, MCP, and Agent actions.
+
+## 2026-05-16 Typography And ChatGPT-Style Operation Logic Iteration
+
+This iteration continued on top of the current new UI instead of replacing it. The real project root was confirmed first with `git rev-parse --show-toplevel` as `D:/NexaChat`; all repo writes stayed inside that root. `using-superpowers` and `impeccable` were loaded, `using-superpower` was checked and not installed, MCP resources/templates were empty, and available Codex plugins were Browser, Documents, Presentations, and Spreadsheets.
+
+Scope completed:
+
+- Added the audit and execution record at `docs/build-plans/00-modular-refactor-master-plan/ui-font-and-chatgpt-logic-iteration.md`.
+- Updated the design token authority docs so they point to the current `AppFrame` and split renderer style layers.
+- Replaced the stale design-system font/color documentation with the current token vocabulary.
+- Expanded typography tokens for sans/UI/mono/message-writing font stacks, body/control/chat/title sizes, and semantic line-height steps.
+- Kept optional KaiTi behavior scoped to message writing surfaces only.
+- Added `PageHeader`, `SectionHeader`, `ErrorState`, `LoadingState`, `disabledReason`, and a multiline `ChatInput` contract in the shared app frame.
+- Unified every first-level module and every second-level page around a visible page title area, stable primary action position, main task region, and auxiliary detail/status region.
+- Updated Workspace, Chat, Models, Knowledge, Tools and Agent, Local Gateway, Data, and Settings pages to use the same low-distraction operation logic.
+- Chat now has stable new conversation entry, message copy/retry/regenerate/cancel actions, multiline input, Enter send, Shift+Enter newline, model/context controls, and a calmer reading width.
+- Models now uses shared activity list rendering and a workflow-chain visual instead of route/debug vocabulary.
+- Gateway overview no longer duplicates the start/stop primary action inside the main content.
+- UI smoke now verifies all active panels have a visible page header.
+- Theme token authority tests now reject raw color, font-family, font-size, and line-height regressions outside token rules, and verify KaiTi scope.
+
+ChatGPT-style learning applied:
+
+- Stable left navigation and current-task center area.
+- Primary actions in predictable page header positions.
+- Secondary actions visually quieter and closer to their target data.
+- Chat composer remains easy to find and supports natural multiline writing.
+- History, tool/model/context controls, logs, and details are available without taking over the main task.
+- Empty, disabled, reserved, dry-run, environment-limited, and error states remain explicit instead of pretending unfinished capabilities are complete.
+
+Product boundaries preserved:
+
+- No ChatGPT branding, icon, copy, or protected asset was copied.
+- NexaChat remains a local AI workbench with provider/model, knowledge, Agent/tool, gateway, data, and security modules.
+- No remote font dependency, large UI framework, duplicate sidebar, duplicate composer, duplicate message list, or fallback old shell was added.
+- API keys remain masked except for the existing one-time reveal flow.
+- No business data structure was intentionally changed by this UI iteration.
+
+Verification results:
+
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test -- tests/app.test.tsx tests/theme-token-authority.test.ts`: passed, 2 files / 18 tests.
+- `npm.cmd run test:ui-smoke`: passed, 8 Playwright tests.
+- `npm.cmd run test`: passed, 19 files / 63 tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run test:electron-smoke`: passed.
+- `npm.cmd run test:shortcut-readback:packaged`: passed; `C:\Users\至亲\Desktop\NexaChat.lnk` still points to the packaged NexaChat entry.
+- `lint`, `test:ui`, `smoke`, and `electron:smoke` scripts do not exist in `package.json`, so they were not run.
+
+Known notes:
+
+- Historical progress/docs sections still contain older mojibake text. This iteration updated the active token/design docs it touched but did not rewrite all historical records.
+- Real upstream Provider execution, full vector RAG/OCR/rerank, external MCP real-run execution, and autonomous Agent sandbox execution remain outside this UI logic pass and stay marked as unavailable, dry-run, reserved, or environment-limited where exposed.
