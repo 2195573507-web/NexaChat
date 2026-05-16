@@ -929,8 +929,8 @@ These references guide product and engineering decisions. They are not permissio
   - `git diff --check`: passed with LF/CRLF conversion warnings only.
 - Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` still targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and uses `D:\NexaChat\assets\app-icon.ico,0`.
 - Acceptance result: Passed. Supported text/Markdown content can be imported and indexed, retrieval returns structured citations, chat displays cited context, rebuild/delete keep file and chunk state consistent, and unsupported PDF/Office/OCR/vector behavior is not advertised as implemented.
-- Commit hash: `6e48333e81239e404d6a1d27030f9b70a6ef7e96` for Round 9 delivery; `862caf0574fc8c485e323dba0197953a12a12752` records closeout and remote confirmation.
-- Push result: delivery and closeout commits pushed; `origin/main` confirmed at `862caf0574fc8c485e323dba0197953a12a12752`.
+- Commit hash: `6e48333e81239e404d6a1d27030f9b70a6ef7e96` for Round 9 delivery; `862caf0574fc8c485e323dba0197953a12a12752` records closeout; `ed7e09ba7227908143fb4d723cbb90403ac70bab` records remote confirmation.
+- Push result: delivery, closeout, and remote-confirmation commits pushed; `origin/main` confirmed at `ed7e09ba7227908143fb4d723cbb90403ac70bab`.
 - Remaining issues: None for Round 9. Round 10 owns the unified Agent, MCP, Tool, Workflow execution/run/trace/approval model.
 
 ## 16. Round 10: Agent, MCP, Tools And Workflow

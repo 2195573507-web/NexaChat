@@ -448,7 +448,8 @@ Git:
 
 - Round 9 delivery commit hash: `6e48333e81239e404d6a1d27030f9b70a6ef7e96`.
 - Round 9 closeout commit hash: `862caf0574fc8c485e323dba0197953a12a12752`.
-- Push result: delivery and closeout commits pushed; `origin/main` confirmed at `862caf0574fc8c485e323dba0197953a12a12752`.
+- Round 9 remote-confirmation commit hash: `ed7e09ba7227908143fb4d723cbb90403ac70bab`.
+- Push result: delivery, closeout, and remote-confirmation commits pushed; `origin/main` confirmed at `ed7e09ba7227908143fb4d723cbb90403ac70bab`.
 
 ## 2026-05-14 UI Shell Redesign
 
