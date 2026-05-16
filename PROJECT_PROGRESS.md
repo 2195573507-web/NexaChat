@@ -1,5 +1,26 @@
 # NexaChat Project Progress
 
+## 2026-05-16 UI Full Redesign Phase 0 Plan
+
+This round completed planning and research only for the NexaChat full UI redesign. No UI source code, routing code, IPC code, Store code, database code, business logic, or test code was modified in this round.
+
+Scope and evidence:
+
+- Confirmed the real project root with `git rev-parse --show-toplevel`: `D:/NexaChat`.
+- Checked requested skills: `using-superpower` was not found; `using-superpowers` was found and read.
+- Checked `impeccable`: the skill exists and was read; its project context loader found no `PRODUCT.md` or `DESIGN.md` under the project root, so this round recorded product-UI principles directly in the plan instead of creating extra context files.
+- Added the executable UI redesign plan at `docs/build-plans/00-modular-refactor-master-plan/ui-full-redesign-plan.md`.
+- Audited the current Electron/React entry path, App shell, navigation registry, module page registry, renderer modules, shared components, CSS token organization, `AppApi`, IPC channels, preload/main IPC boundary, Store action surface, explicit browser mock path, and existing docs.
+- Advanced two analysis tracks in parallel: current UI diagnosis / information architecture restructuring, and external UI/product case study mapping into NexaChat modules.
+- Recorded external UI/product learning objects in the plan: CCS / CC Switch style projects, Open WebUI, Dify, Flowise, Langflow, n8n, sub2api, OpenAI API Platform, Anthropic Console, Cursor, Raycast, and Perplexity as a source needing further official UI verification.
+- Noted an unrelated dirty source file already present in the worktree: `src/main/database/connection.ts`. It was not staged for this docs-only round.
+
+Result:
+
+- Completed Phase 0: audit, research, information architecture, page boundaries, component system, design system, anti-hallucination UI rules, staged execution plan, acceptance criteria, risk list, and next Codex execution guidance.
+- Next suggested step: enter Phase 1, AppShell / navigation / route skeleton redesign, only after confirming the working tree state and keeping unrelated source changes out of the UI-redesign commit.
+- Build/test were intentionally not run because this round changed only planning/progress Markdown files.
+
 ## 2026-05-16 Full App Round 15 Test System, Quality Gates And Release Convergence
 
 Round 15 of `docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md` is completed as implementation, verification, closeout, push, and remote confirmation; delivery commit is `938d017ceede16475369a537227b86be7096b9cc`; closeout commit is `4715788e416f97b79328413c3821287cfcafce0b`.
