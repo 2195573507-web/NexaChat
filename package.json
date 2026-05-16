@@ -15,6 +15,17 @@
     "test": "vitest run",
     "test:ui-smoke": "node scripts/ui-smoke.mjs",
     "test:electron-smoke": "node scripts/electron-smoke.mjs",
+    "package:win-unpacked": "npm run build && node scripts/package-win-unpacked.mjs",
+    "package:installer-script": "node scripts/create-installer-script.mjs",
+    "package:release": "npm run package:win-unpacked && npm run package:installer-script",
+    "test:package-smoke": "node scripts/package-smoke.mjs",
+    "test:installer-smoke": "node scripts/installer-smoke.mjs",
+    "test:shortcut-readback": "node scripts/shortcut-readback.mjs",
+    "test:shortcut-readback:local": "node scripts/shortcut-readback.mjs --target local",
+    "test:shortcut-readback:packaged": "node scripts/shortcut-readback.mjs --target packaged",
+    "test:desktop-entry": "npm run test:package-smoke && npm run test:installer-smoke && npm run test:shortcut-readback:packaged",
+    "shortcut:package": "node scripts/shortcut-update.mjs --target packaged",
+    "shortcut:local": "node scripts/shortcut-update.mjs --target local",
     "verify": "npm run typecheck && npm run test && npm run build"
   },
   "keywords": [

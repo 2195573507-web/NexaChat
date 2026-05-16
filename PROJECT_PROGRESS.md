@@ -1,5 +1,54 @@
 # NexaChat Project Progress
 
+## 2026-05-16 Full App Round 14 Desktop Experience, Packaging, Shortcut And Release
+
+Round 14 of `docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md` is completed as implementation and verification; delivery commit is pending.
+
+Parallel execution lanes:
+
+- Lane A: desktop entry authority, unpacked Windows package, release manifest, installer script generation.
+- Lane B: Electron main-process single-instance behavior, startup/crash diagnostics, packaged shortcut migration, shortcut readback.
+- Lane C: package smoke, installer smoke, UI smoke, Electron smoke, docs, Git closeout.
+
+Key changes:
+
+- Added `src/shared/desktopEntry.ts` for app name, product name, icon paths, package paths, smoke user-data paths, log names, update channel, and shortcut metadata.
+- Added `src/main/desktopDiagnostics.ts` for redacted startup/crash diagnostics.
+- Updated `src/main/index.ts` to use desktop authority values, single-instance lock, startup diagnostics, packaged-safe smoke user data, and second-instance focus behavior.
+- Added scripts for Windows unpacked packaging, installer script generation, package smoke, installer smoke, shortcut readback, and shortcut migration.
+- Added `package:release`, `test:package-smoke`, `test:installer-smoke`, `test:desktop-entry`, packaged/local shortcut readback, and packaged/local shortcut migration scripts.
+- Added `tests/desktop-entry.test.ts`.
+- Added `release/` to `.gitignore`.
+- Migrated the desktop shortcut to the packaged executable after package smoke passed.
+
+Verification:
+
+- `npm.cmd run test -- tests/desktop-entry.test.ts tests/ipc-contract.test.ts`: passed, 2 files / 6 tests.
+- `npm.cmd run package:release`: passed; generated `release/win-unpacked/NexaChat.exe` and `release/NexaChat-Setup.ps1`.
+- First `npm.cmd run test:shortcut-readback:packaged`: failed on raw COM `IconLocation` formatting; fixed normalized icon path comparison.
+- First `npm.cmd run test:installer-smoke`: failed due to unreliable wildcard copy in generated installer script; fixed source-child copy.
+- First parallel installer-smoke/desktop-entry run: failed because both commands used the same smoke directory; fixed per-process installer smoke directories.
+- `npm.cmd run test:installer-smoke`: passed.
+- `npm.cmd run test:desktop-entry`: passed.
+- `npm.cmd run test`: passed, 17 files / 53 tests.
+- `npm.cmd run test:ui-smoke`: passed, 16 Playwright tests.
+- `npm.cmd run verify`: passed, including typecheck, full unit test suite, and build.
+- `npm.cmd run test:electron-smoke`: passed.
+- `git diff --check`: passed with LF/CRLF warnings only.
+
+Desktop shortcut status:
+
+- `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\release\win-unpacked\NexaChat.exe`.
+- Arguments are empty.
+- Working directory is `D:\NexaChat\release\win-unpacked`.
+- IconLocation resolves to `D:\NexaChat\assets\app-icon.ico,0`.
+- The shortcut was modified by `npm.cmd run shortcut:package`.
+
+Git:
+
+- Round 14 delivery commit hash: pending.
+- Push result: pending.
+
 ## 2026-05-16 Full App Round 13 Observability, Usage, Logs, Feedback And Evaluation
 
 Round 13 of `docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md` is completed as implementation, verification, closeout, push, and remote confirmation.

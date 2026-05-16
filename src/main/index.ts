@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { registerIpcHandlers } from './ipc.js';
 import { closeDatabase } from './database/connection.js';
 import { stopLocalGateway } from './services/localGateway.js';
+import { DESKTOP_ENTRY } from '../shared/desktopEntry.js';
+import { installDesktopDiagnostics, recordDesktopDiagnostic } from './desktopDiagnostics.js';
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 const currentDir = fileURLToPath(new URL('.', import.meta.url));
@@ -27,10 +29,15 @@ if (isElectronSmoke) {
   app.disableHardwareAcceleration();
   app.commandLine.appendSwitch('disable-gpu');
   app.commandLine.appendSwitch('disable-gpu-sandbox');
-  app.setPath('userData', join(process.cwd(), 'test-results/electron-smoke-user-data'));
+  const smokeUserDataDir =
+    process.env.NEXACHAT_ELECTRON_SMOKE_USER_DATA_DIR || join(process.cwd(), DESKTOP_ENTRY.relativePaths.electronSmokeUserData);
+  app.setPath('userData', smokeUserDataDir);
 }
 
+installDesktopDiagnostics();
 registerIpcHandlers();
+
+let mainWindow: BrowserWindow | null = null;
 
 function getContentType(filePath: string): string {
   switch (extname(filePath).toLowerCase()) {
@@ -78,13 +85,13 @@ function registerRendererProtocol(): void {
 
 async function createMainWindow(): Promise<void> {
   const window = new BrowserWindow({
-    width: 1280,
-    height: 820,
-    minWidth: 1040,
-    minHeight: 680,
-    title: 'NexaChat',
+    width: DESKTOP_ENTRY.window.width,
+    height: DESKTOP_ENTRY.window.height,
+    minWidth: DESKTOP_ENTRY.window.minWidth,
+    minHeight: DESKTOP_ENTRY.window.minHeight,
+    title: DESKTOP_ENTRY.productName,
     show: false,
-    backgroundColor: '#F7F8FA',
+    backgroundColor: DESKTOP_ENTRY.window.backgroundColor,
     webPreferences: {
       preload: join(currentDir, '../preload/index.js'),
       contextIsolation: true,
@@ -93,7 +100,18 @@ async function createMainWindow(): Promise<void> {
     },
   });
 
-  window.once('ready-to-show', () => window.show());
+  mainWindow = window;
+
+  window.once('ready-to-show', () => {
+    recordDesktopDiagnostic('window.ready-to-show', { mode: isDev ? 'dev' : 'production' });
+    window.show();
+  });
+
+  window.on('closed', () => {
+    if (mainWindow === window) {
+      mainWindow = null;
+    }
+  });
 
   window.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url);
@@ -107,20 +125,37 @@ async function createMainWindow(): Promise<void> {
   }
 }
 
-app.setName('NexaChat');
+app.setName(DESKTOP_ENTRY.appName);
 
-app.whenReady().then(async () => {
-  if (!isDev) {
-    registerRendererProtocol();
-  }
-  await createMainWindow();
+const singleInstanceLock = app.requestSingleInstanceLock();
+if (!singleInstanceLock) {
+  recordDesktopDiagnostic('app.second-instance-quit');
+  app.quit();
+} else {
+  app.whenReady().then(async () => {
+    recordDesktopDiagnostic('app.ready', { mode: isDev ? 'dev' : 'production' });
+    if (!isDev) {
+      registerRendererProtocol();
+    }
+    await createMainWindow();
 
-  app.on('activate', async () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      await createMainWindow();
+    app.on('activate', async () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        await createMainWindow();
+      }
+    });
+  });
+
+  app.on('second-instance', () => {
+    recordDesktopDiagnostic('app.second-instance-focus');
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+      mainWindow.focus();
     }
   });
-});
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

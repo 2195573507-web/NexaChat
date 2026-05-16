@@ -1319,6 +1319,70 @@ These references guide product and engineering decisions. They are not permissio
 25. **Deliverables**: Packaging config, installer or package artifact, shortcut script/check, smoke results, release docs.
 26. **Next Round Input**: Release candidate ready for final quality gates.
 
+### Round 14 Execution Status
+
+- Status: Completed.
+- Completion date: 2026-05-16.
+- Parallel lanes:
+  - Lane A: desktop entry authority, unpacked Windows package, release manifest, installer script generation.
+  - Lane B: Electron main-process single-instance behavior, startup/crash diagnostics, packaged shortcut migration, shortcut readback.
+  - Lane C: package smoke, installer smoke, UI smoke, Electron smoke, docs, Git closeout.
+- Root-cause analysis: the previous desktop entry depended on `node_modules/electron/dist/electron.exe` plus the repo root argument. There was no package artifact, installer script, package smoke, shortcut migration script, or packaged launch diagnostics.
+- Upstream/downstream chain review:
+  - `src/shared/desktopEntry.ts` -> package scripts -> `release/win-unpacked/NexaChat.exe`.
+  - Packaged executable -> `resources/app/package.json` -> Electron main -> preload -> renderer dist -> SQLite user data -> diagnostics logs.
+  - `shortcut:package` -> desktop `.lnk` -> COM readback -> packaged smoke.
+- Major changed files:
+  - `.gitignore`
+  - `package.json`
+  - `src/shared/desktopEntry.ts`
+  - `src/main/desktopDiagnostics.ts`
+  - `src/main/index.ts`
+  - `scripts/desktop-entry.mjs`
+  - `scripts/package-win-unpacked.mjs`
+  - `scripts/create-installer-script.mjs`
+  - `scripts/package-smoke.mjs`
+  - `scripts/installer-smoke.mjs`
+  - `scripts/shortcut-readback.mjs`
+  - `scripts/shortcut-update.mjs`
+  - `tests/desktop-entry.test.ts`
+  - `docs/implementation/round-14-desktop-packaging-shortcut-release-closure.md`
+- Added or changed functionality:
+  - Added centralized desktop entry authority for app name, icon paths, package paths, smoke user-data paths, log names, update channel, shortcut name, and launch metadata.
+  - Added redacted startup/crash diagnostics in the main process.
+  - Added a single-instance lock and second-instance focus behavior so app launch stays one-window.
+  - Added reproducible Windows unpacked packaging from current build output.
+  - Added a local PowerShell installer script generator and installer smoke.
+  - Added packaged executable smoke and packaged desktop shortcut readback.
+  - Migrated `C:\Users\至亲\Desktop\NexaChat.lnk` to the packaged executable after package smoke passed.
+- Deleted or replaced old links:
+  - Replaced the active desktop shortcut target from `D:\NexaChat\node_modules\electron\dist\electron.exe` with `D:\NexaChat\release\win-unpacked\NexaChat.exe`.
+  - Kept `shortcut:local` as an explicit rollback script only.
+  - Did not add extra startup windows, hidden services, or untracked runtime code paths.
+- Test commands and results:
+  - `npm.cmd run test -- tests/desktop-entry.test.ts tests/ipc-contract.test.ts`: Passed, 2 files / 6 tests.
+  - `npm.cmd run package:release`: Passed; generated `release/win-unpacked/NexaChat.exe` and `release/NexaChat-Setup.ps1`.
+  - First `npm.cmd run test:shortcut-readback:packaged`: Failed because COM returned doubled backslashes in `IconLocation`; fixed normalized icon path comparison.
+  - First `npm.cmd run test:installer-smoke`: Failed because the generated installer script copied wildcard input unreliably; fixed source-child copy.
+  - First parallel installer-smoke/desktop-entry run: Failed because both commands used the same smoke directory; fixed per-process installer smoke directories.
+  - `npm.cmd run test:installer-smoke`: Passed.
+  - `npm.cmd run test:desktop-entry`: Passed.
+  - `npm.cmd run test`: Passed, 17 files / 53 tests.
+  - `npm.cmd run test:ui-smoke`: Passed, 16 Playwright tests.
+  - `npm.cmd run verify`: Passed, including typecheck, full unit test suite, and build.
+  - `npm.cmd run test:electron-smoke`: Passed, Electron shell rendered.
+  - `git diff --check`: Passed with LF/CRLF conversion warnings only.
+- Desktop shortcut result:
+  - `C:/Users/至亲/Desktop/NexaChat.lnk` exists.
+  - TargetPath: `D:/NexaChat/release/win-unpacked/NexaChat.exe`.
+  - Arguments: empty.
+  - WorkingDirectory: `D:/NexaChat/release/win-unpacked`.
+  - IconLocation resolves to `D:/NexaChat/assets/app-icon.ico,0`.
+  - Shortcut was migrated by `npm.cmd run shortcut:package`.
+- Acceptance result: Passed. Packaged app launches, installer smoke passes, shortcut points to the packaged executable, no extra window is created, icon path is verified, startup diagnostics are written, and release artifacts are reproducible from tracked scripts.
+- Commit hash: pending Round 14 delivery commit.
+- Remaining issues: None for Round 14. Round 15 owns final quality gates, scanners, release checklist, and convergence audit.
+
 ## 21. Round 15: Test System, Quality Gates And Release Convergence
 
 1. **Round Name**: Test System, Quality Gates And Release Convergence.

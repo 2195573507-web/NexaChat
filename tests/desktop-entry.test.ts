@@ -1,0 +1,58 @@
+import { describe, expect, it } from 'vitest';
+import { accessSync, constants, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { DESKTOP_ENTRY } from '../src/shared/desktopEntry';
+
+const repoRoot = process.cwd();
+
+function expectRepoFile(relativePath: string): void {
+  accessSync(join(repoRoot, relativePath), constants.F_OK);
+}
+
+describe('desktop entry authority', () => {
+  it('keeps package paths and icon assets centralized', () => {
+    expect(DESKTOP_ENTRY.appName).toBe('NexaChat');
+    expect(DESKTOP_ENTRY.productName).toBe('NexaChat');
+    expect(DESKTOP_ENTRY.relativePaths.packagedExecutable).toBe('release/win-unpacked/NexaChat.exe');
+    expect(DESKTOP_ENTRY.relativePaths.packagedAppDir).toBe('release/win-unpacked/resources/app');
+    expect(DESKTOP_ENTRY.relativePaths.installerScript).toBe('release/NexaChat-Setup.ps1');
+    expect(DESKTOP_ENTRY.relativePaths.iconIco).toBe('assets/app-icon.ico');
+    expect(DESKTOP_ENTRY.relativePaths.iconPng).toBe('assets/app-icon.png');
+
+    expectRepoFile(DESKTOP_ENTRY.relativePaths.iconIco);
+    expectRepoFile(DESKTOP_ENTRY.relativePaths.iconPng);
+  });
+
+  it('exposes desktop entry package scripts', () => {
+    const packageJson = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')) as {
+      scripts: Record<string, string>;
+    };
+
+    expect(packageJson.scripts['package:win-unpacked']).toContain('scripts/package-win-unpacked.mjs');
+    expect(packageJson.scripts['package:installer-script']).toContain('scripts/create-installer-script.mjs');
+    expect(packageJson.scripts['package:release']).toContain('package:win-unpacked');
+    expect(packageJson.scripts['package:release']).toContain('package:installer-script');
+    expect(packageJson.scripts['test:package-smoke']).toContain('scripts/package-smoke.mjs');
+    expect(packageJson.scripts['test:installer-smoke']).toContain('scripts/installer-smoke.mjs');
+    expect(packageJson.scripts['test:shortcut-readback']).toContain('scripts/shortcut-readback.mjs');
+    expect(packageJson.scripts['test:shortcut-readback:packaged']).toContain('--target packaged');
+    expect(packageJson.scripts['test:desktop-entry']).toContain('test:package-smoke');
+    expect(packageJson.scripts['test:desktop-entry']).toContain('test:installer-smoke');
+    expect(packageJson.scripts['test:desktop-entry']).toContain('test:shortcut-readback:packaged');
+  });
+
+  it('keeps launch diagnostics and single-window recovery in the main process', () => {
+    const mainSource = readFileSync(join(repoRoot, 'src/main/index.ts'), 'utf8');
+    const diagnosticsSource = readFileSync(join(repoRoot, 'src/main/desktopDiagnostics.ts'), 'utf8');
+
+    expect(mainSource).toContain('DESKTOP_ENTRY');
+    expect(mainSource).toContain('requestSingleInstanceLock');
+    expect(mainSource).toContain('second-instance');
+    expect(mainSource).toContain('installDesktopDiagnostics');
+    expect(diagnosticsSource).toContain('uncaughtException');
+    expect(diagnosticsSource).toContain('unhandledRejection');
+    expect(diagnosticsSource).toContain('render-process-gone');
+    expect(diagnosticsSource).toContain('child-process-gone');
+    expect(diagnosticsSource).toContain('redacted-secret');
+  });
+});

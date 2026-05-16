@@ -178,3 +178,12 @@
 - Usage belongs near Gateway operations, while feedback/evals/privacy belong in Settings second-level pages. Round 13 removed old aliases that sent those routes to unrelated pages instead of adding a ninth Observability module.
 - Redacted observability export must not include API keys, local file paths, or full prompt snippets by default; tests should keep this privacy boundary explicit.
 - Round 14 should build desktop packaging and launch diagnostics from the current verified Electron path, while keeping the existing local Electron shortcut documented until packaged launch smoke passes.
+
+## Full App Round 14 Findings
+
+- The durable desktop-entry authority is `src/shared/desktopEntry.ts`; package, shortcut, smoke, and main-process paths should be routed through it instead of ad hoc strings.
+- A real unpacked package can be produced from the installed Electron runtime without adding network dependencies, but generated artifacts must stay under ignored `release/` and be rebuilt by `npm.cmd run package:release`.
+- The desktop shortcut can move to the packaged executable only after package smoke passes. `shortcut:local` remains the explicit rollback path if a future package smoke fails.
+- COM shortcut readback can normalize `IconLocation` with doubled backslashes, so tests must compare normalized paths rather than raw COM string formatting.
+- Installer smoke must use isolated per-process directories; parallel smoke runs against one install directory can create false failures through cleanup/write races.
+- The local PowerShell installer script is smoke-tested but unsigned; Round 15 should treat it as the current installer artifact and separately gate any future signed/NSIS installer work.

@@ -510,3 +510,33 @@
 - Committed Round 13 delivery as `8a94f74892705d39e4107c3c24a0878bb9a36f09` and started delivery-hash backfill.
 - Committed Round 13 closeout as `d84b413dc4967b44d88a62f182f6577423691688` and started closeout-hash backfill.
 - Committed Round 13 hash backfill as `932ecbcb91b6d3c9c8d27857d89890b4f3b4d9d6`, pushed it to `origin/main`, and confirmed the remote ref at the same hash.
+
+## 2026-05-16 Full App Round 14 Execution
+
+- Reconfirmed real project root with `git rev-parse --show-toplevel`: `D:/NexaChat`.
+- Continued the active `/goal` at Round 14 after Round 0-13 completion and remote delivery, with local branch one commit ahead because the Round 13 remote-confirmation doc commit could not be pushed during a temporary GitHub connectivity failure.
+- Used parallel lanes:
+  - Lane A: desktop entry authority, unpacked Windows package, release manifest, and installer script generation.
+  - Lane B: Electron main-process single-instance behavior, startup/crash diagnostics, packaged shortcut migration, and shortcut readback.
+  - Lane C: package smoke, installer smoke, UI smoke, Electron smoke, docs, and Git closeout.
+  - Lane D/E: read-only Round 15 quality-gate pre-audit.
+- Added `src/shared/desktopEntry.ts` and `src/main/desktopDiagnostics.ts`.
+- Updated Electron main process to use the desktop authority, record diagnostics, preserve one-main-window behavior, and focus the existing window on second-instance launch.
+- Added package scripts and scripts for `package:release`, unpacked Windows package generation, installer script generation, package smoke, installer smoke, shortcut readback, and shortcut migration.
+- Migrated `C:\Users\至亲\Desktop\NexaChat.lnk` from the local Electron binary to `D:\NexaChat\release\win-unpacked\NexaChat.exe` after package smoke passed.
+- Added `tests/desktop-entry.test.ts`.
+- Added `release/` to `.gitignore`; generated package and installer artifacts are reproducible and not tracked.
+- Ran `npm.cmd run test -- tests/desktop-entry.test.ts tests/ipc-contract.test.ts`: passed, 2 files / 6 tests.
+- Ran `npm.cmd run package:release`: passed; generated `release/win-unpacked/NexaChat.exe` and `release/NexaChat-Setup.ps1`.
+- First packaged shortcut readback failed because COM returned doubled backslashes in `IconLocation`; fixed shortcut path normalization.
+- First installer smoke failed because the generated installer script copied wildcard input unreliably; fixed installer generation to enumerate source children.
+- A parallel installer-smoke/desktop-entry run failed because both processes used the same smoke directory; fixed installer smoke to use a per-process directory.
+- Ran `npm.cmd run test:installer-smoke`: passed.
+- Ran `npm.cmd run test:desktop-entry`: passed.
+- Ran `npm.cmd run test`: passed, 17 files / 53 tests.
+- Ran `npm.cmd run test:ui-smoke`: passed, 16 Playwright tests.
+- Ran `npm.cmd run verify`: passed, including typecheck, full unit test suite, and build.
+- Ran `npm.cmd run test:electron-smoke`: passed; Electron shell rendered.
+- Ran `git diff --check`: passed with LF/CRLF conversion warnings only.
+- Checked `C:\Users\至亲\Desktop\NexaChat.lnk`: target is `D:\NexaChat\release\win-unpacked\NexaChat.exe`, arguments are empty, working directory is `D:\NexaChat\release\win-unpacked`, and icon resolves to `D:\NexaChat\assets\app-icon.ico,0`.
+- Updated the authoritative blueprint Round 14 execution record, `PROJECT_PROGRESS.md`, matrix, `docs/implementation/round-14-desktop-packaging-shortcut-release-closure.md`, `task_plan.md`, `progress.md`, and `findings.md`; commit hash is pending until the Round 14 delivery commit.
