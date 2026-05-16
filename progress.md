@@ -542,6 +542,7 @@
 - Updated the authoritative blueprint Round 14 execution record, `PROJECT_PROGRESS.md`, matrix, `docs/implementation/round-14-desktop-packaging-shortcut-release-closure.md`, `task_plan.md`, `progress.md`, and `findings.md`; commit hash is pending until the Round 14 delivery commit.
 - Committed Round 14 delivery as `936cb659e7932ae134d9666653582abca815813e` and started delivery-hash backfill.
 - Committed Round 14 closeout as `f059b4de966023961b7105a729453caa24f0ec2a` and started closeout-hash backfill.
+- Round 14 hash backfill was recorded in `ceb302c5907cafcfac5b9f7d48945763781f6fde`.
 
 ## 2026-05-16 Full App Round 15 Execution
 
@@ -566,3 +567,6 @@
 - Ran `npm.cmd run verify:release`: passed; covered typecheck, 18 Vitest files / 55 tests, production build, 16 Playwright UI smoke tests, Electron smoke, package release, package smoke, installer smoke, packaged shortcut readback, hardcode scan, duplicate scan, security scan, dead-link scan, docs scan, and `git diff --check`.
 - `git diff --check` passed as part of `verify:release`, with LF/CRLF conversion warnings only.
 - Committed Round 15 delivery as `938d017ceede16475369a537227b86be7096b9cc` and started delivery-hash backfill.
+- Committed Round 15 closeout as `4715788e416f97b79328413c3821287cfcafce0b`.
+- Pushed Round 14 and Round 15 pending commits with `git push origin main`.
+- Confirmed `origin/main` at `4715788e416f97b79328413c3821287cfcafce0b` with `git ls-remote origin refs/heads/main` before the final acceptance commit.

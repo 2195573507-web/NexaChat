@@ -1380,8 +1380,9 @@ These references guide product and engineering decisions. They are not permissio
   - IconLocation resolves to `D:/NexaChat/assets/app-icon.ico,0`.
   - Shortcut was migrated by `npm.cmd run shortcut:package`.
 - Acceptance result: Passed. Packaged app launches, installer smoke passes, shortcut points to the packaged executable, no extra window is created, icon path is verified, startup diagnostics are written, and release artifacts are reproducible from tracked scripts.
-- Commit hash: delivery `936cb659e7932ae134d9666653582abca815813e`; closeout `f059b4de966023961b7105a729453caa24f0ec2a`.
-- Remaining issues: None for Round 14. Round 15 owns final quality gates, scanners, release checklist, and convergence audit.
+- Commit hash: delivery `936cb659e7932ae134d9666653582abca815813e`; closeout `f059b4de966023961b7105a729453caa24f0ec2a`; hash backfill `ceb302c5907cafcfac5b9f7d48945763781f6fde`.
+- Push result: Round 14 delivery, closeout, and hash-backfill commits pushed with Round 15; `origin/main` confirmed at `4715788e416f97b79328413c3821287cfcafce0b` before the final acceptance commit.
+- Remaining issues: None for Round 14.
 
 ## 21. Round 15: Test System, Quality Gates And Release Convergence
 
@@ -1464,8 +1465,9 @@ These references guide product and engineering decisions. They are not permissio
   - IconLocation resolves to `D:/NexaChat/assets/app-icon.ico,0`.
   - The shortcut remains the packaged Round 14 entry and is verified by `npm.cmd run test:desktop-entry` inside `npm.cmd run verify:release`.
 - Acceptance result: Passed. Release convergence now has one repeatable command, all configured gates pass, docs freshness is enforced, the packaged desktop entry remains valid, and Round 15 legacy route aliases have been deleted.
-- Commit hash: delivery `938d017ceede16475369a537227b86be7096b9cc`.
-- Remaining issues: None for Round 15. Push, remote confirmation, and final overall acceptance commit remain.
+- Commit hash: delivery `938d017ceede16475369a537227b86be7096b9cc`; closeout `4715788e416f97b79328413c3821287cfcafce0b`.
+- Push result: Round 15 delivery and closeout commits pushed; `origin/main` confirmed at `4715788e416f97b79328413c3821287cfcafce0b` before the final acceptance commit.
+- Remaining issues: None for Round 15. Final overall acceptance commit remains.
 
 ## 22. Overall Convergence Acceptance Standards
 

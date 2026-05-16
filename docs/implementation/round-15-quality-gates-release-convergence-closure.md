@@ -2,7 +2,7 @@
 
 Date: 2026-05-16
 
-Status: Completed as implementation and verification; delivery commit `938d017ceede16475369a537227b86be7096b9cc`.
+Status: Completed as implementation, verification, closeout, push, and remote confirmation; delivery commit `938d017ceede16475369a537227b86be7096b9cc`; closeout commit `4715788e416f97b79328413c3821287cfcafce0b`.
 
 ## Root-Cause And Chain Review
 
@@ -56,6 +56,6 @@ Passed. The implemented gate suite is configured and wired into `verify:release`
 ## Commit
 
 - Delivery commit hash: `938d017ceede16475369a537227b86be7096b9cc`.
-- Closeout commit hash: pending.
-- Push result: pending.
-- Remaining issues: None for Round 15. Push, remote confirmation, and final overall acceptance commit remain.
+- Closeout commit hash: `4715788e416f97b79328413c3821287cfcafce0b`.
+- Push result: Round 15 delivery and closeout commits pushed; `origin/main` confirmed at `4715788e416f97b79328413c3821287cfcafce0b` before the final acceptance commit.
+- Remaining issues: None for Round 15. Final overall acceptance commit remains.

@@ -54,8 +54,8 @@ At least three agents were launched concurrently before implementation work cont
 - Full App Round 11 Security/users/permissions/audit: complete as implementation, verification, commits, push, and remote confirmation.
 - Full App Round 12 Data Config/import/export/backup/recovery: complete as implementation, verification, closeout, push, and remote confirmation; delivery commit `4554dc4c47ff2dbf62479a786d486a8968dd78c6`; closeout commit `b064dae1a90df8ec62fb6cd3ddfd96f9007dafe9`; remote-confirmation commit `2a14e45598e46fb9697f896a767a3869f0b72433`.
 - Full App Round 13 Observability/usage/logs/feedback/evaluation: complete as implementation, verification, closeout, push, and remote confirmation; delivery commit `8a94f74892705d39e4107c3c24a0878bb9a36f09`; closeout commit `d84b413dc4967b44d88a62f182f6577423691688`; remote-confirmation commit `932ecbcb91b6d3c9c8d27857d89890b4f3b4d9d6`.
-- Full App Round 14 Desktop experience/packaging/shortcut/release: complete as implementation and verification; delivery commit `936cb659e7932ae134d9666653582abca815813e`; closeout commit `f059b4de966023961b7105a729453caa24f0ec2a`; push pending.
-- Full App Round 15 Test system/quality gates/release convergence: complete as implementation and verification; `npm.cmd run verify:release` passed; delivery commit `938d017ceede16475369a537227b86be7096b9cc`; push pending.
+- Full App Round 14 Desktop experience/packaging/shortcut/release: complete as implementation, verification, closeout, push, and remote confirmation; delivery commit `936cb659e7932ae134d9666653582abca815813e`; closeout commit `f059b4de966023961b7105a729453caa24f0ec2a`; hash-backfill commit `ceb302c5907cafcfac5b9f7d48945763781f6fde`; remote confirmed at `4715788e416f97b79328413c3821287cfcafce0b` before final acceptance commit.
+- Full App Round 15 Test system/quality gates/release convergence: complete as implementation, verification, closeout, push, and remote confirmation; `npm.cmd run verify:release` passed; delivery commit `938d017ceede16475369a537227b86be7096b9cc`; closeout commit `4715788e416f97b79328413c3821287cfcafce0b`.
 - Phase 1: complete.
 - Phase 2: complete.
 - Phase 3: complete.

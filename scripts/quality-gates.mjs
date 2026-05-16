@@ -271,6 +271,7 @@ async function scanDocs() {
     'progress.md',
     'findings.md',
     'docs/implementation/full-app-round-execution-matrix.md',
+    'docs/implementation/full-app-final-acceptance-20260516.md',
     'docs/implementation/round-14-desktop-packaging-shortcut-release-closure.md',
     'docs/implementation/round-15-quality-gates-release-convergence-closure.md',
     'docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md',
@@ -279,6 +280,9 @@ async function scanDocs() {
   const blueprint = read('docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md');
   const matrix = read('docs/implementation/full-app-round-execution-matrix.md');
   const progress = read('PROJECT_PROGRESS.md');
+  const finalAcceptance = existsPath(join(repoRoot, 'docs/implementation/full-app-final-acceptance-20260516.md'))
+    ? read('docs/implementation/full-app-final-acceptance-20260516.md')
+    : '';
   for (let round = 0; round <= 15; round += 1) {
     const rowPattern = new RegExp(`\\| ${round} \\|[^\\n]+\\| Completed`);
     if (!rowPattern.test(matrix)) {
@@ -296,6 +300,9 @@ async function scanDocs() {
   }
   if (!progress.includes('Full App Round 15')) {
     violations.push('PROJECT_PROGRESS.md: Round 15 section missing');
+  }
+  if (!finalAcceptance.includes('Final Acceptance Status: Completed')) {
+    violations.push('final acceptance: completed status missing');
   }
   fail('Docs freshness gaps', violations);
 }

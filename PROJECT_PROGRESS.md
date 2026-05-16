@@ -2,7 +2,7 @@
 
 ## 2026-05-16 Full App Round 15 Test System, Quality Gates And Release Convergence
 
-Round 15 of `docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md` is completed as implementation and verification; delivery commit is `938d017ceede16475369a537227b86be7096b9cc`.
+Round 15 of `docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md` is completed as implementation, verification, closeout, push, and remote confirmation; delivery commit is `938d017ceede16475369a537227b86be7096b9cc`; closeout commit is `4715788e416f97b79328413c3821287cfcafce0b`.
 
 Parallel execution lanes:
 
@@ -37,11 +37,12 @@ Desktop shortcut status:
 Git:
 
 - Round 15 delivery commit hash: `938d017ceede16475369a537227b86be7096b9cc`.
-- Push result: pending.
+- Round 15 closeout commit hash: `4715788e416f97b79328413c3821287cfcafce0b`.
+- Push result: Round 15 delivery and closeout commits pushed; `origin/main` confirmed at `4715788e416f97b79328413c3821287cfcafce0b` before the final acceptance commit.
 
 ## 2026-05-16 Full App Round 14 Desktop Experience, Packaging, Shortcut And Release
 
-Round 14 of `docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md` is completed as implementation and verification; delivery commit is `936cb659e7932ae134d9666653582abca815813e`; closeout commit is `f059b4de966023961b7105a729453caa24f0ec2a`; push is pending.
+Round 14 of `docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md` is completed as implementation, verification, closeout, push, and remote confirmation; delivery commit is `936cb659e7932ae134d9666653582abca815813e`; closeout commit is `f059b4de966023961b7105a729453caa24f0ec2a`; hash-backfill commit is `ceb302c5907cafcfac5b9f7d48945763781f6fde`.
 
 Parallel execution lanes:
 
@@ -87,7 +88,8 @@ Git:
 
 - Round 14 delivery commit hash: `936cb659e7932ae134d9666653582abca815813e`.
 - Round 14 closeout commit hash: `f059b4de966023961b7105a729453caa24f0ec2a`.
-- Push result: pending.
+- Round 14 hash-backfill commit hash: `ceb302c5907cafcfac5b9f7d48945763781f6fde`.
+- Push result: Round 14 delivery, closeout, and hash-backfill commits pushed with Round 15; `origin/main` confirmed at `4715788e416f97b79328413c3821287cfcafce0b` before the final acceptance commit.
 
 ## 2026-05-16 Full App Round 13 Observability, Usage, Logs, Feedback And Evaluation
 
@@ -860,7 +862,7 @@ Desktop shortcut result:
 Git result:
 
 - Refactor commit hash: `17f072bdee6e00cbf7f821ae1d2589ccc3feb4d5`.
-- Push result: pending push confirmation after final documentation hash recording.
+- Push result: later full-app commits were pushed and the final release branch was remote-confirmed through `origin/main`.
 
 ## Parallel Work Requirement
 
