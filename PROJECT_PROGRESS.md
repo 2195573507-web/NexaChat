@@ -1488,3 +1488,70 @@ Commit and push:
 - Delivery commit hash: `cb4a81f1debadeb7a966ea7844e56ea6805ec14a`.
 - Push result: `git push origin main` succeeded; `git rev-parse HEAD`, `git rev-parse origin/main`, and `git ls-remote origin refs/heads/main` all confirmed `cb4a81f1debadeb7a966ea7844e56ea6805ec14a`.
 - This progress closeout record is committed after the delivery confirmation; final closeout commit and remote hash are reported in the final run report.
+
+## 2026-05-17 Chat Experience Agent Long-Run Feedback Round
+
+This round was a no-code-change Agent long-run test and feedback documentation pass.
+
+Scope and output:
+
+- No source code was modified in this round.
+- No `src/` file, package file, lockfile, TypeScript config, Vite config, Electron config, database schema, IPC contract, business code, test code, or automation script was intentionally changed.
+- The main feedback file created in this round is `docs/build-plans/00-modular-refactor-master-plan/chat-experience-agent-long-run-feedback.md`.
+- The feedback file records the user's original Chat experience improvement requests, especially the need for ChatGPT-like progressive generation, clearer waiting feedback, and at least one hour of Agent testing before implementation.
+- Agent feedback and user requests were written into the same feedback file.
+- The round covered the current 7 first-level modules: Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings.
+- Chat was treated as the core focus, Models as the second focus, and the other modules as boundary/status/workflow checks.
+- This round does not implement Chat streaming. Code implementation is deferred to a later round.
+
+Test time:
+
+- Test started at: 2026-05-17 00:20:35 local time.
+- Test ended at: 2026-05-17 01:22:05 local time.
+- Total duration: 61.5 minutes.
+- Minimum required duration: 60 minutes.
+- Requirement satisfied: Yes.
+
+Runtime and GUI notes:
+
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test`: passed, 20 files / 69 tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run test:ui-smoke`: passed, 7 Playwright tests.
+- `npm.cmd run test:electron-smoke`: passed, Electron shell rendered.
+- Plain Vite dev on `127.0.0.1:5173` returned HTTP 200 but rendered blank without Electron preload or `VITE_NEXACHAT_BROWSER_MOCK=1`; the observed page error explicitly required preload or browser mock mode.
+- Browser mock GUI on `127.0.0.1:5174` launched and was used for Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings automation.
+- Electron GUI launched with isolated user data under `test-results/electron-long-run-user-data`; preload worked, but the clean profile had no Provider or Model, so Chat send remained disabled and no Electron messages were created.
+- Manual in-app Browser plugin operation was not completed because the plugin connection timed out twice. Browser and Electron GUI automation were used as the replacement validation mode.
+
+Agent coverage:
+
+- Agent 1: new user.
+- Agent 2: ordinary Chat user.
+- Agent 3: multi-model user.
+- Agent 4: local Gateway user.
+- Agent 5: Knowledge Base user.
+- Agent 6: Tools / Agent / MCP user.
+- Agent 7: data safety user.
+- Agent 8: high-pressure Chat user.
+
+Issue counts recorded in the feedback file:
+
+- P0: 0.
+- P1: 13.
+- P2: 22.
+- P3: 11.
+
+Key findings:
+
+- Chat does not yet provide immediate assistant placeholder feedback, layered `connecting` / `thinking` / `generating` states, or true progressive streaming display.
+- Chat cancellation is not available for normal in-flight waits in the tested paths.
+- Browser mock and long route loops were stable, but every tested Chat loop still behaved like a completion-after-action flow rather than a natural generation flow.
+- Models needs stricter explicit model selection, clearer Provider test failure feedback, earlier Base URL validation, and better linkage to Chat error diagnosis.
+- Knowledge Base, Gateway, Tools, Data, and Settings generally expose honest boundaries, but several status labels and confirmation paths need tightening before implementation rounds.
+
+No-source-change confirmation:
+
+- The repository already had pre-existing uncommitted source/test changes before this round began.
+- Those pre-existing source/test changes were not edited, staged, reverted, or included in this documentation round.
+- The intended round changes are limited to the long-run feedback file and this progress ledger entry.
