@@ -6,12 +6,17 @@ import type {
   CancelMessageInput,
   CompareModelsInput,
   ExportConversationInput,
+  GatewayKeyCreateInput,
+  GatewayKeyRotateInput,
+  GatewayKeyUpdateInput,
+  ImportPlanApplyOptions,
   McpServer,
   ModelInput,
   ProviderInput,
   RegenerateMessageInput,
   RetryMessageInput,
   SendMessageInput,
+  RestoreSnapshotOptions,
   UiPreferences,
 } from '../shared/types.js';
 
@@ -37,7 +42,9 @@ export function registerIpcHandlers(): void {
   handleIpc(IPC_CHANNELS.chatUpdateConversationFlags, (conversationId: string, flags) =>
     store.updateConversationFlags(conversationId, flags),
   );
-  handleIpc(IPC_CHANNELS.gatewayCreateKey, (name: string) => store.createGatewayKey(name));
+  handleIpc(IPC_CHANNELS.gatewayCreateKey, (input: GatewayKeyCreateInput) => store.createGatewayKey(input));
+  handleIpc(IPC_CHANNELS.gatewayUpdateKey, (input: GatewayKeyUpdateInput) => store.updateGatewayKey(input));
+  handleIpc(IPC_CHANNELS.gatewayRotateKey, (input: GatewayKeyRotateInput) => store.rotateGatewayKey(input));
   handleIpc(IPC_CHANNELS.gatewayRevokeKey, (gatewayKeyId: string) => store.revokeGatewayKey(gatewayKeyId));
   handleIpc(IPC_CHANNELS.gatewayToggle, async (enabled: boolean) => {
     if (enabled) {
@@ -63,8 +70,8 @@ export function registerIpcHandlers(): void {
   handleIpc(IPC_CHANNELS.agentCreate, (name: string, goal: string) => store.createAgent(name, goal));
   handleIpc(IPC_CHANNELS.agentPreviewRun, (agentId: string) => store.previewAgentRun(agentId));
   handleIpc(IPC_CHANNELS.dataValidateImportManifest, (manifestText: string) => store.validateImportManifest(manifestText));
-  handleIpc(IPC_CHANNELS.dataApplyImportPlan, (resultId: string) => store.applyImportPlan(resultId));
-  handleIpc(IPC_CHANNELS.dataRestoreSnapshot, (snapshotId: string) => store.restoreSnapshot(snapshotId));
+  handleIpc(IPC_CHANNELS.dataApplyImportPlan, (resultId: string, options?: ImportPlanApplyOptions) => store.applyImportPlan(resultId, options));
+  handleIpc(IPC_CHANNELS.dataRestoreSnapshot, (snapshotId: string, options?: RestoreSnapshotOptions) => store.restoreSnapshot(snapshotId, options));
   handleIpc(IPC_CHANNELS.dataCreateSnapshot, () => store.createSnapshot());
   handleIpc(IPC_CHANNELS.dataExportDiagnostics, () => store.exportDiagnostics());
   handleIpc(IPC_CHANNELS.systemOpenLogs, async () => {

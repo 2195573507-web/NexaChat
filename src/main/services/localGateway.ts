@@ -1,5 +1,16 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { store } from './store.js';
+import {
+  GATEWAY_BIND_HOST,
+  GATEWAY_BODY_LIMIT_BYTES,
+  GATEWAY_ENDPOINT,
+  GATEWAY_ENDPOINT_SCOPES,
+  GATEWAY_ERROR_MESSAGES,
+  GATEWAY_ERROR_STATUS,
+  GATEWAY_PORT,
+  type GatewayErrorCode,
+  type GatewayScope,
+} from '../../shared/gatewayRuntime.js';
 
 let server: Server | null = null;
 
@@ -13,7 +24,7 @@ export async function startLocalGateway(): Promise<void> {
 
   await new Promise<void>((resolve, reject) => {
     server?.once('error', reject);
-    server?.listen(8787, '127.0.0.1', () => resolve());
+    server?.listen(GATEWAY_PORT, GATEWAY_BIND_HOST, () => resolve());
   });
   store.setGatewayRuntime(true);
 }
@@ -21,31 +32,45 @@ export async function startLocalGateway(): Promise<void> {
 export function createLocalGatewayServer(): Server {
   return createServer(async (request, response) => {
     const path = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
+    const startedAt = Date.now();
     try {
-      if (request.method === 'GET' && path === '/v1/models') {
-        await handleModels(request, response);
+      if (request.method === 'OPTIONS') {
+        writeJson(response, 204, {});
+        store.recordGatewayLog({
+          method: 'OPTIONS',
+          path,
+          statusCode: 204,
+          headers: headersToObject(request),
+          latencyMs: Date.now() - startedAt,
+          remoteAddress: request.socket.remoteAddress ?? null,
+        });
         return;
       }
-      if (request.method === 'POST' && path === '/v1/chat/completions') {
-        await handleChatCompletions(request, response);
+      if (request.method === 'GET' && path === GATEWAY_ENDPOINT.models) {
+        await handleModels(request, response, startedAt);
         return;
       }
-      if (request.method === 'POST' && path === '/v1/embeddings') {
-        await handleEmbeddings(request, response);
+      if (request.method === 'POST' && path === GATEWAY_ENDPOINT.chatCompletions) {
+        await handleChatCompletions(request, response, startedAt);
         return;
       }
-      if (path === '/v1/responses') {
-        writeJson(response, 501, { error: { message: '/v1/responses is reserved in this build.', type: 'reserved_endpoint' } });
-        store.recordGatewayLog(request.method ?? 'GET', path, 501, null, headersToObject(request));
+      if (request.method === 'POST' && path === GATEWAY_ENDPOINT.embeddings) {
+        await handleEmbeddings(request, response, startedAt);
         return;
       }
-      writeJson(response, 404, { error: { message: 'Endpoint not found.', type: 'not_found' } });
-      store.recordGatewayLog(request.method ?? 'GET', path, 404, null, headersToObject(request));
+      if (path === GATEWAY_ENDPOINT.responses) {
+        writeGatewayError(response, 'reserved_endpoint');
+        recordGatewayEvent(request, path, 501, startedAt, null, null, 'reserved_endpoint');
+        return;
+      }
+      writeGatewayError(response, 'not_found');
+      recordGatewayEvent(request, path, 404, startedAt, null, null, 'not_found');
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const gatewayError = normalizeGatewayError(error);
+      const message = gatewayError.message;
       store.setGatewayRuntime(true, message);
-      writeJson(response, 500, { error: { message, type: 'internal_error' } });
-      store.recordGatewayLog(request.method ?? 'GET', path, 500, null, headersToObject(request));
+      writeGatewayError(response, gatewayError.code, message);
+      recordGatewayEvent(request, path, GATEWAY_ERROR_STATUS[gatewayError.code], startedAt, null, null, gatewayError.code);
     }
   });
 }
@@ -62,10 +87,12 @@ export async function stopLocalGateway(): Promise<void> {
   store.setGatewayRuntime(false);
 }
 
-async function handleModels(request: IncomingMessage, response: ServerResponse): Promise<void> {
-  if (!authorize(request, 'models:read')) {
-    writeJson(response, 401, { error: { message: 'Invalid or unauthorized gateway API key.', type: 'unauthorized' } });
-    store.recordGatewayLog('GET', '/v1/models', 401, null, headersToObject(request));
+async function handleModels(request: IncomingMessage, response: ServerResponse, startedAt: number): Promise<void> {
+  const auth = authorize(request, GATEWAY_ENDPOINT_SCOPES['/v1/models']);
+  if (!auth.ok) {
+    const code = auth.errorCode ?? 'invalid_key';
+    writeGatewayError(response, code);
+    recordGatewayEvent(request, GATEWAY_ENDPOINT.models, GATEWAY_ERROR_STATUS[code], startedAt, auth.key, auth.scope, code);
     return;
   }
   const models = store.getModels().filter((model) => model.enabled);
@@ -84,13 +111,15 @@ async function handleModels(request: IncomingMessage, response: ServerResponse):
       },
     })),
   });
-  store.recordGatewayLog('GET', '/v1/models', 200, null, headersToObject(request));
+  recordGatewayEvent(request, GATEWAY_ENDPOINT.models, 200, startedAt, auth.key, auth.scope, null);
 }
 
-async function handleChatCompletions(request: IncomingMessage, response: ServerResponse): Promise<void> {
-  if (!authorize(request, 'chat:write')) {
-    writeJson(response, 401, { error: { message: 'Invalid or unauthorized gateway API key.', type: 'unauthorized' } });
-    store.recordGatewayLog('POST', '/v1/chat/completions', 401, null, headersToObject(request));
+async function handleChatCompletions(request: IncomingMessage, response: ServerResponse, startedAt: number): Promise<void> {
+  const auth = authorize(request, GATEWAY_ENDPOINT_SCOPES['/v1/chat/completions']);
+  if (!auth.ok) {
+    const code = auth.errorCode ?? 'invalid_key';
+    writeGatewayError(response, code);
+    recordGatewayEvent(request, GATEWAY_ENDPOINT.chatCompletions, GATEWAY_ERROR_STATUS[code], startedAt, auth.key, auth.scope, code);
     return;
   }
   const body = await readJsonBody(request);
@@ -141,17 +170,19 @@ async function handleChatCompletions(request: IncomingMessage, response: ServerR
         routeDecision: result.routeDecision,
       },
     });
-    store.recordGatewayLog('POST', '/v1/chat/completions', 502, result.requestLog.id, headersToObject(request));
+    recordGatewayEvent(request, GATEWAY_ENDPOINT.chatCompletions, 502, startedAt, auth.key, auth.scope, 'provider_error', result.requestLog.id);
     return;
   }
   writeJson(response, 200, payload);
-  store.recordGatewayLog('POST', '/v1/chat/completions', 200, result.requestLog.id, headersToObject(request));
+  recordGatewayEvent(request, GATEWAY_ENDPOINT.chatCompletions, 200, startedAt, auth.key, auth.scope, null, result.requestLog.id);
 }
 
-async function handleEmbeddings(request: IncomingMessage, response: ServerResponse): Promise<void> {
-  if (!authorize(request, 'embeddings:write')) {
-    writeJson(response, 401, { error: { message: 'Invalid or unauthorized gateway API key.', type: 'unauthorized' } });
-    store.recordGatewayLog('POST', '/v1/embeddings', 401, null, headersToObject(request));
+async function handleEmbeddings(request: IncomingMessage, response: ServerResponse, startedAt: number): Promise<void> {
+  const auth = authorize(request, GATEWAY_ENDPOINT_SCOPES['/v1/embeddings']);
+  if (!auth.ok) {
+    const code = auth.errorCode ?? 'invalid_key';
+    writeGatewayError(response, code);
+    recordGatewayEvent(request, GATEWAY_ENDPOINT.embeddings, GATEWAY_ERROR_STATUS[code], startedAt, auth.key, auth.scope, code);
     return;
   }
   const body = await readJsonBody(request);
@@ -172,14 +203,14 @@ async function handleEmbeddings(request: IncomingMessage, response: ServerRespon
       note: 'First build lexical fallback for endpoint compatibility; real embedding providers are reserved.',
     },
   });
-  store.recordGatewayLog('POST', '/v1/embeddings', 200, null, headersToObject(request));
+  recordGatewayEvent(request, GATEWAY_ENDPOINT.embeddings, 200, startedAt, auth.key, auth.scope, null);
 }
 
-function authorize(request: IncomingMessage, scope: 'models:read' | 'chat:write' | 'embeddings:write'): boolean {
+function authorize(request: IncomingMessage, scope: GatewayScope) {
   const auth = request.headers.authorization ?? '';
   const token = Array.isArray(auth) ? auth[0] : auth;
   const rawKey = token.startsWith('Bearer ') ? token.slice('Bearer '.length).trim() : '';
-  return Boolean(rawKey && store.validateGatewayKey(rawKey, scope));
+  return store.authorizeGatewayKey(rawKey || null, scope);
 }
 
 function readJsonBody(request: IncomingMessage): Promise<Record<string, unknown>> {
@@ -187,15 +218,16 @@ function readJsonBody(request: IncomingMessage): Promise<Record<string, unknown>
     let data = '';
     request.on('data', (chunk) => {
       data += chunk;
-      if (data.length > 2_000_000) {
-        reject(new Error('Request body too large.'));
+      if (data.length > GATEWAY_BODY_LIMIT_BYTES) {
+        reject(new GatewayRequestError('body_too_large'));
+        request.destroy();
       }
     });
     request.on('end', () => {
       try {
         resolve(data ? (JSON.parse(data) as Record<string, unknown>) : {});
       } catch {
-        reject(new Error('Invalid JSON request body.'));
+        reject(new GatewayRequestError('invalid_json'));
       }
     });
     request.on('error', reject);
@@ -206,8 +238,39 @@ function writeJson(response: ServerResponse, statusCode: number, payload: unknow
   response.writeHead(statusCode, {
     'content-type': 'application/json; charset=utf-8',
     'access-control-allow-origin': 'http://127.0.0.1',
+    'access-control-allow-methods': 'GET,POST,OPTIONS',
+    'access-control-allow-headers': 'authorization,content-type',
+    'access-control-max-age': '600',
   });
-  response.end(JSON.stringify(payload));
+  response.end(statusCode === 204 ? undefined : JSON.stringify(payload));
+}
+
+function writeGatewayError(response: ServerResponse, code: GatewayErrorCode, message = GATEWAY_ERROR_MESSAGES[code]): void {
+  writeJson(response, GATEWAY_ERROR_STATUS[code], { error: { message, type: code } });
+}
+
+function recordGatewayEvent(
+  request: IncomingMessage,
+  path: string,
+  statusCode: number,
+  startedAt: number,
+  key: ReturnType<typeof store.getGatewayKeys>[number] | null,
+  scope: GatewayScope | null,
+  errorCode: GatewayErrorCode | null,
+  requestLogId: string | null = null,
+): void {
+  store.recordGatewayLog({
+    method: request.method ?? 'GET',
+    path,
+    statusCode,
+    requestLogId,
+    key,
+    scope,
+    errorCode,
+    headers: headersToObject(request),
+    latencyMs: Math.max(0, Date.now() - startedAt),
+    remoteAddress: request.socket.remoteAddress ?? null,
+  });
 }
 
 function headersToObject(request: IncomingMessage): Record<string, string> {
@@ -225,4 +288,17 @@ function lexicalEmbedding(value: string): number[] {
   }
   const magnitude = Math.sqrt(buckets.reduce((sum, item) => sum + item * item, 0)) || 1;
   return buckets.map((item) => Number((item / magnitude).toFixed(6)));
+}
+
+class GatewayRequestError extends Error {
+  constructor(readonly code: GatewayErrorCode) {
+    super(GATEWAY_ERROR_MESSAGES[code]);
+  }
+}
+
+function normalizeGatewayError(error: unknown): { code: GatewayErrorCode; message: string } {
+  if (error instanceof GatewayRequestError) {
+    return { code: error.code, message: error.message };
+  }
+  return { code: 'internal_error', message: error instanceof Error ? error.message : String(error) };
 }

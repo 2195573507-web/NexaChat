@@ -23,6 +23,9 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
               <button type="button" disabled={!latestSnapshot} onClick={() => latestSnapshot && onAction(t('data.toast.restoreCreated'), () => api.restoreSnapshot(latestSnapshot.id))}>
                 {t('data.snapshots.restore')}
               </button>
+              <button type="button" disabled={!latestSnapshot} onClick={() => latestSnapshot && onAction(t('data.toast.rollbackApplied'), () => api.restoreSnapshot(latestSnapshot.id, { mode: 'rollback' }))}>
+                {t('data.snapshots.rollback')}
+              </button>
             </div>
           </div>
           <div className="panel">
@@ -121,7 +124,7 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
         <div className="panel">
           <h2>{t('data.import.confirmTitle')}</h2>
           <div className="button-row">
-            <button type="button" disabled={!latestReadyImport} onClick={() => latestReadyImport && onAction(t('data.toast.importApplied'), () => api.applyImportPlan(latestReadyImport.id))}>
+            <button type="button" disabled={!latestReadyImport} onClick={() => latestReadyImport && onAction(t('data.toast.importApplied'), () => api.applyImportPlan(latestReadyImport.id, { mode: 'apply-metadata' }))}>
               {t('data.import.apply')}
             </button>
           </div>

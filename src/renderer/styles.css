@@ -1067,6 +1067,46 @@ pre {
   flex-wrap: wrap;
 }
 
+.button-row.compact {
+  gap: 6px;
+}
+
+.button-row.compact button {
+  min-height: 30px;
+  padding: 5px 8px;
+}
+
+.gateway-key-policy {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.3fr) repeat(2, minmax(100px, 0.7fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.gateway-key-policy label,
+.scope-toggle-list label {
+  display: grid;
+  gap: 5px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.scope-toggle-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.scope-toggle-list label {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  background: var(--color-surface-muted);
+}
+
 .table-wrap {
   overflow: auto;
   margin-top: 10px;

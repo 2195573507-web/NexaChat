@@ -314,3 +314,30 @@
 - Committed Round 7 closeout as `14d8d42da4fccd7063e4a321c2235a57206ed397`, pushed it to `origin/main`, and confirmed the remote ref at the same hash.
 - Received two read-only Round 8 audit reports covering Gateway authority, API Key lifecycle, scope/quota/rate limits, logs, import preflight, snapshots, rollback, UI, and test gaps.
 - Kept two active lanes: main thread for Round 7 docs/commit/push closeout, and parallel subagent review for Round 8 Gateway/API Key chain analysis.
+
+## 2026-05-16 Full App Round 8 Execution
+
+- Reconfirmed real project root with `git rev-parse --show-toplevel`: `D:/NexaChat`.
+- Started Round 8 from the authoritative blueprint and used three active lanes:
+  - Lane A: Gateway runtime authority, HTTP auth/scope/quota/rate/errors/logs.
+  - Lane B: API Key lifecycle, schema migration, import preflight, metadata apply, snapshot, and rollback.
+  - Lane C: Gateway/Data UI, browser mock parity, i18n/theme states, tests, docs, shortcut and Git closeout.
+- Added `src/shared/gatewayRuntime.ts` as the endpoint/scope/key-state/error/quota/rate authority.
+- Added additive DB migrations in `src/main/database/connection.ts`.
+- Extended Gateway key/log/config snapshot schema, mappers, shared types, API, IPC, preload, and main handlers.
+- Implemented Gateway key create/update/disable/enable/rotate/revoke lifecycle with one-time reveal on create/rotate.
+- Implemented missing/invalid/disabled/revoked/expired/scope-denied/quota/rate auth outcomes and attributed Gateway logs.
+- Updated HTTP Gateway with OpenAI-compatible error shapes, OPTIONS/CORS handling, body limit, redacted logs, and reserved `/v1/responses` behavior.
+- Replaced preview-only import apply with metadata apply plus rollback snapshot and rollback-disable of imported metadata.
+- Updated Gateway UI key controls/log table, Data import/rollback actions, browser mock API, CSS, and i18n.
+- Added `tests/gateway-runtime.test.ts`.
+- Ran `npm.cmd run typecheck`: passed.
+- Ran `npm.cmd run test -- tests/gateway-runtime.test.ts tests/gateway-provider-chain.test.ts tests/ipc-contract.test.ts tests/i18n-authority.test.ts`: passed, 4 files / 10 tests.
+- Ran `npm.cmd run test`: passed, 10 files / 33 tests.
+- Ran `npm.cmd run test:ui-smoke`: passed, 11 Playwright tests.
+- Ran `npm.cmd run build`: passed.
+- Ran `npm.cmd run verify`: passed.
+- Ran `npm.cmd run test:electron-smoke`: passed.
+- Ran `git diff --check`: passed with LF/CRLF conversion warnings only.
+- Checked `C:\Users\至亲\Desktop\NexaChat.lnk`: target, arguments, working directory, and icon still point to the current local Electron launch entry.
+- Updated the authoritative blueprint Round 8 execution record, `PROJECT_PROGRESS.md`, matrix, and `docs/implementation/round-08-gateway-api-key-closure.md`; commit hash is pending until Git commit.

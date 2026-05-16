@@ -780,6 +780,66 @@ These references guide product and engineering decisions. They are not permissio
 25. **Deliverables**: Gateway runtime, API key lifecycle, import/rollback, UI, tests, docs.
 26. **Next Round Input**: Stable gateway ready for knowledge/RAG integration.
 
+### Round 8 Execution Status
+
+- Status: Completed.
+- Completion date: 2026-05-16.
+- Parallel lanes:
+  - Lane A: Gateway runtime authority, HTTP auth/scope/quota/rate/errors/logs.
+  - Lane B: API Key lifecycle, schema migration, import preflight, metadata apply, snapshot, and rollback.
+  - Lane C: Gateway/Data UI, browser mock parity, i18n/theme states, tests, docs, shortcut, and Git closeout.
+  - Lane D: read-only Round 9 risk review input from Knowledge/RAG boundaries.
+- Root-cause result: Provider forwarding was no longer the blocker. The blocker was that Gateway endpoints, scopes, key states, quota/rate checks, error shapes, logs, and import/rollback behavior were scattered and incomplete.
+- Chain review result: External client -> bearer token -> key state/scope/quota/rate/expiry/revoke check -> local Gateway endpoint -> router/provider chain or compatibility fallback -> response -> redacted key-attributed Gateway log -> request log/usage/audit -> Gateway/Data UI. Import now preflights manifest metadata, creates rollback snapshots, applies Provider/Model metadata without plaintext secrets, and can roll back imported metadata.
+- Main changed files:
+  - `src/shared/gatewayRuntime.ts`
+  - `src/shared/types.ts`
+  - `src/shared/api.ts`
+  - `src/shared/ipc.ts`
+  - `src/preload/index.ts`
+  - `src/main/ipc.ts`
+  - `src/main/database/schema.ts`
+  - `src/main/database/connection.ts`
+  - `src/main/repositories/mappers.ts`
+  - `src/main/services/localGateway.ts`
+  - `src/main/services/store.ts`
+  - `src/renderer/modules/GatewayPage.tsx`
+  - `src/renderer/modules/DataPage.tsx`
+  - `src/renderer/mockApi.ts`
+  - `src/renderer/styles.css`
+  - `src/shared/i18n.ts`
+  - `tests/gateway-runtime.test.ts`
+  - `docs/implementation/round-08-gateway-api-key-closure.md`
+  - `docs/implementation/full-app-round-execution-matrix.md`
+- Added/modified functionality:
+  - Added centralized Gateway endpoint, scope, key-state, error-code, quota/rate, body-limit, and default key policy authority.
+  - Added additive DB migrations for key state, rotation lineage, rate windows, Gateway log attribution, import source, rollback snapshot, and applied-entity metadata.
+  - Added Gateway key create/update/disable/enable/rotate/revoke lifecycle with one-time reveal after create/rotate.
+  - Added Gateway authorization results for missing, invalid, disabled, revoked, expired, scope denied, quota exhausted, and rate limited states.
+  - Added HTTP Gateway OpenAI-compatible error shapes, OPTIONS/CORS handling, body-size enforcement, redacted attributed logs, and reserved `/v1/responses` behavior.
+  - Added import preflight metadata extraction for OpenAI-compatible/sub2api/CCS-style manifests, metadata apply without plaintext secret import, rollback snapshots, and rollback disabling of imported metadata.
+  - Updated Gateway UI key controls and logs, Data import/rollback actions, browser mock parity, and i18n text.
+- Deleted old links:
+  - Replaced scattered endpoint/scope/error/key policy constants with `src/shared/gatewayRuntime.ts`.
+  - Replaced binary Gateway key UI state with full lifecycle states.
+  - Replaced confirmation-only import apply with metadata apply plus rollback snapshot.
+  - Replaced restore preview-only behavior with rollback mode for imported metadata.
+  - Did not create a duplicated Provider secret path; Provider keys and Gateway keys remain separate.
+- Test commands and results:
+  - `npm.cmd run typecheck`: passed.
+  - `npm.cmd run test -- tests/gateway-runtime.test.ts tests/gateway-provider-chain.test.ts tests/ipc-contract.test.ts tests/i18n-authority.test.ts`: passed, 4 files / 10 tests.
+  - `npm.cmd run test`: passed, 10 files / 33 tests.
+  - `npm.cmd run test:ui-smoke`: passed, 11 Playwright tests.
+  - `npm.cmd run build`: passed.
+  - `npm.cmd run verify`: passed, including typecheck, full unit test suite, and build.
+  - `npm.cmd run test:electron-smoke`: passed.
+  - `git diff --check`: passed with LF/CRLF conversion warnings only.
+- Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` still targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and uses `D:\NexaChat\assets\app-icon.ico,0`.
+- Acceptance result: Passed. Valid external Gateway key calls work; invalid/revoked/disabled/scope/rate-limited keys fail correctly; logs are redacted and key-attributed; rotation uses one-time reveal; import metadata apply is reversible by rollback.
+- Commit hash: pending delivery commit.
+- Push result: pending.
+- Remaining issues: None for Round 8. Round 9 owns full Knowledge/RAG, real embeddings, vector index, parser pipeline, citations, and file delete/rebuild behavior.
+
 ## 15. Round 9: Knowledge Base, RAG And File Processing
 
 1. **Round Name**: Knowledge Base, RAG And File Processing.

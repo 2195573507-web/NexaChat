@@ -249,6 +249,13 @@ function createSeedState(): MockState {
         name: 'Browser dev key',
         keyPreview: 'nexa_...mock',
         scopes: ['chat:write', 'models:read', 'embeddings:write'],
+        state: 'active',
+        disabledAt: null,
+        rotatedFromId: null,
+        lastErrorCode: null,
+        rateLimitPerMinute: 60,
+        rateWindowStartedAt: null,
+        rateWindowCount: 0,
         quotaLimit: 1000,
         quotaUsed: 0,
         expiresAt: null,
@@ -446,6 +453,9 @@ export function createMockApi(): AppApi {
         conflictCount,
         source: 'browser-mock',
       }),
+      rollbackSnapshotId: null,
+      source: 'browser-mock',
+      appliedEntityIdsJson: JSON.stringify([]),
       errorMessage: status === 'failed' ? summary : null,
       conflictCount,
       requiresConfirmation: status === 'ready',
@@ -877,17 +887,25 @@ export function createMockApi(): AppApi {
       return clone(conversation);
     },
 
-    async createGatewayKey(name: string) {
+    async createGatewayKey(input) {
       const timestamp = now();
+      const name = input.name.trim() || 'Untitled key';
       const rawKey = `nexa_mock_${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
       const record: GatewayApiKey = {
         id: createId('gateway_key'),
-        name: name.trim() || 'Untitled key',
+        name,
         keyPreview: `${rawKey.slice(0, 8)}...${rawKey.slice(-4)}`,
-        scopes: ['chat:write', 'models:read', 'embeddings:write'],
-        quotaLimit: null,
+        scopes: input.scopes?.length ? input.scopes : ['chat:write', 'models:read', 'embeddings:write'],
+        state: 'active',
+        disabledAt: null,
+        rotatedFromId: null,
+        lastErrorCode: null,
+        rateLimitPerMinute: input.rateLimitPerMinute ?? 60,
+        rateWindowStartedAt: null,
+        rateWindowCount: 0,
+        quotaLimit: input.quotaLimit ?? 1000,
         quotaUsed: 0,
-        expiresAt: null,
+        expiresAt: input.expiresAt ?? null,
         revokedAt: null,
         lastUsedAt: null,
         createdAt: timestamp,
@@ -899,9 +917,41 @@ export function createMockApi(): AppApi {
       return clone(created);
     },
 
+    async updateGatewayKey(input) {
+      const key = findById(state.gatewayKeys, input.gatewayKeyId, 'Gateway key');
+      if (input.name !== undefined) key.name = input.name.trim() || key.name;
+      if (input.scopes !== undefined) key.scopes = input.scopes;
+      if (input.quotaLimit !== undefined) key.quotaLimit = input.quotaLimit;
+      if (input.rateLimitPerMinute !== undefined) key.rateLimitPerMinute = input.rateLimitPerMinute;
+      if (input.expiresAt !== undefined) key.expiresAt = input.expiresAt;
+      if (input.disabled !== undefined) {
+        key.disabledAt = input.disabled ? key.disabledAt ?? now() : null;
+        key.state = input.disabled ? 'disabled' : 'active';
+      }
+      pushAudit('gateway.updateKey', 'gatewayKey', key.id, { state: key.state });
+      return clone(key);
+    },
+
+    async rotateGatewayKey(input) {
+      const oldKey = findById(state.gatewayKeys, input.gatewayKeyId, 'Gateway key');
+      const created = await this.createGatewayKey({
+        name: `${oldKey.name} rotated`,
+        scopes: oldKey.scopes,
+        quotaLimit: oldKey.quotaLimit,
+        rateLimitPerMinute: oldKey.rateLimitPerMinute,
+        expiresAt: oldKey.expiresAt,
+      });
+      created.record.rotatedFromId = oldKey.id;
+      oldKey.revokedAt = oldKey.revokedAt ?? now();
+      oldKey.state = 'revoked';
+      pushAudit('gateway.rotateKey', 'gatewayKey', oldKey.id, { newKeyId: created.record.id });
+      return clone(created);
+    },
+
     async revokeGatewayKey(gatewayKeyId: string) {
       const key = findById(state.gatewayKeys, gatewayKeyId, 'Gateway key');
       key.revokedAt = key.revokedAt ?? now();
+      key.state = 'revoked';
       pushAudit('gateway.revokeKey', 'gatewayKey', key.id, { keyPreview: key.keyPreview });
       return clone(key);
     },

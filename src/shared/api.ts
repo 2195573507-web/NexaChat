@@ -9,6 +9,9 @@ import type {
   ExportConversationInput,
   GatewayApiKey,
   GatewayKeyCreated,
+  GatewayKeyCreateInput,
+  GatewayKeyRotateInput,
+  GatewayKeyUpdateInput,
   GatewayStatus,
   ImportExportResult,
   KnowledgeFile,
@@ -21,7 +24,9 @@ import type {
   UiPreferences,
   CancelMessageInput,
   RegenerateMessageInput,
+  RestoreSnapshotOptions,
   RetryMessageInput,
+  ImportPlanApplyOptions,
 } from './types.js';
 
 export interface AppApi {
@@ -40,7 +45,9 @@ export interface AppApi {
     conversationId: string,
     flags: Partial<Pick<Conversation, 'isPinned' | 'isFavorite' | 'status'>>,
   ): Promise<Conversation>;
-  createGatewayKey(name: string): Promise<GatewayKeyCreated>;
+  createGatewayKey(input: GatewayKeyCreateInput): Promise<GatewayKeyCreated>;
+  updateGatewayKey(input: GatewayKeyUpdateInput): Promise<GatewayApiKey>;
+  rotateGatewayKey(input: GatewayKeyRotateInput): Promise<GatewayKeyCreated>;
   revokeGatewayKey(gatewayKeyId: string): Promise<GatewayApiKey>;
   toggleGateway(enabled: boolean): Promise<GatewayStatus>;
   saveUiPreferences(preferences: UiPreferences): Promise<UiPreferences>;
@@ -51,8 +58,8 @@ export interface AppApi {
   createAgent(name: string, goal: string): Promise<AgentDefinition>;
   previewAgentRun(agentId: string): Promise<ImportExportResult>;
   validateImportManifest(manifestText: string): Promise<ImportExportResult>;
-  applyImportPlan(resultId: string): Promise<ImportExportResult>;
-  restoreSnapshot(snapshotId: string): Promise<ImportExportResult>;
+  applyImportPlan(resultId: string, options?: ImportPlanApplyOptions): Promise<ImportExportResult>;
+  restoreSnapshot(snapshotId: string, options?: RestoreSnapshotOptions): Promise<ImportExportResult>;
   createSnapshot(): Promise<ImportExportResult>;
   exportDiagnostics(): Promise<ImportExportResult>;
   openLogs(): Promise<void>;
@@ -72,6 +79,8 @@ export const APP_API_METHODS = [
   'createConversation',
   'updateConversationFlags',
   'createGatewayKey',
+  'updateGatewayKey',
+  'rotateGatewayKey',
   'revokeGatewayKey',
   'toggleGateway',
   'saveUiPreferences',

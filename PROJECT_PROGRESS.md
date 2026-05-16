@@ -352,6 +352,54 @@ Git:
 - Round 7 closeout commit hash: `14d8d42da4fccd7063e4a321c2235a57206ed397`.
 - Push result: delivery and closeout commits pushed; `origin/main` confirmed at `14d8d42da4fccd7063e4a321c2235a57206ed397`.
 
+## 2026-05-16 Full App Round 8 Local Gateway And API Key
+
+Round 8 of the authoritative full-app blueprint is implemented and verified. It turns the local Gateway from basic endpoint forwarding plus simple key creation into a controlled external API surface with centralized endpoint/scope/error authority, key lifecycle, quota/rate enforcement, redacted attributed logs, and reversible import metadata application.
+
+Parallel execution lanes:
+
+- Lane A: Gateway runtime authority, HTTP auth/scope/quota/rate/errors/logs.
+- Lane B: API Key lifecycle, schema migration, import preflight, metadata apply, snapshot, and rollback.
+- Lane C: Gateway/Data UI, browser mock parity, i18n/theme states, tests, docs, shortcut and Git closeout.
+- Lane D: read-only Round 9 Knowledge/RAG input.
+
+Key changes:
+
+- Added `src/shared/gatewayRuntime.ts` for endpoints, scopes, key states, error codes, body limit, quota/rate defaults, and Gateway policy.
+- Added additive DB migrations for existing local databases.
+- Extended Gateway key/log/config snapshot schema, mappers, shared types, API, IPC, preload, and main handlers.
+- Added Gateway key create/update/disable/enable/rotate/revoke lifecycle with one-time reveal on create and rotate.
+- Added explicit authorization outcomes for missing, invalid, disabled, revoked, expired, scope denied, quota exhausted, and rate-limited keys.
+- Added HTTP Gateway OpenAI-compatible error shapes, OPTIONS/CORS handling, request body limit, redacted attributed logs, and reserved `/v1/responses`.
+- Replaced preview-only import apply with metadata apply plus rollback snapshot; rollback disables imported Provider/Model metadata without importing plaintext secrets.
+- Updated Gateway UI key controls/log table, Data import/rollback actions, browser mock API, CSS, and zh-CN/en-US i18n.
+- Added `tests/gateway-runtime.test.ts`.
+- Added `docs/implementation/round-08-gateway-api-key-closure.md`.
+
+Verification completed:
+
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test -- tests/gateway-runtime.test.ts tests/gateway-provider-chain.test.ts tests/ipc-contract.test.ts tests/i18n-authority.test.ts`: passed, 4 files / 10 tests.
+- `npm.cmd run test`: passed, 10 files / 33 tests.
+- `npm.cmd run test:ui-smoke`: passed, 11 Playwright tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run verify`: passed, including typecheck, full unit test suite, and build.
+- `npm.cmd run test:electron-smoke`: passed; Electron shell rendered.
+- `git diff --check`: passed with LF/CRLF conversion warnings only.
+
+Desktop shortcut:
+
+- `C:\Users\至亲\Desktop\NexaChat.lnk` exists and still points to `D:\NexaChat\node_modules\electron\dist\electron.exe`.
+- Arguments remain `"D:\NexaChat"`.
+- Working directory remains `D:\NexaChat`.
+- Icon remains `D:\NexaChat\assets\app-icon.ico,0`.
+- No shortcut was modified in Round 8.
+
+Git:
+
+- Round 8 delivery commit hash: pending.
+- Push result: pending.
+
 ## 2026-05-14 UI Shell Redesign
 
 This round rebuilt the visible desktop shell, sidebar hierarchy, topbar, workbench home, and visual system so NexaChat reads as a formal compact desktop tool instead of a crowded prototype/debug panel.

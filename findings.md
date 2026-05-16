@@ -67,6 +67,15 @@
 - Browser mock must follow the `AppApi` contract whenever shared API methods are added, otherwise UI smoke can pass a stale behavior surface that production Electron cannot expose.
 - Cancel semantics are meaningful for in-flight or failed/recoverable records. A completed request should not be rewritten to cancelled merely because a test can call the method.
 
+## Full App Round 8 Findings
+
+- Round 8 was not blocked by Provider forwarding; the blocker was scattered Gateway control-plane authority. Endpoints, scopes, key states, error codes, quota/rate policy, and log attribution now live in `src/shared/gatewayRuntime.ts`.
+- API Key lifecycle must stay separate from Provider API Key storage. Gateway create/rotate can reveal a full key once, but stored/listed records only expose previews and main-process secrets.
+- Quota/rate failures need different errors and logs. Treating missing, invalid, revoked, disabled, expired, scope denied, quota exhausted, and rate-limited keys as one 401 hides the operator action needed to fix them.
+- Browser mock parity is required whenever `AppApi` changes. The mock now implements create/update/rotate/revoke key lifecycle so UI smoke cannot pass against stale preload assumptions.
+- Import from sub2api/CCS-style manifests should not silently import plaintext secrets. Round 8 applies Provider/Model metadata only, records stripped Gateway key templates, creates a rollback snapshot, and can disable imported metadata during rollback.
+- `/v1/embeddings` remains an explicit lexical compatibility fallback and `/v1/responses` remains reserved. Round 9 owns real embedding/RAG integration.
+
 ## Initial Repository State
 
 - Repository root: `D:\NexaChat`.

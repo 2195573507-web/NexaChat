@@ -1,4 +1,5 @@
 import type { ThemeMode } from './theme.js';
+import type { GatewayErrorCode, GatewayImportSource, GatewayKeyState, GatewayScope } from './gatewayRuntime.js';
 import type {
   ConversationExportFormat,
   ConversationStatus,
@@ -331,6 +332,12 @@ export interface RequestLog {
 export interface GatewayLog {
   id: string;
   requestLogId: string | null;
+  gatewayKeyId: string | null;
+  keyPreview: string | null;
+  scope: GatewayScope | null;
+  errorCode: GatewayErrorCode | null;
+  latencyMs: number | null;
+  remoteAddress: string | null;
   method: string;
   path: string;
   statusCode: number;
@@ -363,7 +370,14 @@ export interface GatewayApiKey {
   id: string;
   name: string;
   keyPreview: string;
-  scopes: string[];
+  scopes: GatewayScope[];
+  state: GatewayKeyState;
+  disabledAt: number | null;
+  rotatedFromId: string | null;
+  lastErrorCode: GatewayErrorCode | null;
+  rateLimitPerMinute: number | null;
+  rateWindowStartedAt: number | null;
+  rateWindowCount: number;
   quotaLimit: number | null;
   quotaUsed: number;
   expiresAt: number | null;
@@ -375,6 +389,47 @@ export interface GatewayApiKey {
 export interface GatewayKeyCreated {
   key: string;
   record: GatewayApiKey;
+}
+
+export interface GatewayKeyCreateInput {
+  name: string;
+  scopes?: GatewayScope[];
+  quotaLimit?: number | null;
+  rateLimitPerMinute?: number | null;
+  expiresAt?: number | null;
+}
+
+export interface GatewayKeyUpdateInput {
+  gatewayKeyId: string;
+  name?: string;
+  disabled?: boolean;
+  scopes?: GatewayScope[];
+  quotaLimit?: number | null;
+  rateLimitPerMinute?: number | null;
+  expiresAt?: number | null;
+}
+
+export interface GatewayKeyRotateInput {
+  gatewayKeyId: string;
+}
+
+export interface ImportPlanApplyOptions {
+  mode?: 'record-only' | 'apply-metadata';
+}
+
+export interface RestoreSnapshotOptions {
+  mode?: 'preflight' | 'rollback';
+}
+
+export interface GatewayImportPlan {
+  source: GatewayImportSource;
+  providerCount: number;
+  modelCount: number;
+  gatewayKeyTemplateCount: number;
+  conflictCount: number;
+  rollbackSnapshotId: string | null;
+  appliedProviderIds: string[];
+  appliedModelIds: string[];
 }
 
 export interface KnowledgeFile {
@@ -419,6 +474,9 @@ export interface ImportExportResult {
   summary: string;
   redacted: boolean;
   manifestJson: string | null;
+  rollbackSnapshotId: string | null;
+  source: string | null;
+  appliedEntityIdsJson: string | null;
   errorMessage: string | null;
   conflictCount: number;
   requiresConfirmation: boolean;

@@ -2,6 +2,9 @@ import type {
   CancelMessageInput,
   CompareModelsInput,
   ExportConversationInput,
+  GatewayKeyCreateInput,
+  GatewayKeyRotateInput,
+  GatewayKeyUpdateInput,
   McpServer,
   ModelInput,
   ProviderInput,
@@ -9,6 +12,8 @@ import type {
   RetryMessageInput,
   SendMessageInput,
   UiPreferences,
+  ImportPlanApplyOptions,
+  RestoreSnapshotOptions,
 } from './types.js';
 
 export const IPC_CHANNELS = {
@@ -25,6 +30,8 @@ export const IPC_CHANNELS = {
   chatExportConversation: 'chat:exportConversation',
   chatUpdateConversationFlags: 'chat:updateConversationFlags',
   gatewayCreateKey: 'gateway:createKey',
+  gatewayUpdateKey: 'gateway:updateKey',
+  gatewayRotateKey: 'gateway:rotateKey',
   gatewayRevokeKey: 'gateway:revokeKey',
   gatewayToggle: 'gateway:toggle',
   settingsSaveUiPreferences: 'settings:saveUiPreferences',
@@ -64,7 +71,9 @@ export type IpcInvokeArgs = {
       status: 'active' | 'archived' | 'deleted';
     }>,
   ];
-  [IPC_CHANNELS.gatewayCreateKey]: [string];
+  [IPC_CHANNELS.gatewayCreateKey]: [GatewayKeyCreateInput];
+  [IPC_CHANNELS.gatewayUpdateKey]: [GatewayKeyUpdateInput];
+  [IPC_CHANNELS.gatewayRotateKey]: [GatewayKeyRotateInput];
   [IPC_CHANNELS.gatewayRevokeKey]: [string];
   [IPC_CHANNELS.gatewayToggle]: [boolean];
   [IPC_CHANNELS.settingsSaveUiPreferences]: [UiPreferences];
@@ -75,8 +84,8 @@ export type IpcInvokeArgs = {
   [IPC_CHANNELS.agentCreate]: [string, string];
   [IPC_CHANNELS.agentPreviewRun]: [string];
   [IPC_CHANNELS.dataValidateImportManifest]: [string];
-  [IPC_CHANNELS.dataApplyImportPlan]: [string];
-  [IPC_CHANNELS.dataRestoreSnapshot]: [string];
+  [IPC_CHANNELS.dataApplyImportPlan]: [string, ImportPlanApplyOptions?];
+  [IPC_CHANNELS.dataRestoreSnapshot]: [string, RestoreSnapshotOptions?];
   [IPC_CHANNELS.dataCreateSnapshot]: [];
   [IPC_CHANNELS.dataExportDiagnostics]: [];
   [IPC_CHANNELS.systemOpenLogs]: [];
@@ -113,6 +122,8 @@ const ipcPayloadArity: Record<IpcChannel, { min: number; max: number }> = {
   [IPC_CHANNELS.chatExportConversation]: { min: 1, max: 1 },
   [IPC_CHANNELS.chatUpdateConversationFlags]: { min: 2, max: 2 },
   [IPC_CHANNELS.gatewayCreateKey]: { min: 1, max: 1 },
+  [IPC_CHANNELS.gatewayUpdateKey]: { min: 1, max: 1 },
+  [IPC_CHANNELS.gatewayRotateKey]: { min: 1, max: 1 },
   [IPC_CHANNELS.gatewayRevokeKey]: { min: 1, max: 1 },
   [IPC_CHANNELS.gatewayToggle]: { min: 1, max: 1 },
   [IPC_CHANNELS.settingsSaveUiPreferences]: { min: 1, max: 1 },
@@ -123,8 +134,8 @@ const ipcPayloadArity: Record<IpcChannel, { min: number; max: number }> = {
   [IPC_CHANNELS.agentCreate]: { min: 2, max: 2 },
   [IPC_CHANNELS.agentPreviewRun]: { min: 1, max: 1 },
   [IPC_CHANNELS.dataValidateImportManifest]: { min: 1, max: 1 },
-  [IPC_CHANNELS.dataApplyImportPlan]: { min: 1, max: 1 },
-  [IPC_CHANNELS.dataRestoreSnapshot]: { min: 1, max: 1 },
+  [IPC_CHANNELS.dataApplyImportPlan]: { min: 1, max: 2 },
+  [IPC_CHANNELS.dataRestoreSnapshot]: { min: 1, max: 2 },
   [IPC_CHANNELS.dataCreateSnapshot]: { min: 0, max: 0 },
   [IPC_CHANNELS.dataExportDiagnostics]: { min: 0, max: 0 },
   [IPC_CHANNELS.systemOpenLogs]: { min: 0, max: 0 },

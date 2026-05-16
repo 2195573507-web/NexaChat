@@ -20,6 +20,7 @@ import type {
   Workspace,
 } from '../../shared/types.js';
 import { normalizeThemeMode } from '../../shared/theme.js';
+import { resolveGatewayKeyState } from '../../shared/gatewayRuntime.js';
 
 type Row = Record<string, unknown>;
 
@@ -216,6 +217,12 @@ export function mapGatewayLog(row: Row): GatewayLog {
   return {
     id: String(row.id),
     requestLogId: nullableString(row.request_log_id),
+    gatewayKeyId: nullableString(row.gateway_key_id),
+    keyPreview: nullableString(row.key_preview),
+    scope: nullableString(row.scope) as GatewayLog['scope'],
+    errorCode: nullableString(row.error_code) as GatewayLog['errorCode'],
+    latencyMs: nullableNumber(row.latency_ms),
+    remoteAddress: nullableString(row.remote_address),
     method: String(row.method),
     path: String(row.path),
     statusCode: Number(row.status_code),
@@ -239,15 +246,33 @@ export function mapUsageRecord(row: Row): UsageRecord {
 }
 
 export function mapGatewayKey(row: Row): GatewayApiKey {
+  const quotaLimit = nullableNumber(row.quota_limit);
+  const quotaUsed = Number(row.quota_used);
+  const disabledAt = nullableNumber(row.disabled_at);
+  const revokedAt = nullableNumber(row.revoked_at);
+  const expiresAt = nullableNumber(row.expires_at);
   return {
     id: String(row.id),
     name: String(row.name),
     keyPreview: String(row.key_preview),
-    scopes: JSON.parse(String(row.scopes_json)) as string[],
-    quotaLimit: nullableNumber(row.quota_limit),
-    quotaUsed: Number(row.quota_used),
-    expiresAt: nullableNumber(row.expires_at),
-    revokedAt: nullableNumber(row.revoked_at),
+    scopes: JSON.parse(String(row.scopes_json)) as GatewayApiKey['scopes'],
+    state: resolveGatewayKeyState({
+      disabled: Boolean(disabledAt),
+      revokedAt,
+      expiresAt,
+      quotaLimit,
+      quotaUsed,
+    }),
+    disabledAt,
+    rotatedFromId: nullableString(row.rotated_from_id),
+    lastErrorCode: nullableString(row.last_error_code) as GatewayApiKey['lastErrorCode'],
+    rateLimitPerMinute: nullableNumber(row.rate_limit_per_minute),
+    rateWindowStartedAt: nullableNumber(row.rate_window_started_at),
+    rateWindowCount: Number(row.rate_window_count ?? 0),
+    quotaLimit,
+    quotaUsed,
+    expiresAt,
+    revokedAt,
     lastUsedAt: nullableNumber(row.last_used_at),
     createdAt: Number(row.created_at),
   };
@@ -304,6 +329,9 @@ export function mapImportExportResult(row: Row): ImportExportResult {
     summary: String(row.summary),
     redacted: bool(row.redacted),
     manifestJson,
+    rollbackSnapshotId: nullableString(row.rollback_snapshot_id),
+    source: nullableString(row.source),
+    appliedEntityIdsJson: nullableString(row.applied_entity_ids_json),
     errorMessage: String(row.status) === 'failed' ? String(row.summary) : null,
     conflictCount: manifestJson && /"conflictCount"\s*:/.test(manifestJson)
       ? Number.parseInt(manifestJson.match(/"conflictCount"\s*:\s*(\d+)/)?.[1] ?? '0', 10)

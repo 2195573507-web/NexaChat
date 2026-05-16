@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Copy, KeyRound, Play, XCircle } from 'lucide-react';
+import { Copy, KeyRound, Play, RefreshCw, ToggleLeft, ToggleRight, XCircle } from 'lucide-react';
+import { GATEWAY_SCOPES, type GatewayScope } from '../../shared/gatewayRuntime';
 import { useI18n } from '../i18n';
 import type { TabPageProps } from './shared';
 import { DataTable, StateBadge, TabPanel, copyText, getDefaultModel, statusLabel } from './shared';
@@ -9,6 +10,10 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
   const status = snapshot.dashboard.gatewayStatus;
   const defaultModel = getDefaultModel(snapshot);
   const [lastCreatedKey, setLastCreatedKey] = useState<string | null>(null);
+  const [keyName, setKeyName] = useState(t('gateway.defaultKeyName'));
+  const [quotaLimit, setQuotaLimit] = useState(1000);
+  const [rateLimit, setRateLimit] = useState(60);
+  const [selectedScopes, setSelectedScopes] = useState<GatewayScope[]>([...GATEWAY_SCOPES]);
 
   if (activeTab.id === 'keys') {
     return (
@@ -16,12 +21,47 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
         <section className="panel">
           <h2>{t('gateway.keys.title')}</h2>
           <p>{t('gateway.keys.note')}</p>
+          <div className="gateway-key-policy">
+            <label>
+              {t('gateway.keyName')}
+              <input value={keyName} onChange={(event) => setKeyName(event.target.value)} />
+            </label>
+            <label>
+              {t('gateway.quotaLimit')}
+              <input type="number" min="0" value={quotaLimit} onChange={(event) => setQuotaLimit(Number(event.target.value))} />
+            </label>
+            <label>
+              {t('gateway.rateLimit')}
+              <input type="number" min="0" value={rateLimit} onChange={(event) => setRateLimit(Number(event.target.value))} />
+            </label>
+          </div>
+          <div className="scope-toggle-list" aria-label={t('gateway.scopes.aria')}>
+            {GATEWAY_SCOPES.map((scope) => (
+              <label key={scope}>
+                <input
+                  type="checkbox"
+                  checked={selectedScopes.includes(scope)}
+                  onChange={(event) => {
+                    setSelectedScopes((current) =>
+                      event.target.checked ? Array.from(new Set([...current, scope])) : current.filter((item) => item !== scope),
+                    );
+                  }}
+                />
+                {scope}
+              </label>
+            ))}
+          </div>
           <button
             type="button"
             className="primary-button"
             onClick={() =>
               onAction(t('gateway.toast.created'), async () => {
-                const created = await api.createGatewayKey('Local app integration');
+                const created = await api.createGatewayKey({
+                  name: keyName,
+                  scopes: selectedScopes,
+                  quotaLimit,
+                  rateLimitPerMinute: rateLimit,
+                });
                 setLastCreatedKey(created.key);
               })
             }
@@ -42,13 +82,24 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
             rows={snapshot.gatewayKeys.map((key) => [
               key.name,
               key.keyPreview,
-              key.scopes.join(', '),
-              <StateBadge key={`${key.id}-state`} label={key.revokedAt ? t('common.revoked') : t('common.available')} tone={key.revokedAt ? 'muted' : 'success'} />,
-              key.quotaUsed,
+              <span key={`${key.id}-scope`}>{key.scopes.join(', ')}<br />{t('gateway.rateLimitValue', { count: key.rateLimitPerMinute ?? 0 })}</span>,
+              <StateBadge key={`${key.id}-state`} label={t(`gateway.keyState.${key.state}`)} tone={key.state === 'active' ? 'success' : key.state === 'quota_exceeded' ? 'warning' : 'muted'} />,
+              key.quotaLimit === null ? key.quotaUsed : `${key.quotaUsed}/${key.quotaLimit}`,
               key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleString() : '-',
-              <button type="button" key={key.id} disabled={Boolean(key.revokedAt)} onClick={() => onAction(t('gateway.toast.revoked'), () => api.revokeGatewayKey(key.id))}>
-                <XCircle size={16} /> {t('gateway.revoke')}
-              </button>,
+              <div className="button-row compact" key={key.id}>
+                <button type="button" disabled={Boolean(key.revokedAt)} onClick={() => onAction(key.disabledAt ? t('gateway.toast.enabled') : t('gateway.toast.disabled'), () => api.updateGatewayKey({ gatewayKeyId: key.id, disabled: !key.disabledAt }))}>
+                  {key.disabledAt ? <ToggleRight size={16} /> : <ToggleLeft size={16} />} {key.disabledAt ? t('gateway.enableKey') : t('gateway.disableKey')}
+                </button>
+                <button type="button" disabled={Boolean(key.revokedAt)} onClick={() => onAction(t('gateway.toast.rotated'), async () => {
+                  const rotated = await api.rotateGatewayKey({ gatewayKeyId: key.id });
+                  setLastCreatedKey(rotated.key);
+                })}>
+                  <RefreshCw size={16} /> {t('gateway.rotate')}
+                </button>
+                <button type="button" disabled={Boolean(key.revokedAt)} onClick={() => onAction(t('gateway.toast.revoked'), () => api.revokeGatewayKey(key.id))}>
+                  <XCircle size={16} /> {t('gateway.revoke')}
+                </button>
+              </div>,
             ])}
           />
         </section>
@@ -77,12 +128,14 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
           <div className="panel">
             <h2>{t('gateway.logs.events')}</h2>
             <DataTable
-              columns={[t('gateway.columns.method'), t('gateway.columns.path'), t('gateway.columns.status'), t('gateway.columns.request'), t('gateway.columns.time')]}
+              columns={[t('gateway.columns.method'), t('gateway.columns.path'), t('gateway.columns.status'), t('gateway.columns.key'), t('gateway.columns.scope'), t('gateway.columns.error'), t('gateway.columns.time')]}
               rows={snapshot.gatewayLogs.map((log) => [
                 log.method,
                 log.path,
                 <StateBadge key={log.id} label={String(log.statusCode)} tone={log.statusCode >= 400 ? 'error' : 'success'} />,
-                log.requestLogId ?? '-',
+                log.keyPreview ?? '-',
+                log.scope ?? '-',
+                log.errorCode ?? '-',
                 new Date(log.createdAt).toLocaleString(),
               ])}
             />

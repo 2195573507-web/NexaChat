@@ -39,6 +39,20 @@ import {
   isAllowedAttachmentMimeType,
   isConversationExportFormat,
 } from '../../shared/conversationRuntime.js';
+import {
+  GATEWAY_BIND_HOST,
+  GATEWAY_DEFAULT_KEY_POLICY,
+  GATEWAY_ENDPOINTS,
+  GATEWAY_ERROR_CODES,
+  GATEWAY_PORT,
+  GATEWAY_RATE_WINDOW_MS,
+  GATEWAY_SCOPES,
+  normalizeGatewayLimit,
+  normalizeGatewayRateLimit,
+  normalizeGatewayScopes,
+  type GatewayErrorCode,
+  type GatewayScope,
+} from '../../shared/gatewayRuntime.js';
 import type {
   AgentDefinition,
   AppSnapshot,
@@ -52,9 +66,14 @@ import type {
   DashboardSummary,
   ExportConversationInput,
   GatewayApiKey,
+  GatewayImportPlan,
   GatewayKeyCreated,
+  GatewayKeyCreateInput,
+  GatewayKeyRotateInput,
+  GatewayKeyUpdateInput,
   GatewayLog,
   GatewayStatus,
+  ImportPlanApplyOptions,
   ImportExportResult,
   KnowledgeFile,
   McpServer,
@@ -72,6 +91,7 @@ import type {
   RetryMessageInput,
   RouteDecision,
   SendMessageInput,
+  RestoreSnapshotOptions,
   UiPreferences,
   UsageRecord,
   Workspace,
@@ -86,7 +106,28 @@ import {
 
 const DEFAULT_WORKSPACE_ID = 'ws_default';
 const DEFAULT_PREFS_ID = 'ui_default';
+const GATEWAY_ENABLED_SETTING_KEY = 'gateway.enabled';
 const t = (key: Parameters<typeof translate>[1], params?: Parameters<typeof translate>[2]) => translate('zh-CN', key, params);
+
+export interface GatewayAuthorizationResult {
+  ok: boolean;
+  key: GatewayApiKey | null;
+  scope: GatewayScope;
+  errorCode: GatewayErrorCode | null;
+}
+
+export interface GatewayLogInput {
+  method: string;
+  path: string;
+  statusCode: number;
+  requestLogId?: string | null;
+  key?: GatewayApiKey | null;
+  scope?: GatewayScope | null;
+  errorCode?: GatewayErrorCode | null;
+  headers?: Record<string, string>;
+  latencyMs?: number | null;
+  remoteAddress?: string | null;
+}
 
 export class NexaStore {
   private readonly db: DatabaseSync;
@@ -96,6 +137,7 @@ export class NexaStore {
   constructor() {
     this.db = getDatabase().db;
     this.seed();
+    this.gatewayEnabled = this.getSetting(GATEWAY_ENABLED_SETTING_KEY) === 'true';
   }
 
   getDatabasePath(): string {
@@ -250,9 +292,9 @@ export class NexaStore {
     return {
       enabled: this.gatewayEnabled,
       running: this.gatewayEnabled,
-      port: 8787,
-      bindHost: '127.0.0.1',
-      endpoints: ['/v1/models', '/v1/chat/completions', '/v1/embeddings', '/v1/responses (reserved)'],
+      port: GATEWAY_PORT,
+      bindHost: GATEWAY_BIND_HOST,
+      endpoints: [...GATEWAY_ENDPOINTS],
       recentError: this.gatewayRecentError,
     };
   }
@@ -891,19 +933,69 @@ export class NexaStore {
     };
   }
 
-  createGatewayKey(name: string): GatewayKeyCreated {
+  createGatewayKey(input: GatewayKeyCreateInput | string): GatewayKeyCreated {
+    const normalizedInput: GatewayKeyCreateInput = typeof input === 'string' ? { name: input } : input;
+    const name = normalizedInput.name.trim() || 'Local integration key';
+    const scopes = normalizeGatewayScopes(normalizedInput.scopes);
+    const quotaLimit = normalizeGatewayLimit(normalizedInput.quotaLimit);
+    const rateLimit = normalizeGatewayRateLimit(normalizedInput.rateLimitPerMinute);
     const key = `nxk_${randomBytes(24).toString('hex')}`;
     const secretRef = this.saveSecret(`${name} gateway key`, key);
     const timestamp = now();
     const id = createId('gkey');
     this.db
       .prepare(
-        `INSERT INTO gateway_api_keys (id, name, secret_ref, key_preview, scopes_json, quota_limit, quota_used, expires_at, revoked_at, last_used_at, created_at)
-         VALUES (?, ?, ?, ?, ?, NULL, 0, NULL, NULL, NULL, ?)`,
+        `INSERT INTO gateway_api_keys (id, name, secret_ref, key_preview, scopes_json, disabled_at, rotated_from_id, last_error_code, rate_limit_per_minute, rate_window_started_at, rate_window_count, quota_limit, quota_used, expires_at, revoked_at, last_used_at, created_at)
+         VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, ?, NULL, 0, ?, 0, ?, NULL, NULL, ?)`,
       )
-      .run(id, name.trim() || 'Local integration key', secretRef, previewSecret(key), JSON.stringify(['models:read', 'chat:write', 'embeddings:write']), timestamp);
-    this.audit('gateway.key.created', 'gateway_api_key', id, { name });
+      .run(id, name, secretRef, previewSecret(key), JSON.stringify(scopes), rateLimit, quotaLimit, normalizedInput.expiresAt ?? null, timestamp);
+    this.audit('gateway.key.created', 'gateway_api_key', id, { name, scopes, quotaLimit, rateLimitPerMinute: rateLimit });
     return { key, record: this.requireGatewayKey(id) };
+  }
+
+  updateGatewayKey(input: GatewayKeyUpdateInput): GatewayApiKey {
+    const existing = this.requireGatewayKey(input.gatewayKeyId);
+    const name = input.name !== undefined ? input.name.trim() || existing.name : existing.name;
+    const scopes = input.scopes !== undefined ? normalizeGatewayScopes(input.scopes) : existing.scopes;
+    const quotaLimit = input.quotaLimit !== undefined ? normalizeGatewayLimit(input.quotaLimit) : existing.quotaLimit;
+    const rateLimit = input.rateLimitPerMinute !== undefined ? normalizeGatewayRateLimit(input.rateLimitPerMinute) : existing.rateLimitPerMinute;
+    const disabledAt = input.disabled === undefined ? existing.disabledAt : input.disabled ? existing.disabledAt ?? now() : null;
+    const expiresAt = input.expiresAt !== undefined ? input.expiresAt : existing.expiresAt;
+    this.db
+      .prepare(
+        `UPDATE gateway_api_keys
+         SET name = ?, scopes_json = ?, disabled_at = ?, quota_limit = ?, rate_limit_per_minute = ?, expires_at = ?
+         WHERE id = ?`,
+      )
+      .run(name, JSON.stringify(scopes), disabledAt, quotaLimit, rateLimit, expiresAt ?? null, input.gatewayKeyId);
+    this.audit('gateway.key.updated', 'gateway_api_key', input.gatewayKeyId, {
+      name,
+      scopes,
+      quotaLimit,
+      rateLimitPerMinute: rateLimit,
+      disabled: Boolean(disabledAt),
+    });
+    return this.requireGatewayKey(input.gatewayKeyId);
+  }
+
+  rotateGatewayKey(input: GatewayKeyRotateInput): GatewayKeyCreated {
+    const oldKey = this.requireGatewayKey(input.gatewayKeyId);
+    const created = this.createGatewayKey({
+      name: `${oldKey.name} rotated`,
+      scopes: oldKey.scopes,
+      quotaLimit: oldKey.quotaLimit,
+      rateLimitPerMinute: oldKey.rateLimitPerMinute,
+      expiresAt: oldKey.expiresAt,
+    });
+    const timestamp = now();
+    this.db
+      .prepare('UPDATE gateway_api_keys SET rotated_from_id = ? WHERE id = ?')
+      .run(oldKey.id, created.record.id);
+    this.db
+      .prepare('UPDATE gateway_api_keys SET revoked_at = ? WHERE id = ?')
+      .run(oldKey.revokedAt ?? timestamp, oldKey.id);
+    this.audit('gateway.key.rotated', 'gateway_api_key', oldKey.id, { newKeyId: created.record.id, keyPreview: oldKey.keyPreview });
+    return { ...created, record: this.requireGatewayKey(created.record.id) };
   }
 
   revokeGatewayKey(gatewayKeyId: string): GatewayApiKey {
@@ -918,17 +1010,20 @@ export class NexaStore {
 
   toggleGateway(enabled: boolean): GatewayStatus {
     this.gatewayEnabled = enabled;
-    this.audit(enabled ? 'gateway.enabled' : 'gateway.disabled', 'gateway', null, { bindHost: '127.0.0.1', port: 8787 });
+    this.setSetting(GATEWAY_ENABLED_SETTING_KEY, enabled ? 'true' : 'false');
+    this.audit(enabled ? 'gateway.enabled' : 'gateway.disabled', 'gateway', null, { bindHost: GATEWAY_BIND_HOST, port: GATEWAY_PORT });
     return this.getGatewayStatus();
   }
 
-  validateGatewayKey(rawKey: string, scope: 'models:read' | 'chat:write' | 'embeddings:write'): GatewayApiKey | null {
+  authorizeGatewayKey(rawKey: string | null, scope: GatewayScope): GatewayAuthorizationResult {
+    if (!rawKey) {
+      return { ok: false, key: null, scope, errorCode: 'missing_key' };
+    }
     const rows = this.db
       .prepare(
         `SELECT gateway_api_keys.*, secrets.encrypted_value
          FROM gateway_api_keys
-         JOIN secrets ON secrets.id = gateway_api_keys.secret_ref
-         WHERE gateway_api_keys.revoked_at IS NULL`,
+         JOIN secrets ON secrets.id = gateway_api_keys.secret_ref`,
       )
       .all() as Array<Record<string, unknown> & { encrypted_value: string }>;
 
@@ -939,21 +1034,55 @@ export class NexaStore {
       }
       const record = mapGatewayKey(row);
       const nowValue = now();
+      if (record.revokedAt) {
+        this.markGatewayKeyError(record.id, 'revoked_key');
+        return { ok: false, key: record, scope, errorCode: 'revoked_key' };
+      }
+      if (record.disabledAt) {
+        this.markGatewayKeyError(record.id, 'disabled_key');
+        return { ok: false, key: record, scope, errorCode: 'disabled_key' };
+      }
       if (record.expiresAt && record.expiresAt < nowValue) {
-        return null;
+        this.markGatewayKeyError(record.id, 'expired_key');
+        return { ok: false, key: record, scope, errorCode: 'expired_key' };
       }
       if (!record.scopes.includes(scope)) {
-        return null;
+        this.markGatewayKeyError(record.id, 'scope_denied');
+        return { ok: false, key: record, scope, errorCode: 'scope_denied' };
       }
       if (record.quotaLimit !== null && record.quotaUsed >= record.quotaLimit) {
-        return null;
+        this.markGatewayKeyError(record.id, 'quota_exceeded');
+        return { ok: false, key: record, scope, errorCode: 'quota_exceeded' };
       }
-      this.db
-        .prepare('UPDATE gateway_api_keys SET quota_used = quota_used + 1, last_used_at = ? WHERE id = ?')
-        .run(nowValue, record.id);
-      return this.requireGatewayKey(record.id);
+      if (record.rateLimitPerMinute !== null && record.rateLimitPerMinute >= 0) {
+        const windowStartedAt = record.rateWindowStartedAt && nowValue - record.rateWindowStartedAt < GATEWAY_RATE_WINDOW_MS
+          ? record.rateWindowStartedAt
+          : nowValue;
+        const windowCount = windowStartedAt === record.rateWindowStartedAt ? record.rateWindowCount : 0;
+        if (windowCount >= record.rateLimitPerMinute) {
+          this.markGatewayKeyError(record.id, 'rate_limited');
+          return { ok: false, key: record, scope, errorCode: 'rate_limited' };
+        }
+        this.db
+          .prepare(
+            `UPDATE gateway_api_keys
+             SET quota_used = quota_used + 1, last_used_at = ?, last_error_code = NULL, rate_window_started_at = ?, rate_window_count = ?
+             WHERE id = ?`,
+          )
+          .run(nowValue, windowStartedAt, windowCount + 1, record.id);
+      } else {
+        this.db
+          .prepare('UPDATE gateway_api_keys SET quota_used = quota_used + 1, last_used_at = ?, last_error_code = NULL WHERE id = ?')
+          .run(nowValue, record.id);
+      }
+      return { ok: true, key: this.requireGatewayKey(record.id), scope, errorCode: null };
     }
-    return null;
+    return { ok: false, key: null, scope, errorCode: 'invalid_key' };
+  }
+
+  validateGatewayKey(rawKey: string, scope: GatewayScope): GatewayApiKey | null {
+    const result = this.authorizeGatewayKey(rawKey, scope);
+    return result.ok ? result.key : null;
   }
 
   resolveGatewayModelId(modelName: string | undefined): string | undefined {
@@ -970,13 +1099,27 @@ export class NexaStore {
     return model?.id;
   }
 
-  recordGatewayLog(method: string, path: string, statusCode: number, requestLogId: string | null, headers: Record<string, string>): void {
+  recordGatewayLog(input: GatewayLogInput): void {
     this.db
       .prepare(
-        `INSERT INTO gateway_logs (id, request_log_id, method, path, status_code, redacted_headers_json, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO gateway_logs (id, request_log_id, gateway_key_id, key_preview, scope, error_code, latency_ms, remote_address, method, path, status_code, redacted_headers_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(createId('gwlog'), requestLogId, method, path, statusCode, JSON.stringify(redactHeaders(headers)), now());
+      .run(
+        createId('gwlog'),
+        input.requestLogId ?? null,
+        input.key?.id ?? null,
+        input.key?.keyPreview ?? null,
+        input.scope ?? null,
+        input.errorCode ?? null,
+        input.latencyMs ?? null,
+        input.remoteAddress ?? null,
+        input.method,
+        input.path,
+        input.statusCode,
+        JSON.stringify(redactHeaders(input.headers ?? {})),
+        now(),
+      );
   }
 
   saveUiPreferences(preferences: UiPreferences): UiPreferences {
@@ -1117,6 +1260,7 @@ export class NexaStore {
     const id = createId('import');
     let status: ImportExportResult['status'] = 'ready';
     let summary = t('data.import.summary.ready');
+    let source = 'openai-compatible';
     let manifest: Record<string, unknown> = {
       requiresConfirmation: true,
       conflictCount: 0,
@@ -1125,11 +1269,14 @@ export class NexaStore {
 
     try {
       const parsed = JSON.parse(manifestText) as Record<string, unknown>;
+      source = this.detectImportSource(parsed);
       const providers = parsed.providers;
       const models = parsed.models;
+      const keys = parsed.keys ?? parsed.apiKeys ?? parsed.gatewayKeys;
       const hasValidList =
         (Array.isArray(providers) && providers.length > 0) ||
         (Array.isArray(models) && models.length > 0) ||
+        (Array.isArray(keys) && keys.length > 0) ||
         typeof parsed.workspace === 'object';
       if (!hasValidList) {
         throw new Error(t('data.import.errors.requiredList'));
@@ -1141,8 +1288,13 @@ export class NexaStore {
         : 0;
       manifest = {
         ...manifest,
+        source,
+        providers: this.normalizeImportProviders(providers),
+        models: this.normalizeImportModels(models),
+        gatewayKeyTemplates: this.normalizeGatewayKeyTemplates(keys),
         providerCount: Array.isArray(providers) ? providers.length : 0,
         modelCount: Array.isArray(models) ? models.length : 0,
+        gatewayKeyTemplateCount: Array.isArray(keys) ? keys.length : 0,
         conflictCount,
         keys: 'stripped',
       };
@@ -1161,43 +1313,74 @@ export class NexaStore {
 
     this.db
       .prepare(
-        `INSERT INTO config_snapshots (id, action, status, summary, redacted, manifest_json, created_at)
-         VALUES (?, 'import', ?, ?, 1, ?, ?)`,
+        `INSERT INTO config_snapshots (id, action, status, summary, redacted, rollback_snapshot_id, source, applied_entity_ids_json, manifest_json, created_at)
+         VALUES (?, 'import', ?, ?, 1, NULL, ?, ?, ?, ?)`,
       )
-      .run(id, status, summary, JSON.stringify(manifest), timestamp);
+      .run(id, status, summary, source, JSON.stringify([]), JSON.stringify(manifest), timestamp);
     this.audit('import.manifest.validated', 'config_snapshot', id, { status, summary });
     return this.requireImportExportResult(id);
   }
 
-  applyImportPlan(resultId: string): ImportExportResult {
+  applyImportPlan(resultId: string, options: ImportPlanApplyOptions = {}): ImportExportResult {
     const result = this.requireImportExportResult(resultId);
     if (result.action !== 'import' || result.status !== 'ready') {
       throw new Error(t('data.import.errors.readyOnly'));
     }
     const timestamp = now();
+    const rollbackSnapshot = this.createSnapshot();
+    const manifest = this.parseManifest(result.manifestJson);
+    const mode = options.mode ?? 'apply-metadata';
+    const appliedEntityIds: string[] = [];
+    if (mode === 'apply-metadata') {
+      appliedEntityIds.push(...this.applyImportMetadata(manifest));
+    }
+    const plan: GatewayImportPlan = {
+      source: this.detectImportSource(manifest),
+      providerCount: Number(manifest.providerCount ?? 0),
+      modelCount: Number(manifest.modelCount ?? 0),
+      gatewayKeyTemplateCount: Number(manifest.gatewayKeyTemplateCount ?? 0),
+      conflictCount: Number(manifest.conflictCount ?? 0),
+      rollbackSnapshotId: rollbackSnapshot.id,
+      appliedProviderIds: appliedEntityIds.filter((id) => id.startsWith('provider_')),
+      appliedModelIds: appliedEntityIds.filter((id) => id.startsWith('model_')),
+    };
     this.db
-      .prepare('UPDATE config_snapshots SET status = ?, summary = ?, created_at = ? WHERE id = ?')
-      .run('completed', t('data.import.summary.applied'), timestamp, resultId);
-    this.audit('import.plan.applied', 'config_snapshot', resultId, { mode: 'confirmed preview only' });
+      .prepare('UPDATE config_snapshots SET status = ?, summary = ?, rollback_snapshot_id = ?, applied_entity_ids_json = ?, manifest_json = ?, created_at = ? WHERE id = ?')
+      .run('completed', t('data.import.summary.applied', { count: appliedEntityIds.length }), rollbackSnapshot.id, JSON.stringify(appliedEntityIds), JSON.stringify({ ...manifest, appliedPlan: plan }), timestamp, resultId);
+    this.audit('import.plan.applied', 'config_snapshot', resultId, { mode, rollbackSnapshotId: rollbackSnapshot.id, appliedEntityIds });
     return this.requireImportExportResult(resultId);
   }
 
-  restoreSnapshot(snapshotId: string): ImportExportResult {
+  restoreSnapshot(snapshotId: string, options: RestoreSnapshotOptions = {}): ImportExportResult {
     const snapshot = this.requireImportExportResult(snapshotId);
     const timestamp = now();
     const id = createId('restore');
+    const mode = options.mode ?? 'preflight';
+    const appliedEntityIds = this.parseStringList(snapshot.manifestJson ? this.parseManifest(snapshot.manifestJson).appliedPlan : null, 'appliedProviderIds')
+      .concat(this.parseStringList(snapshot.manifestJson ? this.parseManifest(snapshot.manifestJson).appliedPlan : null, 'appliedModelIds'));
+    if (mode === 'rollback') {
+      for (const entityId of appliedEntityIds) {
+        if (entityId.startsWith('model_')) {
+          this.db.prepare('UPDATE models SET enabled = 0, updated_at = ? WHERE id = ?').run(timestamp, entityId);
+        }
+        if (entityId.startsWith('provider_')) {
+          this.db.prepare('UPDATE providers SET enabled = 0, updated_at = ? WHERE id = ?').run(timestamp, entityId);
+        }
+      }
+    }
     const manifest = {
       sourceSnapshotId: snapshot.id,
       requiresConfirmation: true,
-      conflictCount: 0,
-      mode: 'preview-only',
+      conflictCount: appliedEntityIds.length,
+      mode,
+      affectedEntityIds: appliedEntityIds,
     };
     this.db
       .prepare(
-        `INSERT INTO config_snapshots (id, action, status, summary, redacted, manifest_json, created_at)
-         VALUES (?, 'cleanup-preview', 'ready', ?, 1, ?, ?)`,
+        `INSERT INTO config_snapshots (id, action, status, summary, redacted, rollback_snapshot_id, source, applied_entity_ids_json, manifest_json, created_at)
+         VALUES (?, 'cleanup-preview', ?, ?, 1, ?, ?, ?, ?, ?)`,
       )
-      .run(id, t('data.snapshot.summary.restore'), JSON.stringify(manifest), timestamp);
+      .run(id, mode === 'rollback' ? 'completed' : 'ready', mode === 'rollback' ? t('data.snapshot.summary.rollbackApplied', { count: appliedEntityIds.length }) : t('data.snapshot.summary.restore'), snapshot.id, snapshot.source ?? null, JSON.stringify(appliedEntityIds), JSON.stringify(manifest), timestamp);
     this.audit('snapshot.restore.previewed', 'config_snapshot', snapshotId, manifest);
     return this.requireImportExportResult(id);
   }
@@ -1213,10 +1396,10 @@ export class NexaStore {
     };
     this.db
       .prepare(
-        `INSERT INTO config_snapshots (id, action, status, summary, redacted, manifest_json, created_at)
-         VALUES (?, 'snapshot', 'completed', ?, 1, ?, ?)`,
+        `INSERT INTO config_snapshots (id, action, status, summary, redacted, rollback_snapshot_id, source, applied_entity_ids_json, manifest_json, created_at)
+         VALUES (?, 'snapshot', 'completed', ?, 1, NULL, 'nexachat', ?, ?, ?)`,
       )
-      .run(id, t('data.snapshot.summary.created'), JSON.stringify(manifest), timestamp);
+      .run(id, t('data.snapshot.summary.created'), JSON.stringify([]), JSON.stringify(manifest), timestamp);
     this.audit('snapshot.created', 'config_snapshot', id, manifest);
     return this.requireImportExportResult(id);
   }
@@ -1233,10 +1416,10 @@ export class NexaStore {
     };
     this.db
       .prepare(
-        `INSERT INTO config_snapshots (id, action, status, summary, redacted, manifest_json, created_at)
-         VALUES (?, 'export', 'completed', ?, 1, ?, ?)`,
+        `INSERT INTO config_snapshots (id, action, status, summary, redacted, rollback_snapshot_id, source, applied_entity_ids_json, manifest_json, created_at)
+         VALUES (?, 'export', 'completed', ?, 1, NULL, 'nexachat', ?, ?, ?)`,
       )
-      .run(id, t('data.diagnostics.summary.created'), JSON.stringify(diagnostics), timestamp);
+      .run(id, t('data.diagnostics.summary.created'), JSON.stringify([]), JSON.stringify(diagnostics), timestamp);
     this.audit('diagnostics.exported', 'diagnostics', id, diagnostics);
     return this.requireImportExportResult(id);
   }
@@ -1589,6 +1772,148 @@ export class NexaStore {
       throw new Error('Default workspace missing.');
     }
     return mapWorkspace(row as Record<string, unknown>);
+  }
+
+  private getSetting(key: string): string | null {
+    const row = this.db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key) as { value: string } | undefined;
+    return row?.value ?? null;
+  }
+
+  private setSetting(key: string, value: string): void {
+    this.db
+      .prepare(
+        `INSERT INTO app_settings (key, value, updated_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+      )
+      .run(key, value, now());
+  }
+
+  private markGatewayKeyError(gatewayKeyId: string, errorCode: GatewayErrorCode): void {
+    this.db.prepare('UPDATE gateway_api_keys SET last_error_code = ? WHERE id = ?').run(errorCode, gatewayKeyId);
+  }
+
+  private parseManifest(manifestJson: string | null): Record<string, unknown> {
+    if (!manifestJson) {
+      return {};
+    }
+    try {
+      return JSON.parse(manifestJson) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  }
+
+  private detectImportSource(manifest: Record<string, unknown>): GatewayImportPlan['source'] {
+    const value = String(manifest.source ?? manifest.kind ?? manifest.type ?? '').toLowerCase();
+    if (value.includes('sub2api')) return 'sub2api';
+    if (value.includes('ccs')) return 'ccs';
+    if (value.includes('ollama')) return 'ollama';
+    if (value.includes('lm-studio') || value.includes('lm studio')) return 'lm-studio';
+    if (value.includes('nexachat')) return 'nexachat';
+    return 'openai-compatible';
+  }
+
+  private normalizeImportProviders(value: unknown): Array<{ name: string; type: Provider['type']; baseUrl: string }> {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.slice(0, 20).map((provider, index) => {
+      const item = provider as Record<string, unknown>;
+      return {
+        name: String(item.name ?? item.label ?? `Imported Provider ${index + 1}`),
+        type: 'openai-compatible',
+        baseUrl: normalizeBaseUrl(String(item.baseUrl ?? item.base_url ?? item.url ?? 'http://127.0.0.1:11434/v1')),
+      };
+    });
+  }
+
+  private normalizeImportModels(value: unknown): Array<{ providerName: string | null; name: string; displayName: string }> {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.slice(0, 100).map((model, index) => {
+      const item = model as Record<string, unknown>;
+      const name = String(item.name ?? item.id ?? item.model ?? `imported-model-${index + 1}`);
+      return {
+        providerName: item.providerName || item.provider ? String(item.providerName ?? item.provider) : null,
+        name,
+        displayName: String(item.displayName ?? item.label ?? name),
+      };
+    });
+  }
+
+  private normalizeGatewayKeyTemplates(value: unknown): Array<{ name: string; scopes: GatewayScope[]; quotaLimit: number | null }> {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.slice(0, 20).map((item, index) => {
+      const record = item as Record<string, unknown>;
+      return {
+        name: String(record.name ?? record.label ?? `Imported Gateway Key Template ${index + 1}`),
+        scopes: normalizeGatewayScopes(Array.isArray(record.scopes) ? record.scopes.map(String) : GATEWAY_SCOPES),
+        quotaLimit: normalizeGatewayLimit(typeof record.quotaLimit === 'number' ? record.quotaLimit : null),
+      };
+    });
+  }
+
+  private applyImportMetadata(manifest: Record<string, unknown>): string[] {
+    const timestamp = now();
+    const appliedEntityIds: string[] = [];
+    const providers = Array.isArray(manifest.providers) ? manifest.providers as Array<Record<string, unknown>> : [];
+    const providerByName = new Map(this.getProviders().map((provider) => [provider.name, provider]));
+
+    for (const provider of providers) {
+      const name = String(provider.name ?? '').trim();
+      const baseUrl = normalizeBaseUrl(String(provider.baseUrl ?? ''));
+      if (!name || !baseUrl || providerByName.has(name)) {
+        continue;
+      }
+      const id = createId('provider');
+      this.db
+        .prepare(
+          `INSERT INTO providers (id, name, type, base_url, proxy_url, auth_type, secret_ref, custom_headers_json, enabled, health_status, last_checked_at, created_at, updated_at)
+           VALUES (?, ?, 'openai-compatible', ?, NULL, 'none', NULL, NULL, 1, 'unknown', NULL, ?, ?)`,
+        )
+        .run(id, name, baseUrl, timestamp, timestamp);
+      appliedEntityIds.push(id);
+      providerByName.set(name, this.requireProvider(id));
+    }
+
+    const models = Array.isArray(manifest.models) ? manifest.models as Array<Record<string, unknown>> : [];
+    const defaultProvider = this.getProviders()[0];
+    for (const model of models) {
+      const name = String(model.name ?? '').trim();
+      if (!name) {
+        continue;
+      }
+      const providerName = model.providerName ? String(model.providerName) : null;
+      const provider = providerName ? providerByName.get(providerName) : defaultProvider;
+      if (!provider) {
+        continue;
+      }
+      if (this.getModels().some((existing) => existing.providerId === provider.id && existing.name === name)) {
+        continue;
+      }
+      const id = createId('model');
+      this.db
+        .prepare(
+          `INSERT INTO models (id, provider_id, name, display_name, model_name_snapshot, context_window, supports_streaming, supports_tools, supports_vision, supports_embeddings, input_price, output_price, health_status, latency_ms, enabled, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 8192, 1, 0, 0, 0, NULL, NULL, 'unknown', NULL, 1, ?, ?)`,
+        )
+        .run(id, provider.id, name, String(model.displayName ?? name), name, timestamp, timestamp);
+      appliedEntityIds.push(id);
+    }
+
+    return appliedEntityIds;
+  }
+
+  private parseStringList(value: unknown, key: string): string[] {
+    if (!value || typeof value !== 'object') {
+      return [];
+    }
+    const raw = (value as Record<string, unknown>)[key];
+    return Array.isArray(raw) ? raw.filter((item): item is string => typeof item === 'string') : [];
   }
 
   private saveSecret(label: string, value: string): string {
