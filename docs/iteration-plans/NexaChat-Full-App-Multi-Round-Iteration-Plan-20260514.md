@@ -1018,8 +1018,8 @@ These references guide product and engineering decisions. They are not permissio
   - `git diff --check`: passed with LF/CRLF conversion warnings only.
 - Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` still targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and uses `D:\NexaChat\assets\app-icon.ico,0`.
 - Acceptance result: Passed. Agent preview, safe tool fixtures, trace events, approval requests, approval decisions, and completion/cancel states now share one execution model. MCP and Workflow are connected as boundaries without unsafe execution or fake canvas behavior.
-- Commit hash: `ddab2066c67044c367e7c28cf8126e450d2a074d`.
-- Push result: pending until Git push.
+- Commit hash: `ddab2066c67044c367e7c28cf8126e450d2a074d` for Round 10 delivery; `3f267dca0d0a7ec67272e3e7e800e01b7ca440cd` records closeout and remote confirmation.
+- Push result: delivery and closeout commits pushed; `origin/main` confirmed at `3f267dca0d0a7ec67272e3e7e800e01b7ca440cd`.
 - Remaining issues: None for Round 10. Round 11 owns stronger identity, RBAC/ACL, main-process permission enforcement, and audit hash-chain hardening.
 
 ## 17. Round 11: Security, Users, Permissions And Audit

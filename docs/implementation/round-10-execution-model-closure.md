@@ -2,7 +2,7 @@
 
 Date: 2026-05-16
 
-Status: Completed as implementation and verification; delivery commit recorded, push confirmation pending.
+Status: Completed as implementation, verification, and remote delivery.
 
 ## Root-Cause And Chain Review
 
@@ -69,5 +69,6 @@ Passed at the Round 10 boundary. Agent preview, safe tool fixtures, trace events
 ## Commit
 
 - Delivery commit hash: `ddab2066c67044c367e7c28cf8126e450d2a074d`.
-- Push result: pending until closeout.
+- Closeout commit hash: `3f267dca0d0a7ec67272e3e7e800e01b7ca440cd`.
+- Push result: delivery and closeout commits pushed; `origin/main` confirmed at `3f267dca0d0a7ec67272e3e7e800e01b7ca440cd`.
 - Remaining issues: None for Round 10. Round 11 owns stronger identity, RBAC/ACL, main-process permission enforcement, and audit hash-chain hardening.
