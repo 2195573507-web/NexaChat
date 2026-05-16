@@ -1160,3 +1160,84 @@ Verified on 2026-05-13:
 - The implementation uses Node's experimental `node:sqlite` API. It works in the current local Node/Electron environment but should be revisited before production packaging.
 - New secrets use Electron `safeStorage` when available; non-Electron/bootstrap execution keeps a prefixed local-dev fallback and existing base64 values remain readable for compatibility.
 - `docs/implementation/build-closure.md`, `docs/implementation/iteration-01-closure.md`, `docs/implementation/iteration-02-closure.md`, `task_plan.md`, `findings.md`, and `progress.md` are the current implementation closeout surfaces.
+
+## 2026-05-16 CC Switch Style Renderer Rebuild Final Closure
+
+This is the authoritative closeout for the renderer rebuild requested on 2026-05-16. The real project root was confirmed first with `git rev-parse --show-toplevel`; all repository writes stayed inside that root. The only intentional outside-repo side effect was updating and verifying the Windows desktop shortcut entry.
+
+Why the UI moved from an engineering tool shell to a CC Switch style lightweight desktop tool:
+
+- The previous renderer still read as an admin dashboard: old tree/sidebar structure, top status strip, repeated framed panels, table-first management pages, and a dashboard-like landing surface.
+- The requested product shape is a local AI configuration switcher and workbench: current configuration first, fast Provider/model/gateway switching, direct executable actions, clear dry-run and unconfigured states, and low visual noise.
+- The new direction follows the product-register guidance from `impeccable`: restrained color, system fonts, stable controls, small state indicators, no Liquid Glass, no heavy blur, no large gradients, no decorative motion, and no marketing-page composition.
+
+Old UI removed or replaced:
+
+- Deleted old `src/renderer/AppShell.tsx`, `src/renderer/components/ui.tsx`, `src/renderer/components/ModulePageFrame.tsx`, and `src/renderer/components/ErrorDiagnosisPanel.tsx`.
+- Replaced every old renderer module page implementation under `src/renderer/modules/`.
+- Replaced the monolithic old `src/renderer/styles.css` with a CSS entry plus split `tokens`, `base`, `shell`, `components`, and `pages` files.
+- Removed the old visual vocabulary from renderer output: no old AppShell, old topbar, old tree menu, old horizontal tabs, old subnav panel, old content-grid, old card grid, or old table-led page structure.
+
+Business contracts preserved:
+
+- Main process, preload IPC, SQLite/node:sqlite store, Provider/model records, Gateway records and keys, Knowledge records, Agent/MCP records, audit/log/usage records, shared navigation, shared types, and existing real business assertions were preserved.
+- `src/shared/navigation.ts` remains the route and module authority.
+- UI work did not replace business services with mock completion states. Unavailable capabilities remain marked as unconfigured, environment-limited, reserved, dry-run, or requiring Provider/index/permission.
+
+New UI architecture:
+
+- `AppFrame` now owns the compact desktop shell: narrow module rail, module switcher, main work surface, and command bar.
+- Core reusable primitives now live around `ConfigList`, `ConfigDetail`, `ToolSection`, `StatusDot`, `StatusPillLite`, `InlineNotice`, `CommandButton`, `DataRows`, `ActivityList`, `ChatInput`, and `MessageBubble`.
+- Pages are rebuilt around “current configuration + executable action + status feedback” instead of admin grids.
+
+Rebuilt page scope:
+
+- Workspace: current active configuration summary, gateway/provider/model status, recent conversations, recent changes, and next actions.
+- Chat: conversation strip, chat workspace, Provider/model selector, context selector, composer, message bubbles, and hidden-on-narrow comparison detail.
+- Models: Provider/model switcher, default model context, Provider health, test call entry, OpenAI-compatible/DeepSeek/Claude-compatible/local model boundaries.
+- Gateway: local developer gateway console, bind address, model mapping, key lifecycle, logs/usage, health, and copyable OpenAI-compatible endpoint examples.
+- Knowledge: source import, parse/chunk/index state, lexical retrieval test, citation preview, and explicit unimplemented vector/OCR/rerank boundaries.
+- Tools and Agent: MCP registration, permission state, Agent dry-run, approval and sandbox boundaries, execution run preview.
+- Data: import preflight, export/backup/restore/rollback/diagnostics as maintenance tools, with destructive cleanup kept environment-limited.
+- Settings: theme, security, audit, local data, privacy, evaluation, and about surfaces in desktop settings form.
+
+`impeccable` conclusion:
+
+- Old UI failed because it was structurally an admin shell, not because of theme details.
+- CC Switch / CCSwitch style is the correct reference because NexaChat is primarily a local AI configuration and execution switcher.
+- The new UI is lightweight desktop-tool oriented: rail navigation, direct switch rows, compact status pills, low-noise panels, and immediate actions.
+- Deleted old UI files and no fallback AppShell remains.
+- Business contracts are kept in shared/main layers and real IPC/data paths.
+- Every core renderer page was rebuilt.
+- Dry-run, reserved, environment-limited, unconfigured, and required-permission states are visible and not disguised as complete.
+- Current smoke coverage checks that the UI no longer exposes the old admin shell structures.
+
+Verification results:
+
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test`: passed, 19 files / 58 tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run test:ui-smoke`: passed, 8 Playwright tests.
+- `npm.cmd run test:electron-smoke`: passed.
+- `npm.cmd run scan:hardcode`: passed.
+- `npm.cmd run scan:duplicates`: passed.
+- `npm.cmd run scan:quality`: passed.
+- `git diff --check`: passed with LF/CRLF warnings only.
+- `npm.cmd run package:release`: passed.
+- `npm.cmd run test:package-smoke`: passed.
+- `npm.cmd run test:installer-smoke`: passed.
+- `npm.cmd run shortcut:package`: passed.
+- `npm.cmd run test:shortcut-readback:packaged`: passed.
+- `npm.cmd run test:desktop-entry`: passed.
+
+Remaining issues:
+
+- Some historical documentation still contains old root-path references and mojibake text; this rebuild did not rewrite historical docs.
+- Real upstream Provider execution, full vector RAG/OCR/rerank, dangerous-tool MCP execution, and autonomous Agent sandbox execution remain outside this UI rebuild and are still clearly marked as unavailable or dry-run where exposed.
+- The new UI is validated by smoke checks, but a future visual review should still compare screenshots at 1040, 1280, 1440, and wide desktop sizes after users spend time in the app.
+
+Next UI polish:
+
+- Add screenshots to the UI acceptance record for light, dark, and system theme at multiple widths.
+- Tighten Data and Settings pages further into task-first maintenance flows.
+- Add more explicit empty, loading, error, and disabled substates for Provider, Gateway, Knowledge, MCP, and Agent actions.

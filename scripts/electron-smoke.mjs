@@ -31,10 +31,10 @@ window.on('pageerror', (error) => {
 });
 
 try {
-  await window.locator('.app-shell').waitFor({ timeout: 20_000 });
+  await window.locator('.app-frame').waitFor({ timeout: 20_000 });
   await window.waitForFunction(() => document.readyState !== 'loading', undefined, { timeout: 5_000 }).catch(() => undefined);
-  await window.getByText('NexaChat', { exact: true }).first().waitFor({ timeout: 5_000 });
-  await window.locator('.module-nav-item').first().waitFor({ timeout: 5_000 });
+  await window.locator('.brand-mark').waitFor({ timeout: 5_000 });
+  await window.locator('.rail-item').first().waitFor({ timeout: 5_000 });
   await window.locator('main [role="tabpanel"][data-module="workspace"][data-tab="overview"]').waitFor({ timeout: 5_000 });
 
   const preloadResult = await window.evaluate(async () => {
@@ -46,7 +46,7 @@ try {
     return {
       ok: Boolean(snapshot?.dashboard?.workspace?.id),
       workspaceId: snapshot?.dashboard?.workspace?.id ?? null,
-      moduleCountHint: document.querySelectorAll('.module-nav-item').length,
+      moduleCountHint: document.querySelectorAll('.rail-item').length,
     };
   });
   if (!preloadResult.ok) {

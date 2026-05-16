@@ -1,10 +1,10 @@
+import { Archive, DatabaseBackup, FileCheck, RotateCcw, ShieldAlert } from 'lucide-react';
 import { useState } from 'react';
-import { DATA_CONFIRMATION_PHRASES } from '../../shared/dataRuntime';
+import { DATA_CONFIRMATION_PHRASES, DATA_WIZARD_STEPS } from '../../shared/dataRuntime';
 import { FORM_DEFAULTS } from '../../shared/uiCopy';
-import { FormField } from '../components/ui';
+import { ActivityList, CommandButton, ConfigDetail, ConfigList, CopyableCommand, DataRows, EmptyBlock, Field, InlineNotice, StatusPillLite, ToolSection } from '../components/AppFrame';
 import { useI18n } from '../i18n';
-import type { TabPageProps } from './shared';
-import { DataTable, PlannedTabPlaceholder, StateBadge, TabPanel } from './shared';
+import { formatDate, healthState, statusLabel, TabPanel, type TabPageProps } from './shared';
 
 export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
   const { t } = useI18n();
@@ -12,254 +12,153 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
   const [backupPassphrase, setBackupPassphrase] = useState<string>(FORM_DEFAULTS.backupPassphrase);
   const [restorePassphrase, setRestorePassphrase] = useState<string>(FORM_DEFAULTS.restorePassphrase);
   const [rollbackPhrase, setRollbackPhrase] = useState<string>(FORM_DEFAULTS.rollbackPhrase);
-  const latestReadyImport = snapshot.importExportResults.find((item) => item.action === 'import' && item.status === 'ready');
+  const latestReadyImport = snapshot.importExportResults.find((result) => result.action === 'import' && result.status === 'ready');
   const latestBackup = snapshot.dataBackups[0];
-  const latestRollback = snapshot.rollbackRecords.find((record) => record.state === 'available');
+  const rollback = snapshot.rollbackRecords.find((record) => record.state === 'available') ?? snapshot.rollbackRecords[0];
 
   if (activeTab.id === 'backup') {
     return (
-      <TabPanel moduleId="data" tab={activeTab}>
-        <section className="two-column">
-          <div className="panel">
-            <h2>{t('data.backup.title')}</h2>
-            <p>{t('data.backup.note')}</p>
-            <FormField label={t('data.backup.passphrase')} help={t('data.backup.passphrase.help')}>
-              <input
-                aria-label={t('data.backup.passphrase')}
-                value={backupPassphrase}
-                onChange={(event) => setBackupPassphrase(event.target.value)}
-              />
-            </FormField>
-            <div className="button-row">
-              <button type="button" onClick={() => onAction(t('data.toast.snapshotCreated'), () => api.createSnapshot())}>
-                {t('data.snapshots.create')}
-              </button>
-              <button type="button" onClick={() => onAction(t('data.toast.exportCreated'), () => api.exportDataPackage({ profile: 'metadata-redacted' }))}>
-                {t('data.export.create')}
-              </button>
-              <button type="button" disabled={backupPassphrase.trim().length < 8} title={backupPassphrase.trim().length < 8 ? t('data.backup.passphrase.required') : undefined} onClick={() => onAction(t('data.toast.backupCreated'), () => api.createEncryptedBackup({ passphrase: backupPassphrase, profile: 'encrypted-full' }))}>
+      <TabPanel moduleId="data" tab={activeTab} className="tool-layout">
+        <ConfigList title={t('data.backup.title')} description={activeTab.featureBoundary}>
+          <ToolSection title={t('data.backup.create')} description={t('data.backup.note')}>
+            <div className="form-stack">
+              <Field label={t('data.backup.passphrase')}>
+                <input value={backupPassphrase} onChange={(event) => setBackupPassphrase(event.target.value)} type="password" />
+              </Field>
+              <CommandButton variant="primary" icon={<Archive size={15} />} disabled={!backupPassphrase} onClick={() => onAction(t('data.toast.backupCreated'), () => api.createEncryptedBackup({ profile: 'encrypted-full', passphrase: backupPassphrase }))}>
                 {t('data.backup.create')}
-              </button>
+              </CommandButton>
             </div>
-          </div>
-          <div className="panel">
-            <h2>{t('data.backup.records')}</h2>
-            <DataTable
-              columns={[t('data.columns.action'), t('data.columns.status'), t('data.columns.profile'), t('data.columns.encrypted'), t('data.columns.hash')]}
-              rows={snapshot.dataMobilityJobs
-                .filter((item) => item.operationKind === 'snapshot' || item.operationKind === 'export' || item.operationKind === 'encrypted-backup')
-                .map((item) => [
-                  item.operationKind,
-                  <StateBadge key={`${item.id}-status`} label={item.status} tone={item.status === 'failed' ? 'error' : item.status === 'ready' ? 'warning' : 'success'} />,
-                  item.profile ?? '-',
-                  item.encrypted ? t('common.yes') : t('common.no'),
-                  item.manifestHash ? <code key={`${item.id}-hash`}>{item.manifestHash.slice(0, 12)}</code> : '-',
-                ])}
-            />
-          </div>
-        </section>
+          </ToolSection>
+          <ActivityList
+            empty={t('shared.empty.reason')}
+            items={snapshot.dataBackups.slice(0, 8).map((backup) => ({
+              title: backup.profile,
+              meta: `${backup.manifestHash.slice(0, 12)} / ${formatDate(backup.createdAt, t)}`,
+              state: backup.encrypted ? 'ready' : 'warning',
+            }))}
+          />
+        </ConfigList>
+        <ConfigDetail title={t('data.export.create')} description={t('nav.data.backup.boundary')}>
+          <CommandButton icon={<DatabaseBackup size={15} />} onClick={() => onAction(t('data.toast.exportCreated'), () => api.exportDataPackage({ profile: 'metadata-redacted' }))}>{t('data.export.create')}</CommandButton>
+          <DataRows rows={[
+            { label: t('data.backup.records'), value: latestBackup?.profile ?? t('common.none') },
+            { label: t('data.backup.passphrase'), value: latestBackup?.encrypted ? t('common.yes') : t('common.no') },
+          ]} />
+        </ConfigDetail>
       </TabPanel>
     );
   }
 
   if (activeTab.id === 'restore') {
     return (
-      <TabPanel moduleId="data" tab={activeTab}>
-        <section className="two-column">
-          <div className="panel">
-            <h2>{t('data.restore.title')}</h2>
-            <p>{t('data.restore.note')}</p>
-            <FormField label={t('data.restore.passphrase')} help={t('data.restore.passphrase.help')}>
-              <input
-                aria-label={t('data.restore.passphrase')}
-                value={restorePassphrase}
-                onChange={(event) => setRestorePassphrase(event.target.value)}
-              />
-            </FormField>
-            <button
-              type="button"
-              className="primary-button"
-              disabled={!latestBackup || restorePassphrase.trim().length < 8}
-              title={!latestBackup ? t('data.restore.noBackup') : restorePassphrase.trim().length < 8 ? t('data.restore.passphrase.required') : undefined}
-              onClick={() => latestBackup && onAction(t('data.toast.restoreCreated'), () => api.createRestorePreflight({ backupId: latestBackup.id, passphrase: restorePassphrase }))}
-            >
-              {t('data.restore.preflight')}
-            </button>
-          </div>
-          <div className="panel">
-            <h2>{t('data.restore.records')}</h2>
-            <DataTable
-              columns={[t('data.columns.action'), t('data.columns.status'), t('data.columns.summary'), t('data.columns.conflicts'), t('data.columns.confirmation'), t('data.columns.encrypted')]}
-              rows={snapshot.dataMobilityJobs
-                .filter((item) => item.operationKind === 'restore-preflight')
-                .map((item) => [
-                  item.operationKind,
-                  <StateBadge key={`${item.id}-status`} label={item.status} tone={item.status === 'failed' ? 'error' : item.status === 'ready' ? 'warning' : 'success'} />,
-                  item.summary,
-                  item.conflictCount,
-                  item.requiresConfirmation ? t('common.required') : t('common.no'),
-                  item.encrypted ? t('common.yes') : t('common.no'),
-                ])}
-            />
-          </div>
-        </section>
+      <TabPanel moduleId="data" tab={activeTab} className="tool-layout">
+        <ConfigList title={t('data.restore.title')} description={activeTab.featureBoundary}>
+          <ToolSection title={t('data.restore.preflight')} description={t('data.restore.note')}>
+            <div className="form-stack">
+              <Field label={t('data.restore.passphrase')}>
+                <input value={restorePassphrase} onChange={(event) => setRestorePassphrase(event.target.value)} type="password" />
+              </Field>
+              <CommandButton variant="primary" icon={<FileCheck size={15} />} disabled={!latestBackup || !restorePassphrase} onClick={() => onAction(t('data.toast.restoreCreated'), () => api.createRestorePreflight({ backupId: latestBackup?.id, passphrase: restorePassphrase }))}>
+                {t('data.restore.preflight')}
+              </CommandButton>
+            </div>
+          </ToolSection>
+          <JobList snapshot={snapshot} />
+        </ConfigList>
+        <ConfigDetail title={t('data.conflicts.title')} description={t('nav.data.restore.boundary')}>
+          <ActivityList empty={t('shared.empty.reason')} items={snapshot.dataConflicts.slice(0, 8).map((conflict) => ({ title: conflict.importName, meta: conflict.type, state: conflict.resolved ? 'ready' : 'warning' }))} />
+        </ConfigDetail>
       </TabPanel>
     );
   }
 
   if (activeTab.id === 'rollback') {
     return (
-      <TabPanel moduleId="data" tab={activeTab}>
-        <section className="two-column">
-          <div className="panel">
-            <h2>{t('data.rollback.title')}</h2>
-            <p>{t('data.rollback.note')}</p>
-            <FormField label={t('data.rollback.confirmPhrase')} help={t('data.rollback.confirmPhrase.help')}>
-              <input
-                aria-label={t('data.rollback.confirmPhrase')}
-                value={rollbackPhrase}
-                onChange={(event) => setRollbackPhrase(event.target.value)}
-              />
-            </FormField>
-            <button
-              type="button"
-              className="primary-button"
-              disabled={!latestRollback || rollbackPhrase !== DATA_CONFIRMATION_PHRASES.rollback}
-              title={!latestRollback ? t('data.rollback.noRecord') : rollbackPhrase !== DATA_CONFIRMATION_PHRASES.rollback ? t('data.rollback.confirmPhrase.required') : undefined}
-              onClick={() => latestRollback && onAction(t('data.toast.rollbackApplied'), () => api.applyDataRollback({ rollbackId: latestRollback.id, confirmationPhrase: rollbackPhrase }))}
-            >
+      <TabPanel moduleId="data" tab={activeTab} className="tool-layout">
+        <ConfigList title={t('data.rollback.title')} description={activeTab.featureBoundary}>
+          <InlineNotice tone="warning" title={t('common.required')} detail={DATA_CONFIRMATION_PHRASES.rollback} />
+          <div className="form-stack">
+            <Field label={t('data.rollback.confirmPhrase')}>
+              <input value={rollbackPhrase} onChange={(event) => setRollbackPhrase(event.target.value)} />
+            </Field>
+            <CommandButton variant="danger" icon={<RotateCcw size={15} />} disabled={!rollback || rollbackPhrase !== DATA_CONFIRMATION_PHRASES.rollback} onClick={() => onAction(t('data.toast.rollbackApplied'), () => api.applyDataRollback({ rollbackId: rollback?.id ?? '', confirmationPhrase: rollbackPhrase }))}>
               {t('data.rollback.apply')}
-            </button>
+            </CommandButton>
           </div>
-          <div className="panel">
-            <h2>{t('data.rollback.records')}</h2>
-            <DataTable
-              columns={[t('data.columns.status'), t('data.columns.summary'), t('data.columns.rollbackState'), t('data.columns.time')]}
-              rows={snapshot.rollbackRecords.map((record) => {
-                const job = snapshot.dataMobilityJobs.find((item) => item.id === record.jobId);
-                return [
-                  record.state,
-                  job?.summary ?? record.jobId,
-                  record.rollbackSnapshotId ?? '-',
-                  new Date(record.createdAt).toLocaleString(),
-                ];
-              })}
-            />
-          </div>
-        </section>
+          <ActivityList empty={t('shared.empty.reason')} items={snapshot.rollbackRecords.map((record) => ({ title: record.id, meta: statusLabel(record.state, t), state: healthState(record.state) }))} />
+        </ConfigList>
+        <ConfigDetail title={t('data.rollback.title')} description={t('nav.data.rollback.boundary')}>
+          <DataRows rows={[
+            { label: t('common.available'), value: snapshot.rollbackRecords.filter((record) => record.state === 'available').length },
+            { label: t('common.completed'), value: snapshot.rollbackRecords.filter((record) => record.state === 'applied').length },
+          ]} />
+        </ConfigDetail>
       </TabPanel>
     );
   }
 
-  if (activeTab.id === 'diagnostics') {
+  if (activeTab.id === 'diagnostics' || activeTab.id === 'cleanup') {
     return (
-      <TabPanel moduleId="data" tab={activeTab}>
-        <section className="two-column">
-          <div className="panel">
-            <h2>{t('data.diagnostics.title')}</h2>
-            <p>{t('data.diagnostics.note')}</p>
-            <button type="button" className="primary-button" onClick={() => onAction(t('data.toast.diagnosticsExported'), () => api.exportDiagnostics())}>
-              {t('data.diagnostics.export')}
-            </button>
-          </div>
-          <div className="panel">
-            <h2>{t('data.diagnostics.records')}</h2>
-            <DataTable
-              columns={[t('data.columns.action'), t('data.columns.status'), t('data.columns.summary'), t('data.columns.redacted'), t('data.columns.time')]}
-              rows={snapshot.importExportResults
-                .filter((item) => item.action === 'export')
-                .map((item) => [
-                  item.action,
-                  <StateBadge key={`${item.id}-status`} label={item.status} tone={item.status === 'failed' ? 'error' : item.status === 'ready' ? 'warning' : 'success'} />,
-                  item.summary,
-                  item.redacted ? t('common.yes') : t('common.no'),
-                  new Date(item.createdAt).toLocaleString(),
-                ])}
-            />
-          </div>
-        </section>
-      </TabPanel>
-    );
-  }
-
-  if (activeTab.id === 'cleanup') {
-    return (
-      <TabPanel moduleId="data" tab={activeTab}>
-        <PlannedTabPlaceholder
-          tab={activeTab}
-          featureName={t('data.cleanup.feature')}
-          why={t('data.cleanup.why')}
-          dependency={t('data.cleanup.dependency')}
-        />
+      <TabPanel moduleId="data" tab={activeTab} className="tool-layout">
+        <ConfigList title={activeTab.label} description={activeTab.featureBoundary}>
+          <CommandButton variant="primary" icon={<ShieldAlert size={15} />} onClick={() => onAction(t('data.toast.diagnosticsExported'), () => api.exportDiagnostics())}>
+            {t('data.diagnostics.export')}
+          </CommandButton>
+          <JobList snapshot={snapshot} />
+        </ConfigList>
+        <ConfigDetail title={t('stage.environment-limited')} description={t('nav.data.cleanup.boundary')}>
+          <InlineNotice tone="warning" title={t('stage.environment-limited')} detail={activeTab.featureBoundary} />
+        </ConfigDetail>
       </TabPanel>
     );
   }
 
   return (
-    <TabPanel moduleId="data" tab={activeTab}>
-      <section className="panel">
-        <div className="panel-header">
-          <div>
-            <h2>{t('data.import.title')}</h2>
-            <p>{t('data.import.note')}</p>
+    <TabPanel moduleId="data" tab={activeTab} className="tool-layout">
+      <ConfigList title={t('data.import.title')} description={activeTab.featureBoundary}>
+        <ToolSection title={t('data.import.preflight')} description={t('data.import.note')}>
+          <div className="wizard-steps">
+            {DATA_WIZARD_STEPS.map((step) => <span key={step}>{step}</span>)}
           </div>
-          <button type="button" className="primary-button" onClick={() => onAction(t('data.toast.importPreflighted'), () => api.validateImportManifest(manifestText))}>
-            {t('data.import.preflight')}
-          </button>
-        </div>
-        <div className="wizard-steps">
-          {[
-            t('data.import.steps.detect'),
-            t('data.import.steps.preview'),
-            t('data.import.steps.mapFields'),
-            t('data.import.steps.conflictReview'),
-            t('data.import.steps.secretHandling'),
-            t('data.import.steps.confirm'),
-            t('data.import.steps.result'),
-          ].map((step, index) => (
-            <span key={step}>{index + 1}. {step}</span>
-          ))}
-        </div>
-        <textarea className="manifest-input" value={manifestText} onChange={(event) => setManifestText(event.target.value)} aria-label={t('data.import.aria')} />
-        <p>{t('data.import.compatNote')}</p>
-      </section>
-      <section className="two-column">
-        <div className="panel">
-          <h2>{t('data.import.confirmTitle')}</h2>
-          <div className="button-row">
-            <button type="button" disabled={!latestReadyImport} onClick={() => latestReadyImport && onAction(t('data.toast.importApplied'), () => api.applyImportPlan(latestReadyImport.id, { mode: 'apply-metadata', conflictStrategy: 'import-as-new', confirmationPhrase: DATA_CONFIRMATION_PHRASES.applyImport }))}>
-              {t('data.import.apply')}
-            </button>
+          <div className="form-stack">
+            <Field label={t('data.import.aria')}>
+              <textarea value={manifestText} onChange={(event) => setManifestText(event.target.value)} aria-label={t('data.import.aria')} />
+            </Field>
+            <span className="row-actions">
+              <CommandButton variant="primary" icon={<FileCheck size={15} />} disabled={!manifestText.trim()} onClick={() => onAction(t('data.toast.importPreflighted'), () => api.validateImportManifest(manifestText))}>
+                {t('data.import.preflight')}
+              </CommandButton>
+              <CommandButton icon={<DatabaseBackup size={15} />} disabled={!latestReadyImport} onClick={() => onAction(t('data.toast.importApplied'), () => api.applyImportPlan(latestReadyImport?.id ?? '', { mode: 'apply-metadata', confirmationPhrase: DATA_CONFIRMATION_PHRASES.applyImport }))}>
+                {t('data.import.apply')}
+              </CommandButton>
+            </span>
           </div>
-          <p>{t('data.import.confirmNote')}</p>
-        </div>
-        <div className="panel">
-          <h2>{t('data.import.records')}</h2>
-          <DataTable
-            columns={[t('data.columns.action'), t('data.columns.status'), t('data.columns.summary'), t('data.columns.conflicts'), t('data.columns.confirmation'), t('data.columns.redacted')]}
-            rows={snapshot.importExportResults.filter((item) => item.action === 'import').map((item) => [
-              item.action,
-              <StateBadge key={`${item.id}-status`} label={item.status} tone={item.status === 'failed' ? 'error' : item.status === 'ready' ? 'warning' : 'success'} />,
-              item.summary,
-              item.conflictCount,
-              item.requiresConfirmation ? t('common.required') : t('common.no'),
-              item.redacted ? t('common.yes') : t('common.no'),
-            ])}
-          />
-        </div>
-        <div className="panel">
-          <h2>{t('data.conflicts.title')}</h2>
-          <DataTable
-            columns={[t('data.columns.action'), t('data.columns.conflictType'), t('data.columns.strategy'), t('data.columns.summary')]}
-            rows={snapshot.dataConflicts.map((conflict) => [
-              conflict.entityKind,
-              conflict.type,
-              conflict.strategy,
-              conflict.importName,
-            ])}
-          />
-        </div>
-      </section>
+        </ToolSection>
+        <JobList snapshot={snapshot} />
+      </ConfigList>
+      <ConfigDetail title={t('data.import.title')} description={t('nav.data.import.boundary')}>
+        <CopyableCommand value={DATA_CONFIRMATION_PHRASES.applyImport} label={t('gateway.copy')} />
+        <DataRows rows={[
+          { label: t('data.conflicts.title'), value: snapshot.dataConflicts.length },
+          { label: t('data.backup.title'), value: snapshot.dataBackups.length },
+          { label: t('data.migration.summary.round12'), value: snapshot.migrationRuns[0]?.status ?? t('common.none') },
+        ]} />
+      </ConfigDetail>
     </TabPanel>
   );
+}
+
+function JobList({ snapshot }: { snapshot: TabPageProps['snapshot'] }) {
+  const { t } = useI18n();
+  const jobs = snapshot.dataMobilityJobs.length > 0 ? snapshot.dataMobilityJobs.map((job) => ({
+    title: job.operationKind,
+    meta: `${statusLabel(job.status, t)} / ${formatDate(job.createdAt, t)}`,
+    state: healthState(job.status),
+  })) : snapshot.importExportResults.slice(0, 10).map((result) => ({
+    title: result.action,
+    meta: `${statusLabel(result.status, t)} / ${result.summary}`,
+    state: healthState(result.status),
+  }));
+  return <ActivityList empty={t('shared.empty.reason')} items={jobs} />;
 }

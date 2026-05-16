@@ -1,11 +1,19 @@
+import { Activity, Plus, Server, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Plus } from 'lucide-react';
-import { DEFAULT_MODEL_FORM, DEFAULT_PROVIDER_FORM } from '../../shared/providerCatalog';
 import type { ProviderType } from '../../shared/types';
-import { FormField, MetricTile, PageSection, ProviderCard } from '../components/ui';
+import { DEFAULT_MODEL_FORM, DEFAULT_PROVIDER_FORM, PROVIDER_CATALOG } from '../../shared/providerCatalog';
+import { CommandButton, ConfigDetail, ConfigList, DataRows, EmptyBlock, Field, InlineNotice, StatusPillLite, ToolSection } from '../components/AppFrame';
 import { useI18n } from '../i18n';
-import type { TabPageProps } from './shared';
-import { DataTable, StateBadge, TabPanel, getDefaultModel, healthTone, modelCapabilityLabels, providerTypeLabel, providerTypes, statusLabel } from './shared';
+import {
+  getDefaultModel,
+  getDefaultProvider,
+  healthState,
+  modelCapabilityLabels,
+  providerTypeLabel,
+  statusLabel,
+  TabPanel,
+  type TabPageProps,
+} from './shared';
 
 export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
   const { t } = useI18n();
@@ -16,6 +24,8 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
   const [modelName, setModelName] = useState(DEFAULT_MODEL_FORM.name);
   const [selectedProviderId, setSelectedProviderId] = useState(snapshot.providers[0]?.id ?? '');
   const defaultModel = getDefaultModel(snapshot);
+  const defaultProvider = getDefaultProvider(snapshot);
+  const selectedProvider = snapshot.providers.find((provider) => provider.id === selectedProviderId) ?? snapshot.providers[0];
 
   useEffect(() => {
     if (!selectedProviderId && snapshot.providers[0]) {
@@ -25,163 +35,171 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
 
   if (activeTab.id === 'catalog') {
     return (
-      <TabPanel moduleId="models" tab={activeTab}>
-        <section className="two-column">
-          <div className="panel">
-            <h2>{t('models.create.title')}</h2>
-            <p>{t('models.create.note')}</p>
-            <div className="form-grid">
-              <FormField label={t('models.columns.provider')}>
+      <TabPanel moduleId="models" tab={activeTab} className="tool-layout">
+        <ConfigList title={t('models.create.title')} description={activeTab.description}>
+          <ToolSection title={t('models.modelName')} description={t('models.modelName.help')}>
+            <div className="form-stack">
+            <Field label={t('models.columns.provider')}>
                 <select value={selectedProviderId} onChange={(event) => setSelectedProviderId(event.target.value)}>
                   {snapshot.providers.map((provider) => (
-                    <option key={provider.id} value={provider.id}>
-                      {provider.name}
-                    </option>
+                  <option value={provider.id} key={provider.id}>{provider.name}</option>
                   ))}
                 </select>
-              </FormField>
-              <FormField label={t('models.modelName')} help={t('models.modelName.help')}>
+              </Field>
+              <Field label={t('models.modelName')}>
                 <input value={modelName} onChange={(event) => setModelName(event.target.value)} placeholder={t('models.modelName.placeholder')} />
-              </FormField>
+              </Field>
+              <CommandButton
+                variant="primary"
+                icon={<Plus size={15} />}
+                disabled={!selectedProviderId || !modelName.trim()}
+                onClick={() => onAction(t('models.toast.added'), () => api.createModel({ providerId: selectedProviderId, name: modelName.trim() }))}
+              >
+                {t('models.create.title')}
+              </CommandButton>
             </div>
-            <button
-              type="button"
-              className="primary-button"
-              disabled={!modelName.trim() || !(selectedProviderId || snapshot.providers[0]?.id)}
-              onClick={() =>
-                onAction(t('models.toast.added'), () =>
-                  api.createModel({ providerId: selectedProviderId || snapshot.providers[0]?.id, name: modelName, supportsStreaming: true }),
-                )
-              }
-            >
-              <Plus size={16} /> {t('models.addModel')}
-            </button>
+          </ToolSection>
+
+          <div className="config-items">
+            {snapshot.models.map((model) => (
+              <div className={`config-row ${model.id === defaultModel?.id ? 'is-active' : ''}`} key={model.id}>
+                <span>
+                  <strong>{model.displayName}</strong>
+                  <small>{modelCapabilityLabels(model, t)}</small>
+                </span>
+                <StatusPillLite label={statusLabel(model.healthStatus, t)} state={healthState(model.healthStatus)} />
+              </div>
+            ))}
           </div>
-          <div className="panel">
-            <h2>{t('models.catalog.title')}</h2>
-            <DataTable
-              columns={[t('models.columns.model'), t('models.columns.provider'), t('models.columns.context'), t('models.columns.capabilities'), t('models.columns.health')]}
-              rows={snapshot.models.map((model) => [
-                model.displayName,
-                snapshot.providers.find((provider) => provider.id === model.providerId)?.name ?? model.providerId,
-                model.contextWindow,
-                modelCapabilityLabels(model, t),
-                <StateBadge key={`${model.id}-health`} label={statusLabel(model.healthStatus, t)} tone={healthTone(model.healthStatus)} />,
-              ])}
-            />
-          </div>
-        </section>
+        </ConfigList>
+        <ConfigDetail title={t('models.router.title')} description={t('models.router.note')}>
+          <DataRows
+            rows={[
+              { label: t('gateway.defaultModel'), value: defaultModel?.displayName ?? t('common.notConfigured') },
+              { label: t('models.providerList'), value: selectedProvider?.name ?? t('common.notConfigured') },
+              { label: t('stage.environment-limited'), value: t('models.router.note') },
+            ]}
+          />
+        </ConfigDetail>
       </TabPanel>
     );
   }
 
   if (activeTab.id === 'router') {
     return (
-      <TabPanel moduleId="models" tab={activeTab}>
-        <section className="two-column">
-          <div className="panel">
-            <h2>{t('models.router.title')}</h2>
-            <p>{t('models.router.note')}</p>
-            <dl className="detail-list">
-              <div><dt>{t('models.defaultProvider')}</dt><dd>{snapshot.providers.find((provider) => provider.id === snapshot.dashboard.workspace.defaultProviderId)?.name ?? t('common.notConfigured')}</dd></div>
-              <div><dt>{t('models.defaultModel')}</dt><dd>{defaultModel?.displayName ?? t('common.notConfigured')}</dd></div>
-              <div><dt>{t('models.fallbackLabel')}</dt><dd>{t('models.fallback')}</dd></div>
-              <div><dt>{t('models.ruleEditor')}</dt><dd>{t('models.ruleEditor.note')}</dd></div>
-            </dl>
+      <TabPanel moduleId="models" tab={activeTab} className="tool-layout">
+        <ConfigList title={t('models.router.title')} description={activeTab.featureBoundary}>
+          <div className="route-chain">
+            <div><span>1</span><strong>{t('chat.modelSelect.aria')}</strong><small>{defaultModel?.displayName ?? t('common.notConfigured')}</small></div>
+            <div><span>2</span><strong>{t('models.providerList')}</strong><small>{defaultProvider?.name ?? t('common.notConfigured')}</small></div>
+            <div><span>3</span><strong>{t('gateway.overview.title')}</strong><small>{snapshot.dashboard.gatewayStatus.running ? t('shell.gateway.running') : t('shell.gateway.stopped')}</small></div>
           </div>
-          <div className="panel">
-            <h2>{t('models.healthTest')}</h2>
-            <DataTable
-              columns={[t('models.columns.provider'), t('models.columns.health'), t('models.columns.lastChecked'), t('gateway.columns.actions')]}
-              rows={snapshot.providers.map((provider) => [
-                provider.name,
-                <StateBadge key={`${provider.id}-health`} label={statusLabel(provider.healthStatus, t)} tone={healthTone(provider.healthStatus)} />,
-                provider.lastCheckedAt ? new Date(provider.lastCheckedAt).toLocaleString() : t('common.unchecked'),
-                <button type="button" key={provider.id} onClick={() => onAction(t('models.toast.tested'), () => api.testProvider(provider.id))}>
-                  {t('models.testConnection')}
-                </button>,
-              ])}
-            />
-          </div>
-        </section>
+          <InlineNotice tone="warning" title={t('stage.environment-limited')} detail={t('models.router.note')} />
+        </ConfigList>
+        <ConfigDetail title={t('observability.health.title')} description={t('nav.models.router.description')}>
+          <ActivityRows snapshot={snapshot} />
+        </ConfigDetail>
       </TabPanel>
     );
   }
 
   return (
-    <TabPanel moduleId="models" tab={activeTab}>
-      <section className="models-command-center">
-        <MetricTile label={t('models.providerList')} value={snapshot.providers.length} detail={t('dashboard.metric.enabled', { count: snapshot.providers.filter((provider) => provider.enabled).length })} tone="info" />
-        <MetricTile label={t('models.catalog.title')} value={snapshot.models.length} detail={t('dashboard.metric.healthy', { count: snapshot.models.filter((model) => model.healthStatus === 'healthy').length })} tone="success" />
-        <MetricTile label={t('models.defaultModel')} value={defaultModel?.displayName ?? t('common.notConfigured')} detail={snapshot.providers.find((provider) => provider.id === snapshot.dashboard.workspace.defaultProviderId)?.name ?? t('common.notConfigured')} tone={defaultModel ? 'neutral' : 'warning'} />
-      </section>
+    <TabPanel moduleId="models" tab={activeTab} className="tool-layout">
+      <ConfigList title={t('models.provider.title')} description={activeTab.featureBoundary}>
+        <section className="current-config-strip">
+          <div>
+            <span className="eyebrow">{t('dashboard.defaultModel')}</span>
+            <strong>{defaultModel?.displayName ?? t('common.notConfigured')}</strong>
+            <small>{defaultProvider?.name ?? t('common.notConfigured')}</small>
+          </div>
+          <div>
+            <span className="eyebrow">{t('models.providerList')}</span>
+            <strong>{snapshot.providers.length}</strong>
+            <small>{t('common.countConfigured', { count: snapshot.providers.filter((provider) => provider.secretRef).length })}</small>
+          </div>
+          <div>
+            <span className="eyebrow">{t('observability.columns.status')}</span>
+            <strong>{snapshot.providers.filter((provider) => provider.healthStatus === 'healthy').length}</strong>
+            <small>{t('common.countAvailable', { count: snapshot.models.filter((model) => model.enabled).length })}</small>
+          </div>
+        </section>
 
-      <section className="two-column models-two-column">
-        <PageSection title={t('models.provider.title')} description={t('models.provider.note')} className="provider-setup-panel">
-          <div className="form-grid">
-            <FormField label={t('models.name')} help={t('models.name.help')}>
+        <ToolSection title={t('models.provider.title')} description={t('models.provider.note')}>
+          <div className="form-stack">
+            <Field label={t('models.name')}>
               <input value={providerName} onChange={(event) => setProviderName(event.target.value)} placeholder={t('models.name.placeholder')} />
-            </FormField>
-            <FormField label={t('models.type')}>
+            </Field>
+            <Field label={t('models.type')}>
               <select value={providerType} onChange={(event) => setProviderType(event.target.value as ProviderType)}>
-                {providerTypes.map((type) => (
-                  <option key={type} value={type}>
-                    {providerTypeLabel(type, t)}
-                  </option>
+                {PROVIDER_CATALOG.map((entry) => (
+                  <option key={entry.type} value={entry.type}>{t(entry.labelKey)}</option>
                 ))}
               </select>
-            </FormField>
-            <FormField label={t('models.baseUrl')} help={t('models.baseUrl.help')}>
+            </Field>
+            <Field label={t('models.baseUrl')}>
               <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder={t('models.baseUrl.placeholder')} />
-            </FormField>
-            <FormField label={t('models.apiKey')} help={t('models.apiKey.help')}>
-              <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" placeholder={t('models.apiKey.placeholder')} />
-            </FormField>
-          </div>
-          <div className="button-row">
-            <button
-              type="button"
-              className="primary-button"
+            </Field>
+            <Field label={t('models.apiKey')}>
+              <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={t('models.apiKey.placeholder')} type="password" />
+            </Field>
+            <CommandButton
+              variant="primary"
+              icon={<Server size={15} />}
               disabled={!providerName.trim() || !baseUrl.trim()}
-              onClick={() =>
-                onAction(t('models.toast.saved'), () =>
-                  api.createProvider({ name: providerName, type: providerType, baseUrl, apiKey: apiKey || undefined }),
-                )
-              }
+              onClick={() => onAction(t('models.toast.saved'), () => api.createProvider({ name: providerName.trim(), type: providerType, baseUrl: baseUrl.trim(), apiKey: apiKey.trim() || undefined }))}
             >
-              <Plus size={16} /> {t('models.addProvider')}
-            </button>
+              {t('models.addProvider')}
+            </CommandButton>
           </div>
-        </PageSection>
-        <PageSection title={t('models.providerList')} description={t('models.router.note')} className="provider-list-panel">
-          <div className="provider-card-list">
-            {snapshot.providers.map((provider) => (
-              <ProviderCard
-                key={provider.id}
-                name={provider.name}
-                type={providerTypeLabel(provider.type, t)}
-                baseUrl={provider.baseUrl}
-                secretState={provider.secretRef ? t('common.saved') : t('common.notConfigured')}
-                secretLabel={t('models.columns.secretRef')}
-                baseUrlLabel={t('models.columns.baseUrl')}
-                healthLabel={t('models.columns.health')}
-                health={<StateBadge label={provider.healthStatus} tone={healthTone(provider.healthStatus)} />}
-                actions={
-                  <button type="button" onClick={() => onAction(t('models.toast.tested'), () => api.testProvider(provider.id))}>
-                    {t('models.testConnection')}
-                  </button>
-                }
-              />
-            ))}
-          </div>
-          {snapshot.providers.length === 0 ? (
-            <div className="empty-state">
-              <h3>{t('dashboard.setup.providerMissing')}</h3>
-              <p>{t('dashboard.defaultModel.missing')}</p>
+        </ToolSection>
+
+        <div className="config-items provider-switch-list">
+          {snapshot.providers.length > 0 ? snapshot.providers.map((provider) => (
+            <div className={`config-row ${provider.id === defaultProvider?.id ? 'is-active' : ''}`} key={provider.id}>
+              <span>
+                <strong>{provider.name}</strong>
+                <small>{providerTypeLabel(provider.type, t)} / {provider.baseUrl || t('common.notConfigured')}</small>
+              </span>
+              <span className="row-actions">
+                <StatusPillLite label={provider.secretRef ? t('common.saved') : t('common.notConfigured')} state={provider.secretRef ? 'ready' : 'warning'} />
+                <StatusPillLite label={statusLabel(provider.healthStatus, t)} state={healthState(provider.healthStatus)} />
+                <CommandButton icon={<Activity size={14} />} onClick={() => onAction(t('models.toast.tested'), () => api.testProvider(provider.id))}>{t('models.testConnection')}</CommandButton>
+              </span>
             </div>
-          ) : null}
-        </PageSection>
-      </section>
+          )) : <EmptyBlock title={t('common.notConfigured')} detail={t('models.provider.note')} />}
+        </div>
+      </ConfigList>
+
+      <ConfigDetail title={t('models.providerList')} description={t('nav.models.providers.boundary')}>
+        <DataRows
+          rows={[
+            { label: t('provider.type.openaiCompatible'), value: PROVIDER_CATALOG.find((entry) => entry.type === 'openai-compatible') ? t('common.available') : t('common.unsupported') },
+            { label: t('provider.type.deepseek'), value: t('stage.environment-limited') },
+            { label: t('provider.type.anthropic'), value: t('stage.reserved') },
+            { label: t('provider.type.ollama'), value: t('stage.environment-limited') },
+          ]}
+        />
+        <InlineNotice tone="info" title={t('common.required')} detail={t('models.apiKey.help')} />
+        <CommandButton icon={<ShieldCheck size={15} />} onClick={defaultProvider ? () => onAction(t('models.toast.tested'), () => api.testProvider(defaultProvider.id)) : undefined}>
+          {t('models.testConnection')}
+        </CommandButton>
+      </ConfigDetail>
     </TabPanel>
+  );
+}
+
+function ActivityRows({ snapshot }: { snapshot: TabPageProps['snapshot'] }) {
+  const { t } = useI18n();
+  return (
+    <div className="activity-list">
+      {snapshot.providerHealthRecords.slice(0, 8).map((record) => (
+        <div className="activity-row" key={record.id}>
+          <span className={`status-dot status-${healthState(record.status)}`} />
+          <span>{statusLabel(record.status, t)}</span>
+          <small>{record.errorMessage ?? `${record.latencyMs ?? 0}ms`}</small>
+        </div>
+      ))}
+      {snapshot.providerHealthRecords.length === 0 ? <EmptyBlock title={t('app.recent.empty')} /> : null}
+    </div>
   );
 }

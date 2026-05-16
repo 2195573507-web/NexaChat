@@ -1,307 +1,163 @@
+import { Copy, KeyRound, Play, Power, RotateCcw, ShieldAlert } from 'lucide-react';
 import { useState } from 'react';
-import { Copy, KeyRound, Play, RefreshCw, ToggleLeft, ToggleRight, XCircle } from 'lucide-react';
-import { GATEWAY_DEFAULT_KEY_POLICY, GATEWAY_ENDPOINT, GATEWAY_SCOPES, type GatewayScope } from '../../shared/gatewayRuntime';
-import { GATEWAY_DOCS } from '../../shared/uiCopy';
-import { FormField, GatewayStatusCard, MetricTile, PageSection } from '../components/ui';
+import { GATEWAY_DEFAULT_KEY_POLICY, GATEWAY_ENDPOINT, GATEWAY_ENDPOINTS } from '../../shared/gatewayRuntime';
+import { GATEWAY_DOCS, FORM_DEFAULTS } from '../../shared/uiCopy';
+import { ActivityList, CommandButton, ConfigDetail, ConfigList, CopyableCommand, DataRows, EmptyBlock, Field, InlineNotice, StatusPillLite, ToolSection } from '../components/AppFrame';
 import { useI18n } from '../i18n';
-import type { TabPageProps } from './shared';
-import { DataTable, StateBadge, TabPanel, copyText, getDefaultModel, statusLabel } from './shared';
+import { formatDate, getDefaultModel, healthState, statusLabel, TabPanel, type TabPageProps } from './shared';
 
 export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
   const { t } = useI18n();
-  const status = snapshot.dashboard.gatewayStatus;
   const defaultModel = getDefaultModel(snapshot);
-  const [lastCreatedKey, setLastCreatedKey] = useState<string | null>(null);
-  const [keyName, setKeyName] = useState(t('gateway.defaultKeyName'));
-  const [quotaLimit, setQuotaLimit] = useState<number>(GATEWAY_DEFAULT_KEY_POLICY.quotaLimit);
-  const [rateLimit, setRateLimit] = useState<number>(GATEWAY_DEFAULT_KEY_POLICY.rateLimitPerMinute);
-  const [selectedScopes, setSelectedScopes] = useState<GatewayScope[]>([...GATEWAY_DEFAULT_KEY_POLICY.scopes]);
-  const [pendingDangerKeyId, setPendingDangerKeyId] = useState<string | null>(null);
+  const [keyName, setKeyName] = useState<string>(FORM_DEFAULTS.gatewayKeyName);
+  const [oneTimeKey, setOneTimeKey] = useState<string | null>(null);
+  const endpointBase = `${snapshot.dashboard.gatewayStatus.bindHost}:${snapshot.dashboard.gatewayStatus.port}`;
+  const chatCommand = `curl http://${endpointBase}${GATEWAY_ENDPOINT.chatCompletions} -H "Authorization: Bearer ${GATEWAY_DOCS.bearerPlaceholder}" -H "Content-Type: application/json" -d "{\\"model\\":\\"${defaultModel?.modelNameSnapshot ?? GATEWAY_DOCS.sampleModelPlaceholder}\\",\\"messages\\":[{\\"role\\":\\"user\\",\\"content\\":\\"${GATEWAY_DOCS.sampleUserMessage}\\"}]}"`;
+
+  const createKey = async () => {
+    const created = await api.createGatewayKey({
+      name: keyName.trim() || t('gateway.defaultKeyName'),
+      scopes: [...GATEWAY_DEFAULT_KEY_POLICY.scopes],
+      quotaLimit: GATEWAY_DEFAULT_KEY_POLICY.quotaLimit,
+      rateLimitPerMinute: GATEWAY_DEFAULT_KEY_POLICY.rateLimitPerMinute,
+    });
+    setOneTimeKey(created.key);
+  };
 
   if (activeTab.id === 'keys') {
     return (
-      <TabPanel moduleId="gateway" tab={activeTab}>
-        <section className="panel">
-          <h2>{t('gateway.keys.title')}</h2>
-          <p>{t('gateway.keys.note')}</p>
-          <div className="gateway-key-policy">
-            <FormField label={t('gateway.keyName')}>
-              <input value={keyName} onChange={(event) => setKeyName(event.target.value)} />
-            </FormField>
-            <FormField label={t('gateway.quotaLimit')}>
-              <input type="number" min="0" value={quotaLimit} onChange={(event) => setQuotaLimit(Number(event.target.value))} />
-            </FormField>
-            <FormField label={t('gateway.rateLimit')}>
-              <input type="number" min="0" value={rateLimit} onChange={(event) => setRateLimit(Number(event.target.value))} />
-            </FormField>
-          </div>
-          <div className="scope-toggle-list" aria-label={t('gateway.scopes.aria')}>
-            {GATEWAY_SCOPES.map((scope) => (
-              <label key={scope}>
-                <input
-                  type="checkbox"
-                  checked={selectedScopes.includes(scope)}
-                  onChange={(event) => {
-                    setSelectedScopes((current) =>
-                      event.target.checked ? Array.from(new Set([...current, scope])) : current.filter((item) => item !== scope),
-                    );
-                  }}
-                />
-                {scope}
-              </label>
-            ))}
-          </div>
-          <button
-            type="button"
-            className="primary-button"
-            onClick={() =>
-              onAction(t('gateway.toast.created'), async () => {
-                const created = await api.createGatewayKey({
-                  name: keyName,
-                  scopes: selectedScopes,
-                  quotaLimit,
-                  rateLimitPerMinute: rateLimit,
-                });
-                setLastCreatedKey(created.key);
-              })
-            }
-          >
-            <KeyRound size={16} /> {t('gateway.generateKey')}
-          </button>
-          {lastCreatedKey ? (
-            <div className="secret-once">
-              <strong>{t('gateway.oneTimeKey')}</strong>
-              <code>{lastCreatedKey}</code>
-              <button type="button" onClick={() => copyText(lastCreatedKey)}>
-                <Copy size={16} /> {t('gateway.copy')}
-              </button>
+      <TabPanel moduleId="gateway" tab={activeTab} className="tool-layout">
+        <ConfigList title={t('gateway.keys.title')} description={activeTab.featureBoundary}>
+          <ToolSection title={t('gateway.generateKey')} description={t('gateway.keys.note')}>
+            <div className="form-stack">
+              <Field label={t('gateway.keyName')}>
+                <input value={keyName} onChange={(event) => setKeyName(event.target.value)} placeholder={t('gateway.defaultKeyName')} />
+              </Field>
+              <CommandButton variant="primary" icon={<KeyRound size={15} />} onClick={() => onAction(t('gateway.toast.created'), createKey)}>
+                {t('gateway.generateKey')}
+              </CommandButton>
             </div>
-          ) : null}
-          <DataTable
-            columns={[t('gateway.columns.name'), t('gateway.columns.preview'), t('gateway.columns.scopes'), t('gateway.columns.state'), t('gateway.columns.usage'), t('gateway.columns.lastUsed'), t('gateway.columns.actions')]}
-            rows={snapshot.gatewayKeys.map((key) => [
-              key.name,
-              key.keyPreview,
-              <span key={`${key.id}-scope`}>{key.scopes.join(', ')}<br />{t('gateway.rateLimitValue', { count: key.rateLimitPerMinute ?? 0 })}</span>,
-              <StateBadge key={`${key.id}-state`} label={t(`gateway.keyState.${key.state}`)} tone={key.state === 'active' ? 'success' : key.state === 'quota_exceeded' ? 'warning' : 'muted'} />,
-              key.quotaLimit === null ? key.quotaUsed : `${key.quotaUsed}/${key.quotaLimit}`,
-              key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleString() : '-',
-              <div className="button-row compact" key={key.id}>
-                <button type="button" disabled={Boolean(key.revokedAt)} onClick={() => onAction(key.disabledAt ? t('gateway.toast.enabled') : t('gateway.toast.disabled'), () => api.updateGatewayKey({ gatewayKeyId: key.id, disabled: !key.disabledAt }))}>
-                  {key.disabledAt ? <ToggleRight size={16} /> : <ToggleLeft size={16} />} {key.disabledAt ? t('gateway.enableKey') : t('gateway.disableKey')}
-                </button>
-                <button type="button" disabled={Boolean(key.revokedAt)} onClick={() => {
-                  if (pendingDangerKeyId !== `rotate:${key.id}`) {
-                    setPendingDangerKeyId(`rotate:${key.id}`);
-                    return;
-                  }
-                  setPendingDangerKeyId(null);
-                  onAction(t('gateway.toast.rotated'), async () => {
+            {oneTimeKey ? (
+              <InlineNotice tone="warning" title={t('gateway.oneTimeKey')} detail={<code>{oneTimeKey}</code>} />
+            ) : null}
+          </ToolSection>
+
+          <div className="config-items">
+            {snapshot.gatewayKeys.length > 0 ? snapshot.gatewayKeys.map((key) => (
+              <div className={`config-row ${key.state === 'active' ? 'is-active' : ''}`} key={key.id}>
+                <span>
+                  <strong>{key.name}</strong>
+                  <small>{key.keyPreview} / {key.scopes.join(', ')}</small>
+                </span>
+                <span className="row-actions">
+                  <StatusPillLite label={statusLabel(key.state, t)} state={healthState(key.state)} />
+                  <CommandButton icon={<RotateCcw size={14} />} onClick={() => onAction(t('gateway.toast.rotated'), async () => {
                     const rotated = await api.rotateGatewayKey({ gatewayKeyId: key.id });
-                    setLastCreatedKey(rotated.key);
-                  });
-                }}>
-                  <RefreshCw size={16} /> {t('gateway.rotate')}
-                </button>
-                <button type="button" className={pendingDangerKeyId === `revoke:${key.id}` ? 'danger-button' : undefined} disabled={Boolean(key.revokedAt)} onClick={() => {
-                  if (pendingDangerKeyId !== `revoke:${key.id}`) {
-                    setPendingDangerKeyId(`revoke:${key.id}`);
-                    return;
-                  }
-                  setPendingDangerKeyId(null);
-                  onAction(t('gateway.toast.revoked'), () => api.revokeGatewayKey(key.id));
-                }}>
-                  <XCircle size={16} /> {t('gateway.revoke')}
-                </button>
-              </div>,
-            ])}
+                    setOneTimeKey(rotated.key);
+                  })}>{t('gateway.rotate')}</CommandButton>
+                  <CommandButton variant="danger" icon={<ShieldAlert size={14} />} onClick={() => onAction(t('gateway.toast.revoked'), () => api.revokeGatewayKey(key.id))}>{t('gateway.revoke')}</CommandButton>
+                </span>
+              </div>
+            )) : <EmptyBlock title={t('common.notConfigured')} detail={t('gateway.keys.note')} />}
+          </div>
+        </ConfigList>
+        <ConfigDetail title={t('gateway.docs.security')} description={t('nav.gateway.keys.boundary')}>
+          <DataRows
+            rows={[
+              { label: t('gateway.keyCount'), value: snapshot.gatewayKeys.length },
+              { label: t('gateway.scopes.aria'), value: GATEWAY_DEFAULT_KEY_POLICY.scopes.join(', ') },
+              { label: t('common.required'), value: t('gateway.oneTimeKey') },
+            ]}
           />
-        </section>
+        </ConfigDetail>
       </TabPanel>
     );
   }
 
-  if (activeTab.id === 'logs') {
-    const filteredLogs = snapshot.observability.requestLogs;
+  if (activeTab.id === 'logs' || activeTab.id === 'usage') {
+    const logItems = activeTab.id === 'usage'
+      ? snapshot.usageRecords.slice(0, 12).map((usage) => ({
+          title: t('common.valueSeparator', { left: usage.inputTokens + usage.outputTokens, right: t('knowledge.columns.tokens') }),
+          meta: formatDate(usage.createdAt, t),
+          state: 'info' as const,
+        }))
+      : snapshot.gatewayLogs.slice(0, 12).map((log) => ({
+          title: `${log.method} ${log.path}`,
+          meta: `${log.statusCode} / ${formatDate(log.createdAt, t)}`,
+          state: log.statusCode >= 400 ? 'danger' as const : 'ready' as const,
+        }));
     return (
-      <TabPanel moduleId="gateway" tab={activeTab}>
-        <section className="two-column">
-          <div className="panel">
-            <h2>{t('gateway.logs.requests')}</h2>
-            <DataTable
-              columns={[t('gateway.columns.status'), t('gateway.columns.endpoint'), t('gateway.columns.model'), t('gateway.columns.tokens'), t('gateway.columns.latency'), t('gateway.columns.error')]}
-              rows={filteredLogs.map((log) => [
-                <StateBadge key={`${log.id}-status`} label={statusLabel(log.status, t)} tone={log.status === 'failed' ? 'error' : log.status === 'completed' ? 'success' : 'warning'} />,
-                log.endpoint,
-                log.modelNameSnapshot ?? '-',
-                `${log.inputTokens ?? 0}/${log.outputTokens ?? 0}`,
-                log.latencyMs ?? '-',
-                log.errorMessage ?? '-',
-              ])}
-            />
-          </div>
-          <div className="panel">
-            <h2>{t('gateway.logs.events')}</h2>
-            <DataTable
-              columns={[t('gateway.columns.method'), t('gateway.columns.path'), t('gateway.columns.status'), t('gateway.columns.key'), t('gateway.columns.scope'), t('gateway.columns.error'), t('gateway.columns.time')]}
-              rows={snapshot.gatewayLogs.map((log) => [
-                log.method,
-                log.path,
-                <StateBadge key={log.id} label={String(log.statusCode)} tone={log.statusCode >= 400 ? 'error' : 'success'} />,
-                log.keyPreview ?? '-',
-                log.scope ?? '-',
-                log.errorCode ?? '-',
-                new Date(log.createdAt).toLocaleString(),
-              ])}
-            />
-          </div>
-        </section>
-      </TabPanel>
-    );
-  }
-
-  if (activeTab.id === 'usage') {
-    const summary = snapshot.observability.summary;
-    return (
-      <TabPanel moduleId="gateway" tab={activeTab}>
-        <section className="summary-grid">
-          <article className="metric-card">
-            <span>{t('observability.summary.requests')}</span>
-            <strong>{summary.requestCount}</strong>
-            <p>{t('observability.summary.successRate', { value: Math.round(summary.successRate * 100) })}</p>
-          </article>
-          <article className="metric-card">
-            <span>{t('observability.summary.tokens')}</span>
-            <strong>{summary.inputTokens + summary.outputTokens}</strong>
-            <p>{t('observability.summary.tokenBreakdown', { input: summary.inputTokens, output: summary.outputTokens })}</p>
-          </article>
-          <article className="metric-card">
-            <span>{t('observability.summary.latency')}</span>
-            <strong>{summary.averageLatencyMs ?? '-'}</strong>
-            <p>{t('observability.summary.p95', { value: summary.p95LatencyMs ?? '-' })}</p>
-          </article>
-          <article className="metric-card">
-            <span>{t('observability.summary.feedbackEval')}</span>
-            <strong>{summary.feedbackCount + summary.evalResultCount}</strong>
-            <p>{t('observability.summary.feedbackEvalDetail', { feedback: summary.feedbackCount, evals: summary.evalResultCount })}</p>
-          </article>
-        </section>
-        <section className="two-column">
-          <div className="panel">
-            <h2>{t('observability.health.title')}</h2>
-            <DataTable
-              columns={[t('observability.columns.provider'), t('observability.columns.status'), t('observability.columns.requests'), t('observability.columns.failures'), t('observability.columns.latency')]}
-              rows={summary.providerHealth.map((health) => [
-                health.providerName,
-                <StateBadge key={`${health.providerId}-health`} label={statusLabel(health.status, t)} tone={health.status === 'healthy' ? 'success' : health.status === 'error' ? 'error' : 'warning'} />,
-                health.requestCount,
-                health.failureCount,
-                health.averageLatencyMs ?? '-',
-              ])}
-            />
-          </div>
-          <div className="panel">
-            <h2>{t('observability.usage.title')}</h2>
-            <DataTable
-              columns={[t('gateway.columns.model'), t('gateway.columns.tokens'), t('gateway.columns.request'), t('gateway.columns.time')]}
-              rows={snapshot.observability.usageRecords.map((record) => {
-                const model = snapshot.models.find((item) => item.id === record.modelId);
-                return [
-                  model?.displayName ?? record.modelId ?? '-',
-                  t('observability.summary.tokenBreakdown', { input: record.inputTokens, output: record.outputTokens }),
-                  record.requestLogId ?? '-',
-                  new Date(record.createdAt).toLocaleString(),
-                ];
-              })}
-            />
-          </div>
-        </section>
-        <section className="panel">
-          <h2>{t('observability.errors.title')}</h2>
-          <DataTable
-            columns={[t('observability.columns.errorCode'), t('observability.columns.count')]}
-            rows={summary.topErrors.map((error) => [error.code, error.count])}
+      <TabPanel moduleId="gateway" tab={activeTab} className="tool-layout">
+        <ConfigList title={activeTab.label} description={activeTab.featureBoundary}>
+          <ActivityList empty={t('app.recent.empty')} items={logItems} />
+        </ConfigList>
+        <ConfigDetail title={t('observability.usage.title')} description={t('gateway.overview.note', { host: snapshot.dashboard.gatewayStatus.bindHost, port: snapshot.dashboard.gatewayStatus.port })}>
+          <DataRows
+            rows={[
+              { label: t('observability.summary.requests'), value: snapshot.dashboard.usageToday.requests },
+              { label: t('observability.summary.tokens'), value: snapshot.dashboard.usageToday.inputTokens + snapshot.dashboard.usageToday.outputTokens },
+              { label: t('gateway.recentError'), value: snapshot.dashboard.gatewayStatus.recentError ?? t('common.none') },
+            ]}
           />
-        </section>
+        </ConfigDetail>
       </TabPanel>
     );
   }
 
   if (activeTab.id === 'docs') {
     return (
-      <TabPanel moduleId="gateway" tab={activeTab}>
-        <section className="two-column">
-          <div className="panel">
-            <h2>{t('gateway.docs.example')}</h2>
-            <p>{t('gateway.docs.note', { host: status.bindHost, port: status.port })}</p>
-            <pre className="snippet">{`curl http://${status.bindHost}:${status.port}${GATEWAY_ENDPOINT.models} \\
-  -H "Authorization: Bearer ${GATEWAY_DOCS.bearerPlaceholder}"
-
-curl http://${status.bindHost}:${status.port}${GATEWAY_ENDPOINT.chatCompletions} \\
-  -H "Authorization: Bearer ${GATEWAY_DOCS.bearerPlaceholder}" \\
-  -H "Content-Type: application/json" \\
-  -d '{"model":"${defaultModel?.name ?? GATEWAY_DOCS.sampleModelPlaceholder}","messages":[{"role":"user","content":"${GATEWAY_DOCS.sampleUserMessage}"}]}'`}</pre>
-          </div>
-          <div className="panel">
-            <h2>{t('gateway.docs.security')}</h2>
+      <TabPanel moduleId="gateway" tab={activeTab} className="tool-layout">
+        <ConfigList title={t('gateway.docs.example')} description={activeTab.featureBoundary}>
+          <CopyableCommand value={chatCommand} label={t('app.error.copy')} />
+          <ToolSection title={t('gateway.docs.security')} description={t('gateway.docs.note', { host: snapshot.dashboard.gatewayStatus.bindHost, port: snapshot.dashboard.gatewayStatus.port })}>
             <div className="endpoint-list">
-              {status.endpoints.map((endpoint) => (
+              {GATEWAY_ENDPOINTS.map((endpoint) => (
                 <code key={endpoint}>{endpoint}</code>
               ))}
             </div>
-            <dl className="detail-list">
-              <div><dt>{t('gateway.scope')}</dt><dd>{t('gateway.scope.note')}</dd></div>
-              <div><dt>{t('gateway.redaction')}</dt><dd>{t('gateway.redaction.note')}</dd></div>
-              <div><dt>{t('gateway.providerRoute')}</dt><dd>{t('gateway.providerRoute.note')}</dd></div>
-            </dl>
-          </div>
-        </section>
+          </ToolSection>
+        </ConfigList>
+        <ConfigDetail title={t('nav.gateway.docs.label')} description={t('nav.gateway.docs.boundary')}>
+          <InlineNotice tone="warning" title={t('stage.reserved')} detail={GATEWAY_ENDPOINT.responses} />
+          <CommandButton icon={<Copy size={15} />} onClick={() => void navigator.clipboard?.writeText(chatCommand)}>{t('app.error.copy')}</CommandButton>
+        </ConfigDetail>
       </TabPanel>
     );
   }
 
   return (
-    <TabPanel moduleId="gateway" tab={activeTab}>
-      <section className="gateway-console">
-        <GatewayStatusCard
-          status={status}
-          defaultModel={defaultModel?.displayName ?? t('common.notConfigured')}
-          keyCount={t('common.countAvailable', { count: snapshot.gatewayKeys.filter((key) => !key.revokedAt).length })}
-          actions={
-          <button type="button" className="primary-button" onClick={() => onAction(status.running ? t('gateway.toast.stopped') : t('gateway.toast.started'), () => api.toggleGateway(!status.running))}>
-            <Play size={16} /> {status.running ? t('gateway.stop') : t('gateway.start')}
-          </button>
-          }
-        />
-        <div className="gateway-endpoint-console">
-          <div>
-            <h3>{t('gateway.overview.title')}</h3>
-            <p>{t('gateway.overview.note', { host: status.bindHost, port: status.port })}</p>
+    <TabPanel moduleId="gateway" tab={activeTab} className="tool-layout">
+      <ConfigList title={t('gateway.overview.title')} description={activeTab.featureBoundary}>
+        <section className="gateway-console">
+          <div className="gateway-status-block">
+            <span className="eyebrow">{t('nav.gateway.overview.label')}</span>
+            <strong>{snapshot.dashboard.gatewayStatus.running ? t('shell.gateway.running') : t('shell.gateway.stopped')}</strong>
+            <small>{endpointBase}</small>
           </div>
+          <div className="vertical-actions">
+            <CommandButton variant={snapshot.dashboard.gatewayStatus.running ? 'danger' : 'primary'} icon={snapshot.dashboard.gatewayStatus.running ? <Power size={15} /> : <Play size={15} />} onClick={() => onAction(snapshot.dashboard.gatewayStatus.running ? t('gateway.toast.stopped') : t('gateway.toast.started'), () => api.toggleGateway(!snapshot.dashboard.gatewayStatus.enabled))}>
+              {snapshot.dashboard.gatewayStatus.running ? t('gateway.stop') : t('gateway.start')}
+            </CommandButton>
+          </div>
+        </section>
+        <ToolSection title={t('gateway.docs.security')} description={t('gateway.overview.note', { host: snapshot.dashboard.gatewayStatus.bindHost, port: snapshot.dashboard.gatewayStatus.port })}>
           <div className="endpoint-list">
-            {status.endpoints.map((endpoint) => (
+            {snapshot.dashboard.gatewayStatus.endpoints.map((endpoint) => (
               <code key={endpoint}>{endpoint}</code>
             ))}
           </div>
-        </div>
-      </section>
-      <section className="summary-grid gateway-summary-grid">
-        <MetricTile label={t('gateway.keyCount')} value={snapshot.gatewayKeys.filter((key) => !key.revokedAt).length} detail={t('gateway.keys.title')} tone="info" />
-        <MetricTile label={t('observability.summary.requests')} value={snapshot.observability.summary.requestCount} detail={t('observability.summary.successRate', { value: Math.round(snapshot.observability.summary.successRate * 100) })} tone="success" />
-        <MetricTile label={t('gateway.recentError')} value={status.recentError ?? t('common.none')} detail={t('gateway.redaction.note')} tone={status.recentError ? 'danger' : 'neutral'} />
-      </section>
-      <PageSection title={t('gateway.providerRoute')} description={t('gateway.providerRoute.note')} className="gateway-route-panel">
-        <div className="endpoint-list">
-          <code>{defaultModel?.displayName ?? t('common.notConfigured')}</code>
-          <code>{defaultModel ? snapshot.providers.find((provider) => provider.id === defaultModel.providerId)?.name ?? defaultModel.providerId : t('common.notConfigured')}</code>
-        </div>
-        <dl className="detail-list">
-          <div><dt>{t('gateway.defaultModel')}</dt><dd>{defaultModel?.displayName ?? t('common.notConfigured')}</dd></div>
-          <div><dt>{t('gateway.provider')}</dt><dd>{defaultModel ? snapshot.providers.find((provider) => provider.id === defaultModel.providerId)?.name ?? defaultModel.providerId : t('common.notConfigured')}</dd></div>
-          <div><dt>{t('gateway.keyCount')}</dt><dd>{t('common.countAvailable', { count: snapshot.gatewayKeys.filter((key) => !key.revokedAt).length })}</dd></div>
-          <div><dt>{t('gateway.recentError')}</dt><dd>{status.recentError ?? t('common.none')}</dd></div>
-        </dl>
-      </PageSection>
+        </ToolSection>
+      </ConfigList>
+      <ConfigDetail title={t('gateway.defaultModel')} description={t('nav.gateway.overview.boundary')}>
+        <DataRows
+          rows={[
+            { label: t('gateway.defaultModel'), value: defaultModel?.displayName ?? t('common.notConfigured') },
+            { label: t('gateway.keyCount'), value: snapshot.gatewayKeys.length },
+            { label: t('settings.about.bindHost'), value: endpointBase },
+            { label: t('gateway.recentError'), value: snapshot.dashboard.gatewayStatus.recentError ?? t('common.none') },
+          ]}
+        />
+      </ConfigDetail>
     </TabPanel>
   );
 }

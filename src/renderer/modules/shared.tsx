@@ -1,13 +1,11 @@
 import type { ReactNode } from 'react';
-import type { AppApi } from '../../shared/api';
 import { PROVIDER_CATALOG, type ProviderCatalogEntry } from '../../shared/providerCatalog';
+import type { AppApi } from '../../shared/api';
 import type { AppSnapshot, ContextStrategy, ModuleId, NavTab, ProviderType } from '../../shared/types';
-import { EmptyState } from '../components/EmptyState';
-import { StatusPill } from '../components/StatusPill';
-import { Card, MetricCard, StatusBadge } from '../components/ui';
-import { useI18n, type Translate } from '../i18n';
+import type { Translate } from '../i18n';
 
 export const providerTypes: ProviderType[] = PROVIDER_CATALOG.map((entry) => entry.type);
+
 export const contextStrategies: Array<{ value: ContextStrategy; labelKey: Parameters<Translate>[0] }> = [
   { value: 'recent_n', labelKey: 'shared.context.recentN' },
   { value: 'summary_recent_n', labelKey: 'shared.context.summaryRecentN' },
@@ -16,6 +14,7 @@ export const contextStrategies: Array<{ value: ContextStrategy; labelKey: Parame
 ];
 
 export type OpenModuleTarget = ModuleId | { moduleId: ModuleId; tabId?: string };
+
 export type TabPageProps = {
   activeTab: NavTab;
   snapshot: AppSnapshot;
@@ -35,7 +34,6 @@ export function TabPanel({
   className?: string;
   children: ReactNode;
 }) {
-  const { t } = useI18n();
   return (
     <div
       id={`panel-${moduleId}-${tab.id}`}
@@ -45,71 +43,42 @@ export function TabPanel({
       data-module={moduleId}
       data-tab={tab.id}
     >
-      <section className="tab-title">
-        <h2>{tab.label}</h2>
-        <StateBadge label={stageLabelForUi(tab.stage, t)} tone={tab.stage === 'implemented' ? 'success' : tab.stage === 'reserved' ? 'muted' : 'warning'} />
-      </section>
       {children}
     </div>
   );
 }
 
-export function PlannedTabPlaceholder({
-  tab,
-  featureName,
-  why,
-  dependency,
-}: {
-  tab: NavTab;
-  featureName: string;
-  why: string;
-  dependency: string;
-}) {
-  const { t } = useI18n();
+export function providerTypeLabel(type: ProviderType, t: Translate): string {
+  const entry = getProviderCatalogEntry(type);
+  return t(entry.labelKey);
+}
+
+export function getProviderCatalogEntry(type: ProviderType): ProviderCatalogEntry {
+  return PROVIDER_CATALOG.find((entry) => entry.type === type) ?? PROVIDER_CATALOG[0];
+}
+
+export function modelCapabilityLabels(model: AppSnapshot['models'][number], t: Translate): string {
+  const labels = [
+    model.supportsStreaming ? t('common.streaming') : null,
+    model.supportsTools ? t('common.tools') : null,
+    model.supportsVision ? t('common.vision') : null,
+    model.supportsEmbeddings ? t('common.embeddings') : null,
+  ].filter(Boolean);
+  return labels.length > 0 ? labels.join(', ') : t('common.none');
+}
+
+export function getDefaultModel(snapshot: AppSnapshot) {
   return (
-    <section className="panel planned-panel placeholder-panel">
-      <div className="panel-header">
-        <div>
-          <h2>{featureName}</h2>
-          <p>{t('shared.planned.currentStage', { stage: stageLabelForUi(tab.stage, t) })}</p>
-        </div>
-        <StatusPill stage={tab.stage} />
-      </div>
-      <dl className="detail-list">
-        <div>
-          <dt>{t('shared.planned.why')}</dt>
-          <dd>{why}</dd>
-        </div>
-        <div>
-          <dt>{t('shared.planned.dependency')}</dt>
-          <dd>{dependency}</dd>
-        </div>
-      </dl>
-    </section>
+    snapshot.models.find((model) => model.id === snapshot.dashboard.workspace.defaultModelId) ??
+    snapshot.models.find((model) => model.enabled) ??
+    snapshot.models[0] ??
+    null
   );
 }
 
-export function Metric({ title, value, detail }: { title: string; value: string | number; detail: string }) {
-  return <MetricCard title={title} value={value} detail={detail} />;
-}
-
-export function StateBadge({ label, tone }: { label: string; tone: 'success' | 'warning' | 'error' | 'muted' }) {
-  return <StatusBadge label={label} tone={tone} />;
-}
-
-export function stageLabelForUi(stage: NavTab['stage'], t: Translate): string {
-  if (stage === 'implemented') return t('stage.implemented');
-  if (stage === 'planned') return t('stage.planned');
-  if (stage === 'reserved') return t('stage.reserved');
-  if (stage === 'environment-limited') return t('stage.environment-limited');
-  return t('stage.ready');
-}
-
-export function healthTone(status: string): 'success' | 'warning' | 'error' | 'muted' {
-  if (status === 'healthy') return 'success';
-  if (status === 'error') return 'error';
-  if (status === 'warning') return 'warning';
-  return 'muted';
+export function getDefaultProvider(snapshot: AppSnapshot) {
+  const model = getDefaultModel(snapshot);
+  return snapshot.providers.find((provider) => provider.id === model?.providerId) ?? snapshot.providers.find((provider) => provider.enabled) ?? null;
 }
 
 export function statusLabel(status: string, t: Translate): string {
@@ -144,36 +113,23 @@ export function statusLabel(status: string, t: Translate): string {
   if (status === 'deleted') return t('common.deleted');
   if (status === 'active') return t('common.active');
   if (status === 'archived') return t('common.archived');
-  if (status === 'unknown') return t('common.unknown');
+  if (status === 'available') return t('common.available');
+  if (status === 'revoked') return t('common.revoked');
   return status;
 }
 
-export function providerTypeLabel(type: ProviderType, t: Translate): string {
-  const entry = getProviderCatalogEntry(type);
-  return t(entry.labelKey);
+export function healthState(status: string): 'ready' | 'warning' | 'danger' | 'muted' {
+  if (status === 'healthy' || status === 'completed' || status === 'active' || status === 'indexed') return 'ready';
+  if (status === 'warning' || status === 'queued' || status === 'pending' || status === 'waiting_approval') return 'warning';
+  if (status === 'error' || status === 'failed' || status === 'revoked' || status === 'denied') return 'danger';
+  return 'muted';
 }
 
-export function getProviderCatalogEntry(type: ProviderType): ProviderCatalogEntry {
-  return PROVIDER_CATALOG.find((entry) => entry.type === type) ?? PROVIDER_CATALOG[0];
-}
-
-export function modelCapabilityLabels(model: AppSnapshot['models'][number], t: Translate): string {
-  const labels = [
-    model.supportsStreaming ? t('common.streaming') : null,
-    model.supportsTools ? t('common.tools') : null,
-    model.supportsVision ? t('common.vision') : null,
-    model.supportsEmbeddings ? t('common.embeddings') : null,
-  ].filter(Boolean);
-  return labels.length > 0 ? labels.join(', ') : t('common.none');
-}
-
-export function getDefaultModel(snapshot: AppSnapshot) {
-  return (
-    snapshot.models.find((model) => model.id === snapshot.dashboard.workspace.defaultModelId) ??
-    snapshot.models.find((model) => model.enabled) ??
-    snapshot.models[0] ??
-    null
-  );
+export function formatDate(value: number | null | undefined, t: Translate): string {
+  if (!value) {
+    return t('common.none');
+  }
+  return new Intl.DateTimeFormat(undefined, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(value);
 }
 
 export function formatMessageMetadata(metadataJson: string, t: Translate): string {
@@ -187,95 +143,16 @@ export function formatMessageMetadata(metadataJson: string, t: Translate): strin
       Array.isArray(metadata.citations) ? t('shared.metadata.citations', { count: metadata.citations.length }) : null,
     ]
       .filter(Boolean)
-      .join(' · ');
+      .join(' / ');
   } catch {
     return t('shared.metadata.localTrace');
   }
-}
-
-export function formatRequestLog(log: AppSnapshot['requestLogs'][number]): string {
-  return [
-    `status=${log.status}`,
-    `endpoint=${log.endpoint}`,
-    `model=${log.modelNameSnapshot ?? '-'}`,
-    `error=${log.errorMessage ?? '-'}`,
-    `request=${log.requestSummaryJson ?? '-'}`,
-  ].join('\n');
 }
 
 export function copyText(value: string): void {
   void navigator.clipboard?.writeText(value);
 }
 
-export function ListRows({
-  rows,
-  empty,
-}: {
-  rows: Array<{ title: string; meta: string }>;
-  empty: ReactNode;
-}) {
-  if (rows.length === 0) {
-    return <>{empty}</>;
-  }
-  return (
-    <div className="rows">
-      {rows.map((row) => (
-        <div className="basic-row" key={`${row.title}-${row.meta}`}>
-          <strong>{row.title}</strong>
-          <span>{row.meta}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-export function DataTable({ columns, rows }: { columns: string[]; rows: Array<Array<ReactNode>> }) {
-  const { t } = useI18n();
-  if (rows.length === 0) {
-    return (
-      <EmptyState
-        title={t('shared.empty.title')}
-        reason={t('shared.empty.reason')}
-        actionLabel={t('shared.empty.action')}
-      />
-    );
-  }
-  return (
-    <div className="table-wrap data-panel">
-      <table>
-        <thead>
-          <tr>
-            {columns.map((column) => (
-              <th key={column}>{column}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, rowIndex) => (
-            <tr key={rowIndex}>
-              {row.map((cell, cellIndex) => (
-                <td key={cellIndex}>{cell}</td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-export function DetailPanel({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: string;
-  children: ReactNode;
-}) {
-  return (
-    <Card title={title} description={description} className="detail-panel">
-      {children}
-    </Card>
-  );
+export function truncate(value: string, max = 96) {
+  return value.length > max ? `${value.slice(0, max - 1)}...` : value;
 }

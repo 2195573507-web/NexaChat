@@ -10,12 +10,9 @@ const repoRoot = resolve(currentDir, '..');
 
 const uiSourceFiles = [
   'src/renderer/App.tsx',
-  'src/renderer/AppShell.tsx',
-  'src/renderer/components/ErrorDiagnosisPanel.tsx',
-  'src/renderer/components/EmptyState.tsx',
-  'src/renderer/components/ModulePageFrame.tsx',
+  'src/renderer/components/AppFrame.tsx',
   'src/renderer/components/StatusPill.tsx',
-  'src/renderer/components/ui.tsx',
+  'src/renderer/components/stageStatus.ts',
   'src/renderer/modules/ChatPage.tsx',
   'src/renderer/modules/DashboardPage.tsx',
   'src/renderer/modules/DataPage.tsx',

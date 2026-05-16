@@ -42,9 +42,9 @@ try {
     pageErrors.push(error.message);
   });
 
-  await window.locator('.app-shell').waitFor({ timeout: 20_000 });
-  await window.getByText(desktopEntry.productName, { exact: true }).first().waitFor({ timeout: 5_000 });
-  await window.locator('.module-nav-item').first().waitFor({ timeout: 5_000 });
+  await window.locator('.app-frame').waitFor({ timeout: 20_000 });
+  await window.locator('.brand-mark').waitFor({ timeout: 5_000 });
+  await window.locator('.rail-item').first().waitFor({ timeout: 5_000 });
   await window.locator('main [role="tabpanel"][data-module="workspace"][data-tab="overview"]').waitFor({ timeout: 5_000 });
   if (app.windows().length !== 1) {
     throw new Error(`Expected one packaged app window, got ${app.windows().length}.`);
@@ -56,7 +56,7 @@ try {
     return {
       hasApi: Boolean(api?.getSnapshot),
       workspaceId: snapshot?.dashboard?.workspace?.id ?? null,
-      moduleCount: document.querySelectorAll('.module-nav-item').length,
+      moduleCount: document.querySelectorAll('.rail-item').length,
       body: document.body.innerText,
     };
   });

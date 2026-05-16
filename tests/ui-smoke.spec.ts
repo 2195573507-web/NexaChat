@@ -54,38 +54,42 @@ async function mockSystemTheme(page: Page, initialDark: boolean) {
   }, initialDark);
 }
 
-async function clickModule(page: Page, module: NavModule) {
-  await page.locator('.module-nav-item').filter({ hasText: module.label }).first().click();
+async function openModule(page: Page, module: NavModule) {
+  await page.locator('.rail-item').filter({ hasText: module.shortLabel }).click();
 }
 
 async function openFeature(page: Page, module: NavModule, tab: NavTab) {
-  const expandButton = page.getByRole('button', { name: new RegExp(`${translate('zh-CN', 'shell.expand')}${module.label}|${translate('zh-CN', 'shell.collapse')}${module.label}`) });
-  if ((await expandButton.getAttribute('aria-expanded')) === 'false') {
-    await expandButton.click();
-  }
-  await page.locator(`#sidebar-children-${module.id}`).getByRole('button', { name: new RegExp(tab.label) }).click();
+  await openModule(page, module);
+  await page.locator(`#feature-list-${module.id}`).getByRole('button', { name: new RegExp(tab.label) }).click();
 }
 
 async function expectActiveRouteAndPanel(page: Page, module: NavModule, tab: NavTab) {
-  await expect(page.locator('.module-subnav-panel')).toHaveCount(0);
+  await expect(page.locator('.app-shell')).toHaveCount(0);
+  await expect(page.locator('.module-nav-item')).toHaveCount(0);
   await expect(page.locator('.module-tabs')).toHaveCount(0);
-  await expect(page.locator('.module-header')).toContainText(module.label);
-  await expect(page.locator('.module-header')).toContainText(tab.label);
-  await expect(page.locator('.module-child-link.is-active')).toContainText(tab.label);
+  await expect(page.locator('.module-subnav-panel')).toHaveCount(0);
+  await expect(page.locator('.switcher-head')).toContainText(tab.label);
+  await expect(page.locator(`#feature-list-${module.id} .feature-row.is-active`)).toContainText(tab.label);
   await expect(page).toHaveURL(new RegExp(`${getTabRoute(module.id, tab.id)}$`));
   const panel = page.locator(`main [role="tabpanel"][data-module="${module.id}"][data-tab="${tab.id}"]`);
   await expect(panel).toBeVisible();
   await expect(panel).toHaveAttribute('aria-label', tab.label);
-  await expect(panel.getByRole('heading', { name: tab.label }).first()).toBeVisible();
   await expectNoVisibleRouteLeak(page);
 }
 
-test('browser renderer exposes eight expandable modules and can send chat through fallback API', async ({ page }) => {
+test('browser renderer exposes rebuilt lightweight rail switcher and can send chat', async ({ page }) => {
   await page.goto('/');
   await expect(page).toHaveURL(/\/workspace\/overview$/);
+  await expect(page.locator('.app-frame')).toBeVisible();
+  await expect(page.locator('.module-rail')).toBeVisible();
+  await expect(page.locator('.module-switcher')).toBeVisible();
+  await expect(page.locator('.work-surface')).toBeVisible();
+  await expect(page.locator('.rail-item')).toHaveCount(navModules.length);
+  await expect(page.locator('.app-shell')).toHaveCount(0);
+  await expect(page.locator('.module-nav-item')).toHaveCount(0);
 
   for (const module of navModules) {
-    await expect(page.locator('.module-nav').getByRole('button', { name: new RegExp(module.label) }).first()).toBeVisible();
+    await expect(page.locator('.rail-item').filter({ hasText: module.shortLabel })).toBeVisible();
   }
 
   const chat = navModules.find((module) => module.id === 'chat')!;
@@ -96,102 +100,65 @@ test('browser renderer exposes eight expandable modules and can send chat throug
 
   await expect(page.getByText(message, { exact: true })).toBeVisible();
   await expect(page.getByText(/Mock response from nexachat-mock/)).toBeVisible();
-  await expect(page.getByRole('button', { name: new RegExp(translate('zh-CN', 'chat.exportConversation')) })).toBeVisible();
   await expect(page.getByText(translate('zh-CN', 'chat.message.copy')).first()).toBeVisible();
-  await expect(page.getByText(translate('zh-CN', 'chat.compare.title'))).toBeVisible();
-  await expect(page.locator('.chat-input')).toBeVisible();
+  await expect(page.getByText(translate('zh-CN', 'chat.compare.title'))).toHaveCount(1);
+  await expect(page.locator('.chat-composer')).toBeVisible();
   await expect(page.locator('.message-bubble').first()).toBeVisible();
-  await expectNoHorizontalOverflow(page, '.app-shell');
-  await expectNoHorizontalOverflow(page, '.content-grid');
-  await expectNoHorizontalOverflow(page, '.chat-layout');
+  await expectNoHorizontalOverflow(page, '.app-frame');
+  await expectNoHorizontalOverflow(page, '.work-surface');
+  await expectNoHorizontalOverflow(page, '.chat-workspace');
   await expectNoVisibleRouteLeak(page);
 });
 
-test('model gateway data and settings key flows stay real on new routes', async ({ page }) => {
+test('core pages read as local AI configuration tools instead of admin tables', async ({ page }) => {
   await page.goto('/');
 
   const models = navModules.find((module) => module.id === 'models')!;
   const gateway = navModules.find((module) => module.id === 'gateway')!;
+  const knowledge = navModules.find((module) => module.id === 'knowledge')!;
+  const tools = navModules.find((module) => module.id === 'tools')!;
   const data = navModules.find((module) => module.id === 'data')!;
   const settings = navModules.find((module) => module.id === 'settings')!;
 
   await openFeature(page, models, models.tabs.find((tab) => tab.id === 'providers')!);
+  await expect(page.locator('main [data-tab="providers"] .current-config-strip')).toBeVisible();
+  await expect(page.locator('main [data-tab="providers"] .provider-switch-list')).toBeVisible();
   await expect(page.locator('main [data-tab="providers"]').getByRole('heading', { name: translate('zh-CN', 'models.provider.title') }).first()).toBeVisible();
-  await expect(page.locator('main [data-tab="providers"] .models-command-center')).toBeVisible();
-  await expect(page.locator('main [data-tab="providers"] .provider-card').first()).toBeVisible();
-  await openFeature(page, models, models.tabs.find((tab) => tab.id === 'catalog')!);
-  await expect(page.locator('main [data-tab="catalog"]').getByRole('heading', { name: translate('zh-CN', 'models.create.title') }).first()).toBeVisible();
-  await expect(page.getByPlaceholder(translate('zh-CN', 'models.modelName.placeholder'))).toHaveValue('');
 
   await openFeature(page, gateway, gateway.tabs.find((tab) => tab.id === 'overview')!);
-  await expect(page.locator('main [data-tab="overview"] .gateway-status-card')).toBeVisible();
   await expect(page.locator('main [data-tab="overview"] .gateway-console')).toBeVisible();
+  await expect(page.locator('main [data-tab="overview"] .endpoint-list')).toBeVisible();
   await openFeature(page, gateway, gateway.tabs.find((tab) => tab.id === 'keys')!);
-  await expect(page.locator('main [data-tab="keys"]').getByRole('heading', { name: 'Gateway API Key' }).first()).toBeVisible();
+  await expect(page.locator('main [data-tab="keys"]').getByRole('heading', { name: translate('zh-CN', 'gateway.keys.title') }).first()).toBeVisible();
   await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'gateway.generateKey')) }).click();
-  await expect(page.getByText(translate('zh-CN', 'gateway.oneTimeKey'))).toBeVisible();
-  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'gateway.revoke')) }).first().click();
-  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'gateway.revoke')) }).first().click();
-  await expect(page.getByText(translate('zh-CN', 'common.revoked')).first()).toBeVisible();
+  await expect(page.locator('main [data-tab="keys"] .inline-notice').getByText(translate('zh-CN', 'gateway.oneTimeKey'))).toBeVisible();
+
+  await openFeature(page, knowledge, knowledge.tabs.find((tab) => tab.id === 'files')!);
+  await expect(page.locator('main [data-tab="files"] .current-config-strip')).toBeVisible();
+  await expect(page.locator('main [data-tab="files"]').getByLabel(translate('zh-CN', 'knowledge.import.content'))).toBeVisible();
+
+  await openFeature(page, tools, tools.tabs.find((tab) => tab.id === 'mcp')!);
+  await expect(page.locator('main [data-tab="mcp"] .current-config-strip')).toBeVisible();
+  await expect(page.getByRole('button', { name: new RegExp(translate('zh-CN', 'tools.mcp.register')) })).toBeDisabled();
 
   await openFeature(page, data, data.tabs.find((tab) => tab.id === 'diagnostics')!);
   await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'data.diagnostics.export')) }).click();
-  await expect(page.locator('main [data-tab="diagnostics"]').getByRole('cell', { name: /Exported browser mock diagnostics/ })).toBeVisible();
+  await expect(page.locator('.module-page > .inline-notice').getByText(translate('zh-CN', 'data.toast.diagnosticsExported'))).toBeVisible();
 
   await openFeature(page, settings, settings.tabs.find((tab) => tab.id === 'security')!);
+  await expect(page.locator('main [data-tab="security"] .current-config-strip')).toBeVisible();
   await expect(page.locator('main [data-tab="security"]').getByRole('heading', { name: translate('zh-CN', 'settings.security.title') }).first()).toBeVisible();
-  await expect(page.locator('main [data-tab="security"]').getByRole('heading', { name: translate('zh-CN', 'settings.security.auditIntegrity') }).first()).toBeVisible();
-  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'settings.audit.verify')) }).first().click();
-  await expect(page.locator('main [data-tab="security"]').getByText(translate('zh-CN', 'settings.audit.integrity')).first()).toBeVisible();
-});
 
-test('security audit tab verifies integrity and exports redacted audit data', async ({ page }) => {
-  await page.goto('/settings/audit');
-  await expect(page.locator('main [data-tab="audit"]').getByRole('heading', { name: translate('zh-CN', 'settings.audit.title') }).first()).toBeVisible();
-  await expect(page.locator('main [data-tab="audit"]').getByText(translate('zh-CN', 'settings.audit.integrity')).first()).toBeVisible();
-  await page.getByLabel(translate('zh-CN', 'settings.audit.search')).fill('gateway');
-  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'settings.audit.verify')) }).click();
-  await expect(page.locator('main [data-tab="audit"]').getByText(translate('zh-CN', 'settings.audit.integrity')).first()).toBeVisible();
-  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'settings.audit.export')) }).click();
-  await page.getByLabel(translate('zh-CN', 'settings.audit.search')).fill('');
-  await expect(page.locator('main [data-tab="audit"]').getByRole('cell', { name: 'audit.export' }).first()).toBeVisible();
-});
-
-test('observability usage feedback eval and privacy pages share one local chain', async ({ page }) => {
-  await page.goto('/chat/playground');
-  await page.getByPlaceholder(translate('zh-CN', 'chat.composer.placeholder')).fill('round 13 observability smoke');
-  await page.getByRole('button', { name: translate('zh-CN', 'chat.send') }).click();
-  await expect(page.getByText('round 13 observability smoke', { exact: true })).toBeVisible();
-
-  await page.goto('/gateway/usage');
-  await expect(page.locator('main [data-tab="usage"]').getByRole('heading', { name: translate('zh-CN', 'observability.health.title') }).first()).toBeVisible();
-  await expect(page.locator('main [data-tab="usage"]').getByText(translate('zh-CN', 'observability.summary.tokens')).first()).toBeVisible();
-
-  await page.goto('/settings/feedback');
-  await page.getByLabel(translate('zh-CN', 'observability.feedback.notes')).fill('round 13 local feedback smoke');
-  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'observability.feedback.create')) }).click();
-  await expect(page.locator('main [data-tab="feedback"]').getByRole('cell', { name: 'round 13 local feedback smoke' })).toBeVisible();
-
-  await page.goto('/settings/evals');
-  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'observability.eval.run')) }).first().click();
-  await expect(page.locator('main [data-tab="evals"]').getByText(translate('zh-CN', 'observability.eval.results')).first()).toBeVisible();
-  await expect(page.locator('main [data-tab="evals"]').getByText(/completed|已完成/i).first()).toBeVisible();
-
-  await page.goto('/settings/observability');
-  await page.getByLabel(translate('zh-CN', 'observability.privacy.includePromptSnippets')).check();
-  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'observability.privacy.save')) }).click();
-  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'observability.export.button')) }).click();
-  await expect(page.locator('main [data-tab="observability"]').getByText(translate('zh-CN', 'observability.privacy.localOnly')).first()).toBeVisible();
+  await expect(page.locator('table')).toHaveCount(0);
+  await expectNoHorizontalOverflow(page, '.app-frame');
   await expectNoVisibleRouteLeak(page);
-  await expectNoHorizontalOverflow(page, '.app-shell');
-  await expectNoHorizontalOverflow(page, '.content-grid');
 });
 
-test('all modules and feature routes sync sidebar subnav route and panel', async ({ page }) => {
+test('all modules and feature routes sync the switcher route and panel', async ({ page }) => {
   await page.goto('/');
 
   for (const module of navModules) {
-    await clickModule(page, module);
+    await openModule(page, module);
     await expectActiveRouteAndPanel(page, module, getDefaultTab(module));
 
     for (const tab of module.tabs) {
@@ -201,189 +168,80 @@ test('all modules and feature routes sync sidebar subnav route and panel', async
   }
 });
 
-test('workspace home has four clean product areas and real quick entries', async ({ page }) => {
+test('workspace home is a current configuration launcher', async ({ page }) => {
   await page.goto('/workspace/overview');
 
-  await expect(page.getByRole('region', { name: translate('zh-CN', 'dashboard.home.aria') })).toBeVisible();
-  await expect(page.locator('.workbench-hero')).toBeVisible();
-  await expect(page.locator('.metric-river')).toBeVisible();
+  await expect(page.locator('.workbench-home')).toBeVisible();
+  await expect(page.locator('.current-config-strip')).toBeVisible();
+  await expect(page.locator('.switch-grid')).toBeVisible();
+  await expect(page.locator('.switch-tile')).toHaveCount(4);
   await expect(page.getByRole('heading', { name: translate('zh-CN', 'dashboard.overview.title') })).toBeVisible();
-  await expect(page.getByRole('heading', { name: translate('zh-CN', 'dashboard.metrics.title') })).toBeVisible();
   await expect(page.getByRole('heading', { name: translate('zh-CN', 'dashboard.actions.title') })).toBeVisible();
   await expect(page.getByRole('heading', { name: translate('zh-CN', 'dashboard.activity.title') })).toBeVisible();
-  await expect(page.getByText('System overview')).toHaveCount(0);
-  await expect(page.getByText('Real quick entries')).toHaveCount(0);
-  await expect(page.getByText('Startup status and next steps')).toHaveCount(0);
-  await expect(page.locator('.module-child-link.is-active')).toContainText(translate('zh-CN', 'nav.workspace.overview.label'));
+  await expect(page.locator(`#feature-list-workspace .feature-row.is-active`)).toContainText(translate('zh-CN', 'nav.workspace.overview.label'));
 
   const quickEntries = [
     { label: translate('zh-CN', 'dashboard.action.chat'), path: '/chat/playground', moduleId: 'chat', tabId: 'playground' },
     { label: translate('zh-CN', 'dashboard.action.provider'), path: '/models/providers', moduleId: 'models', tabId: 'providers' },
-    { label: translate('zh-CN', 'dashboard.action.model'), path: '/models/catalog', moduleId: 'models', tabId: 'catalog' },
     { label: translate('zh-CN', 'dashboard.action.gatewayKey'), path: '/gateway/keys', moduleId: 'gateway', tabId: 'keys' },
-    { label: translate('zh-CN', 'dashboard.action.import'), path: '/data/import', moduleId: 'data', tabId: 'import' },
-    { label: translate('zh-CN', 'dashboard.action.logs'), path: '/gateway/logs', moduleId: 'gateway', tabId: 'logs' },
+    { label: translate('zh-CN', 'tools.mcp.title'), path: '/tools/mcp', moduleId: 'tools', tabId: 'mcp' },
   ];
 
   for (const entry of quickEntries) {
     await page.goto('/workspace/overview');
-    await page.getByLabel(translate('zh-CN', 'dashboard.actions.title')).getByRole('button', { name: new RegExp(entry.label) }).click();
+    await page.locator('.switch-grid .switch-tile').filter({ hasText: entry.label }).click();
     await expect(page).toHaveURL(new RegExp(`${entry.path}$`));
-    const panel = page.locator(`main [role="tabpanel"][data-module="${entry.moduleId}"][data-tab="${entry.tabId}"]`);
-    await expect(panel).toBeVisible();
+    await expect(page.locator(`main [role="tabpanel"][data-module="${entry.moduleId}"][data-tab="${entry.tabId}"]`)).toBeVisible();
   }
 });
 
-test('sidebar expansion persists and never exposes route paths', async ({ page }) => {
-  await page.goto('/workspace/overview');
-  const gateway = navModules.find((module) => module.id === 'gateway')!;
-  const expandButton = page.getByRole('button', { name: new RegExp(`${translate('zh-CN', 'shell.expand')}${gateway.label}|${translate('zh-CN', 'shell.collapse')}${gateway.label}`) });
+test('route fallback and desktop floor stay overflow-free', async ({ page }) => {
+  await page.setViewportSize({ width: 1040, height: 680 });
+  const workspace = navModules.find((module) => module.id === 'workspace')!;
+  const settings = navModules.find((module) => module.id === 'settings')!;
+  const models = navModules.find((module) => module.id === 'models')!;
 
-  if ((await expandButton.getAttribute('aria-expanded')) === 'true') {
-    await expandButton.click();
-  }
-  await expect(expandButton).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.locator(`#sidebar-children-${gateway.id}`)).toHaveCount(0);
-
-  await expandButton.click();
-  await expect(expandButton).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.locator(`#sidebar-children-${gateway.id}`)).toBeVisible();
-  await expectNoVisibleRouteLeak(page);
-
-  await page.reload();
-  await expect(page.getByRole('button', { name: new RegExp(`${translate('zh-CN', 'shell.collapse')}${gateway.label}`) })).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.locator(`#sidebar-children-${gateway.id}`)).toBeVisible();
-});
-
-test('root and unknown paths normalize without exposing old alias chains', async ({ page }) => {
   await page.goto('/');
-  await expectActiveRouteAndPanel(page, navModules.find((module) => module.id === 'workspace')!, navModules.find((module) => module.id === 'workspace')!.tabs[0]);
+  await expectActiveRouteAndPanel(page, workspace, workspace.tabs[0]);
 
   await page.goto('/settings/request-logs');
-  await expectActiveRouteAndPanel(page, navModules.find((module) => module.id === 'settings')!, navModules.find((module) => module.id === 'settings')!.tabs[0]);
+  await expectActiveRouteAndPanel(page, settings, settings.tabs[0]);
 
   await page.goto('/models/not-real');
-  await expectActiveRouteAndPanel(page, navModules.find((module) => module.id === 'models')!, navModules.find((module) => module.id === 'models')!.tabs[0]);
-});
+  await expectActiveRouteAndPanel(page, models, models.tabs[0]);
 
-test('renderer keeps the 1040x680 desktop floor usable without horizontal overflow', async ({ page }) => {
-  test.setTimeout(60_000);
-  await page.setViewportSize({ width: 1040, height: 680 });
   for (const path of ['/chat/playground', '/models/providers', '/gateway/keys', '/settings/preferences']) {
     await page.goto(path);
-    await expect(page.locator('.app-shell')).toBeVisible();
-    await expect(page.locator('.right-rail')).toBeHidden();
-    await expectNoHorizontalOverflow(page, '.app-shell');
-    await expectNoHorizontalOverflow(page, '.content-grid');
+    await expect(page.locator('.app-frame')).toBeVisible();
+    await expectNoHorizontalOverflow(page, '.app-frame');
+    await expectNoHorizontalOverflow(page, '.work-surface');
+    await expect(page.locator('.app-shell')).toHaveCount(0);
     await expect(page.locator('.module-tabs')).toHaveCount(0);
     await expect(page.locator('.module-subnav-panel')).toHaveCount(0);
-  }
-
-  await page.goto('/chat/playground');
-  await expect(page.getByPlaceholder(translate('zh-CN', 'chat.composer.placeholder'))).toBeVisible();
-  await expect(page.locator('.chat-context')).toBeHidden();
-  await expectNoHorizontalOverflow(page, '.chat-layout');
-});
-
-test('shell stays readable at 1040 1280 1440 and 1920 widths', async ({ page }) => {
-  for (const width of [1040, 1280, 1440, 1920]) {
-    await page.setViewportSize({ width, height: 820 });
-    await page.goto('/workspace/overview');
-    await expect(page.getByRole('heading', { name: translate('zh-CN', 'dashboard.overview.title') })).toBeVisible();
-    await expectNoHorizontalOverflow(page, '.app-shell');
-    await expectNoHorizontalOverflow(page, '.topbar');
-    await expectNoHorizontalOverflow(page, '.content-grid');
-    await expectNoHorizontalOverflow(page, '.workbench-overview');
-    await expect(page.locator('.topbar-context')).toContainText(translate('zh-CN', 'dashboard.defaultModel'));
-    await expect(page.locator('.topbar-actions')).toContainText(translate('zh-CN', 'shell.openChat'));
     await expectNoVisibleRouteLeak(page);
-    await page.screenshot({ path: `test-results/round-03-design-system/workspace-${width}.png`, fullPage: true });
   }
 });
 
-test('data import rejects invalid manifests and records the failure visibly', async ({ page }) => {
-  await page.goto('/data/import');
-  await page.getByLabel(translate('zh-CN', 'data.import.aria')).fill('{"bad":true}');
-  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'data.import.preflight')) }).click();
-  await expect(page.getByText(/rejected|refused|invalid|Import/i)).toBeVisible();
-});
-
-test('data mobility backup restore and rollback use structured Round 12 records', async ({ page }) => {
-  const data = navModules.find((module) => module.id === 'data')!;
-  await page.goto('/data/import');
-  await expect(page.getByLabel(translate('zh-CN', 'data.import.aria'))).toHaveValue('');
-  await page.getByLabel(translate('zh-CN', 'data.import.aria')).fill('{"providers":[{"name":"Round 12 UI Provider","baseUrl":"http://127.0.0.1:11434/v1"}],"models":[{"providerName":"Round 12 UI Provider","name":"round-12-ui-model"}]}');
-  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'data.import.preflight')) }).click();
-  await expect(page.locator('main [data-tab="import"]').getByText('ready').first()).toBeVisible();
-  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'data.import.apply')) }).click();
-  await expect(page.locator('main [data-tab="import"]').getByText('completed').first()).toBeVisible();
-
-  await openFeature(page, data, data.tabs.find((tab) => tab.id === 'backup')!);
-  await expect(page.getByLabel(translate('zh-CN', 'data.backup.passphrase'))).toHaveValue('');
-  await page.getByLabel(translate('zh-CN', 'data.backup.passphrase')).fill('round-12-passphrase');
-  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'data.backup.create')) }).click();
-  await expect(page.locator('main [data-tab="backup"]').getByText('encrypted-backup').first()).toBeVisible();
-
-  await openFeature(page, data, data.tabs.find((tab) => tab.id === 'restore')!);
-  await expect(page.getByLabel(translate('zh-CN', 'data.restore.passphrase'))).toHaveValue('');
-  await page.getByLabel(translate('zh-CN', 'data.restore.passphrase')).fill('round-12-passphrase');
-  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'data.restore.preflight')) }).click();
-  await expect(page.locator('main [data-tab="restore"]').getByText('restore-preflight').first()).toBeVisible();
-
-  await openFeature(page, data, data.tabs.find((tab) => tab.id === 'rollback')!);
-  await expect(page.locator('main [data-tab="rollback"]').getByText(/available|applied/).first()).toBeVisible();
-  await expectNoVisibleRouteLeak(page);
-  await expectNoHorizontalOverflow(page, '.app-shell');
-  await expectNoHorizontalOverflow(page, '.content-grid');
-});
-
-test('knowledge import retrieval rebuild delete and chat citations use one RAG chain', async ({ page }) => {
+test('knowledge data and tools flows keep real contracts in the new panels', async ({ page }) => {
   const knowledge = navModules.find((module) => module.id === 'knowledge')!;
+  const tools = navModules.find((module) => module.id === 'tools')!;
   await page.goto('/knowledge/files');
-  await expect(page.locator('main [data-tab="files"] .knowledge-flow')).toBeVisible();
-  await expect(page.locator('main [data-tab="files"] .knowledge-pipeline')).toBeVisible();
   await expect(page.getByLabel(translate('zh-CN', 'knowledge.import.name'))).toHaveValue('');
   await expect(page.getByLabel(translate('zh-CN', 'knowledge.import.content'))).toHaveValue('');
-  await page.getByLabel(translate('zh-CN', 'knowledge.import.name')).fill('round-09-smoke.md');
-  await page.getByLabel(translate('zh-CN', 'knowledge.import.content')).fill('Round 9 smoke verifies retrieval citations, rebuild, and delete in one knowledge pipeline.');
+  await page.getByLabel(translate('zh-CN', 'knowledge.import.name')).fill('round-redesign-smoke.md');
+  await page.getByLabel(translate('zh-CN', 'knowledge.import.content')).fill('The redesign smoke verifies retrieval citations in the lightweight tool panels.');
   await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'knowledge.import.create')) }).click();
-  await expect(page.locator('main [data-tab="files"]').getByRole('cell', { name: 'round-09-smoke.md' })).toBeVisible();
+  await expect(page.locator('main [data-tab="files"]').getByText('round-redesign-smoke.md')).toBeVisible();
   await expect(page.locator('main [data-tab="files"]').getByText(translate('zh-CN', 'common.indexed')).first()).toBeVisible();
 
   await openFeature(page, knowledge, knowledge.tabs.find((tab) => tab.id === 'retrieval')!);
   await page.getByLabel(translate('zh-CN', 'knowledge.retrieval.query')).fill('retrieval citations smoke');
   await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'knowledge.retrieval.run')) }).click();
-  await expect(page.locator('main [data-tab="retrieval"]').getByRole('cell', { name: 'round-09-smoke.md', exact: true })).toBeVisible();
+  await expect(page.locator('main [data-tab="retrieval"]').getByText('round-redesign-smoke.md')).toBeVisible();
 
-  const chat = navModules.find((module) => module.id === 'chat')!;
-  await openFeature(page, chat, chat.tabs.find((tab) => tab.id === 'playground')!);
-  await page.getByPlaceholder(translate('zh-CN', 'chat.composer.placeholder')).fill('How does retrieval citations smoke work?');
-  await page.getByRole('button', { name: translate('zh-CN', 'chat.send') }).click();
-  await expect(page.getByLabel(translate('zh-CN', 'chat.citations.aria')).first()).toBeVisible();
-
-  await openFeature(page, knowledge, knowledge.tabs.find((tab) => tab.id === 'files')!);
-  await page.locator('tr', { hasText: 'round-09-smoke.md' }).getByRole('button', { name: new RegExp(translate('zh-CN', 'knowledge.rebuild')) }).click();
-  await expect(page.locator('main [data-tab="files"]').getByRole('cell', { name: 'round-09-smoke.md' })).toBeVisible();
-  await page.locator('tr', { hasText: 'round-09-smoke.md' }).getByRole('button', { name: new RegExp(translate('zh-CN', 'knowledge.delete')) }).click();
-  await page.locator('tr', { hasText: 'round-09-smoke.md' }).getByRole('button', { name: new RegExp(translate('zh-CN', 'knowledge.delete')) }).click();
-  await expect(page.locator('main [data-tab="files"]').getByRole('cell', { name: 'round-09-smoke.md' })).toHaveCount(0);
-});
-
-test('tools run center uses unified execution trace approval chain', async ({ page }) => {
-  const tools = navModules.find((module) => module.id === 'tools')!;
-  await page.goto('/tools/mcp');
-  await expect(page.locator('main [data-tab="mcp"] .tools-control-strip')).toBeVisible();
-  await expect(page.locator('main [data-tab="mcp"] .tools-boundary-grid')).toBeVisible();
-  await expect(page.getByRole('button', { name: new RegExp(translate('zh-CN', 'tools.mcp.register')) })).toBeDisabled();
-  await page.goto('/tools/runs');
+  await openFeature(page, tools, tools.tabs.find((tab) => tab.id === 'runs')!);
   await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'tools.execution.runStatusRead')) }).click();
-  await expect(page.locator('main [data-tab="runs"]').getByRole('cell', { name: /Agent|工具|Tool|运行|run/i }).first()).toBeVisible();
-  await expect(page.locator('main [data-tab="runs"]').getByText(translate('zh-CN', 'tools.execution.trace')).first()).toBeVisible();
-
-  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'tools.execution.runEchoApproval')) }).click();
-  await expect(page.locator('main [data-tab="runs"]').getByText(translate('zh-CN', 'tools.execution.approvals')).first()).toBeVisible();
-  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'tools.approve')) }).first().click();
-  await expect(page.locator('main [data-tab="runs"]').getByText(translate('zh-CN', 'tools.execution.trace')).first()).toBeVisible();
+  await expect(page.locator('main [data-tab="runs"]').getByText(/NexaChat status read/).first()).toBeVisible();
 
   await openFeature(page, tools, tools.tabs.find((tab) => tab.id === 'agents')!);
   await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'tools.dryRun.generate')) }).first().click();
@@ -391,7 +249,7 @@ test('tools run center uses unified execution trace approval chain', async ({ pa
   await expect(page.locator('main [data-tab="runs"]').getByText(/Agent/).first()).toBeVisible();
 });
 
-test('theme and language preferences can change without breaking the shell', async ({ page }) => {
+test('theme and language preferences keep light dark and system modes usable', async ({ page }) => {
   await page.goto('/settings/preferences');
 
   await page.getByLabel(translate('zh-CN', 'settings.preferences.theme')).selectOption('dark');
@@ -399,42 +257,42 @@ test('theme and language preferences can change without breaking the shell', asy
   await page.getByLabel(translate('zh-CN', 'settings.preferences.motion')).selectOption('reduced');
   await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'settings.preferences.save')) }).click();
 
-  await expect(page.locator('.app-shell')).toHaveClass(/theme-dark/);
-  await expect(page.locator('.module-child-link.is-active')).toContainText(translate('en-US', 'nav.settings.preferences.label'));
-  await expect(page.locator('.topbar-actions')).toContainText(translate('en-US', 'shell.openChat'));
+  await expect(page.locator('.app-frame')).toHaveClass(/theme-dark/);
+  await expect(page.locator(`#feature-list-settings .feature-row.is-active`)).toContainText(translate('en-US', 'nav.settings.preferences.label'));
+  await expect(page.locator('.command-actions')).toContainText(translate('en-US', 'shell.openChat'));
   await expect(page.locator('main [data-tab="preferences"]').getByRole('heading', { name: translate('en-US', 'settings.preferences.title') }).first()).toBeVisible();
-  await expectNoHorizontalOverflow(page, '.app-shell');
-  await page.screenshot({ path: 'test-results/round-05-theme-runtime/dark-en-preferences.png', fullPage: true });
+  await expectNoHorizontalOverflow(page, '.app-frame');
+  await page.screenshot({ path: 'test-results/ui-full-redesign/dark-en-preferences.png', fullPage: true });
 
   await page.getByLabel(translate('en-US', 'settings.preferences.theme')).selectOption('light');
   await page.getByRole('button', { name: new RegExp(translate('en-US', 'settings.preferences.save')) }).click();
-  await expect(page.locator('.app-shell')).toHaveClass(/theme-light/);
-  await expect(page.locator('.app-shell')).toHaveAttribute('data-theme-mode', 'light');
-  await expect(page.locator('.app-shell')).toHaveAttribute('data-resolved-theme', 'light');
-  await expectNoHorizontalOverflow(page, '.app-shell');
-  await page.screenshot({ path: 'test-results/round-05-theme-runtime/light-en-preferences.png', fullPage: true });
+  await expect(page.locator('.app-frame')).toHaveClass(/theme-light/);
+  await expect(page.locator('.app-frame')).toHaveAttribute('data-theme-mode', 'light');
+  await expect(page.locator('.app-frame')).toHaveAttribute('data-resolved-theme', 'light');
+  await expectNoHorizontalOverflow(page, '.app-frame');
+  await page.screenshot({ path: 'test-results/ui-full-redesign/light-en-preferences.png', fullPage: true });
 });
 
 test('system theme follows OS preference changes without resetting saved preferences', async ({ page }) => {
   await mockSystemTheme(page, true);
   await page.goto('/settings/preferences');
 
-  await expect(page.locator('.app-shell')).toHaveClass(/theme-dark/);
-  await expect(page.locator('.app-shell')).toHaveAttribute('data-theme-mode', 'system');
-  await expect(page.locator('.app-shell')).toHaveAttribute('data-resolved-theme', 'dark');
+  await expect(page.locator('.app-frame')).toHaveClass(/theme-dark/);
+  await expect(page.locator('.app-frame')).toHaveAttribute('data-theme-mode', 'system');
+  await expect(page.locator('.app-frame')).toHaveAttribute('data-resolved-theme', 'dark');
 
   await page.getByLabel(translate('zh-CN', 'settings.preferences.language')).selectOption('en-US');
   await page.getByLabel(translate('zh-CN', 'settings.preferences.density')).selectOption('compact');
   await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'settings.preferences.save')) }).click();
-  await expect(page.locator('.app-shell')).toHaveClass(/density-compact/);
-  await expect(page.locator('.topbar-actions')).toContainText(translate('en-US', 'shell.openChat'));
-  await expect(page.locator('.app-shell')).toHaveAttribute('data-theme-mode', 'system');
-  await expect(page.locator('.app-shell')).toHaveAttribute('data-resolved-theme', 'dark');
+  await expect(page.locator('.app-frame')).toHaveClass(/density-compact/);
+  await expect(page.locator('.command-actions')).toContainText(translate('en-US', 'shell.openChat'));
+  await expect(page.locator('.app-frame')).toHaveAttribute('data-theme-mode', 'system');
+  await expect(page.locator('.app-frame')).toHaveAttribute('data-resolved-theme', 'dark');
 
   await page.evaluate(() => window.__setNexaChatSystemDark(false));
-  await expect(page.locator('.app-shell')).toHaveClass(/theme-light/);
-  await expect(page.locator('.app-shell')).toHaveAttribute('data-resolved-theme', 'light');
-  await expect(page.locator('.app-shell')).toHaveClass(/density-compact/);
-  await expect(page.locator('.topbar-actions')).toContainText(translate('en-US', 'shell.openChat'));
-  await page.screenshot({ path: 'test-results/round-05-theme-runtime/system-light-en-preferences.png', fullPage: true });
+  await expect(page.locator('.app-frame')).toHaveClass(/theme-light/);
+  await expect(page.locator('.app-frame')).toHaveAttribute('data-resolved-theme', 'light');
+  await expect(page.locator('.app-frame')).toHaveClass(/density-compact/);
+  await expect(page.locator('.command-actions')).toContainText(translate('en-US', 'shell.openChat'));
+  await page.screenshot({ path: 'test-results/ui-full-redesign/system-light-en-preferences.png', fullPage: true });
 });

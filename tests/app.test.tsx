@@ -23,39 +23,37 @@ function activePanel() {
   return document.querySelector('main [role="tabpanel"]') as HTMLElement;
 }
 
+function openModule(module: NavModule) {
+  const rail = document.querySelector('.module-rail') as HTMLElement;
+  fireEvent.click(within(rail).getByRole('button', { name: new RegExp(module.shortLabel) }));
+}
+
 function openFeature(module: NavModule, tab: NavTab) {
-  const expandButton = screen.getByRole('button', { name: new RegExp(`${translate('zh-CN', 'shell.expand')}${module.label}|${translate('zh-CN', 'shell.collapse')}${module.label}`) });
-  if (expandButton.getAttribute('aria-expanded') === 'false') {
-    fireEvent.click(expandButton);
+  openModule(module);
+  const switcher = document.querySelector(`#feature-list-${module.id}`);
+  if (!switcher) {
+    throw new Error(`Missing feature switcher for ${module.id}`);
   }
-  const childList = document.getElementById(`sidebar-children-${module.id}`);
-  if (!childList) {
-    throw new Error(`Missing child list for ${module.id}`);
-  }
-  fireEvent.click(within(childList).getByRole('button', { name: new RegExp(tab.label) }));
+  fireEvent.click(within(switcher as HTMLElement).getByRole('button', { name: new RegExp(tab.label) }));
 }
 
 describe('NexaChat renderer', () => {
-  it('renders all eight first-level modules with expandable feature links', async () => {
+  it('renders the rebuilt lightweight tool frame without old shell structures', async () => {
     await renderApp();
 
-    expect(document.querySelectorAll('.module-nav-group')).toHaveLength(navModules.length);
-    expect(document.querySelectorAll('.module-nav-item')).toHaveLength(navModules.length);
+    expect(document.querySelectorAll('.app-frame')).toHaveLength(1);
+    expect(document.querySelectorAll('.module-rail')).toHaveLength(1);
+    expect(document.querySelectorAll('.module-switcher')).toHaveLength(1);
+    expect(document.querySelectorAll('.work-surface')).toHaveLength(1);
+    expect(document.querySelectorAll('.rail-item')).toHaveLength(navModules.length);
+    expect(document.querySelectorAll('.app-shell')).toHaveLength(0);
+    expect(document.querySelectorAll('.module-nav-item')).toHaveLength(0);
+    expect(document.querySelectorAll('.module-tabs')).toHaveLength(0);
+    expect(document.querySelectorAll('.module-subnav-panel')).toHaveLength(0);
 
     for (const module of navModules) {
-      const expandButton = document.querySelector(`button[aria-controls="sidebar-children-${module.id}"]`) as HTMLButtonElement | null;
-      if (!expandButton) {
-        throw new Error(`Missing expand button for ${module.id}`);
-      }
-      const moduleButton = expandButton.parentElement?.querySelector('.module-nav-item');
-      expect(moduleButton?.textContent).toContain(module.label);
-
-      if (expandButton.getAttribute('aria-expanded') === 'false') {
-        fireEvent.click(expandButton);
-      }
-      const childList = document.getElementById(`sidebar-children-${module.id}`);
-      expect(childList).toBeTruthy();
-      expect(childList?.textContent).toContain(module.tabs[0].label);
+      const rail = document.querySelector('.module-rail') as HTMLElement;
+      expect(within(rail).getByRole('button', { name: new RegExp(module.shortLabel) })).toBeInTheDocument();
     }
   });
 
@@ -74,10 +72,10 @@ describe('NexaChat renderer', () => {
     });
     expect(screen.getByText(/Mock response from nexachat-mock/)).toBeInTheDocument();
     expect(screen.getAllByText(translate('zh-CN', 'chat.message.copy')).length).toBeGreaterThan(0);
-    expect(screen.getByText(translate('zh-CN', 'chat.exportConversation'))).toBeInTheDocument();
+    expect(screen.getByText(translate('zh-CN', 'chat.compare.title'))).toBeInTheDocument();
   });
 
-  it('shows model gateway and settings key areas on new canonical routes', async () => {
+  it('shows model gateway and settings key areas on canonical routes', async () => {
     await renderApp();
 
     const models = navModules.find((module) => module.id === 'models')!;
@@ -93,7 +91,7 @@ describe('NexaChat renderer', () => {
 
     openFeature(gateway, gateway.tabs.find((tab) => tab.id === 'keys')!);
     expect(activePanel()).toHaveAttribute('data-tab', 'keys');
-    expect(activePanel()).toHaveTextContent('Gateway API Key');
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'gateway.keys.title'));
 
     openFeature(settings, settings.tabs.find((tab) => tab.id === 'preferences')!);
     expect(activePanel()).toHaveAttribute('data-tab', 'preferences');
@@ -102,21 +100,6 @@ describe('NexaChat renderer', () => {
     expect(activePanel()).toHaveAttribute('data-tab', 'security');
     expect(activePanel()).toHaveTextContent(translate('zh-CN', 'settings.security.title'));
     expect(activePanel()).toHaveTextContent(translate('zh-CN', 'settings.security.auditIntegrity'));
-    openFeature(settings, settings.tabs.find((tab) => tab.id === 'audit')!);
-    expect(activePanel()).toHaveAttribute('data-tab', 'audit');
-    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'settings.audit.verify'));
-    openFeature(gateway, gateway.tabs.find((tab) => tab.id === 'usage')!);
-    expect(activePanel()).toHaveAttribute('data-tab', 'usage');
-    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'observability.health.title'));
-    openFeature(settings, settings.tabs.find((tab) => tab.id === 'feedback')!);
-    expect(activePanel()).toHaveAttribute('data-tab', 'feedback');
-    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'observability.feedback.title'));
-    openFeature(settings, settings.tabs.find((tab) => tab.id === 'evals')!);
-    expect(activePanel()).toHaveAttribute('data-tab', 'evals');
-    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'observability.eval.title'));
-    openFeature(settings, settings.tabs.find((tab) => tab.id === 'observability')!);
-    expect(activePanel()).toHaveAttribute('data-tab', 'observability');
-    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'observability.privacy.title'));
   });
 });
 

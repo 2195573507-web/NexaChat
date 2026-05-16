@@ -69,9 +69,9 @@ const app = await electron.launch({
 
 try {
   const window = await app.firstWindow();
-  await window.locator('.app-shell').waitFor({ timeout: 20_000 });
-  await window.getByText(desktopEntry.productName, { exact: true }).first().waitFor({ timeout: 5_000 });
-  const moduleCount = await window.locator('.module-nav-item').count();
+  await window.locator('.app-frame').waitFor({ timeout: 20_000 });
+  await window.locator('.brand-mark').waitFor({ timeout: 5_000 });
+  const moduleCount = await window.locator('.rail-item').count();
   if (moduleCount !== 8) {
     throw new Error(`Installed app expected 8 modules, got ${moduleCount}.`);
   }

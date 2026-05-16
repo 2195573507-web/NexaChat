@@ -1,257 +1,164 @@
-import {
-  Activity,
-  Clock3,
-  Database,
-  FileInput,
-  KeyRound,
-  MessageSquareText,
-  ScrollText,
-  ServerCog,
-  Settings2,
-} from 'lucide-react';
-import { EmptyState } from '../components/EmptyState';
-import { ActionCard, MetricTile, PageSection, Toolbar } from '../components/ui';
+import { ArrowRight, KeyRound, MessageSquareText, PlugZap, ServerCog } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { ActivityList, CommandButton, ConfigDetail, ConfigList, DataRows, EmptyBlock, StatusPillLite, ToolSection } from '../components/AppFrame';
 import { useI18n } from '../i18n';
-import type { TabPageProps } from './shared';
-import { DataTable, ListRows, Metric, StateBadge, TabPanel, getDefaultModel, healthTone } from './shared';
+import { formatDate, getDefaultModel, getDefaultProvider, healthState, statusLabel, type TabPageProps } from './shared';
+import { TabPanel } from './shared';
 
-function formatTime(value: number | null | undefined, fallback: string) {
-  return value ? new Date(value).toLocaleString() : fallback;
-}
-
-function countHealthy(snapshot: TabPageProps['snapshot'], t: ReturnType<typeof useI18n>['t']) {
-  const healthyProviders = snapshot.providers.filter((provider) => provider.healthStatus === 'healthy').length;
-  const healthyModels = snapshot.models.filter((model) => model.healthStatus === 'healthy').length;
-  return t('dashboard.healthSummary', { providers: healthyProviders, providerTotal: snapshot.providers.length, models: healthyModels, modelTotal: snapshot.models.length });
+function QuickAction({
+  title,
+  detail,
+  icon,
+  onClick,
+}: {
+  title: string;
+  detail: string;
+  icon: ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" className="switch-tile" onClick={onClick}>
+      <span className="switch-tile-icon">{icon}</span>
+      <span>
+        <strong>{title}</strong>
+        <small>{detail}</small>
+      </span>
+      <ArrowRight size={15} />
+    </button>
+  );
 }
 
 export function DashboardPage({ activeTab, snapshot, onOpenModule }: TabPageProps) {
   const { t } = useI18n();
-  const { dashboard } = snapshot;
   const defaultModel = getDefaultModel(snapshot);
-  const defaultProvider = snapshot.providers.find((provider) => provider.id === dashboard.workspace.defaultProviderId) ?? snapshot.providers[0];
-  const latestRequest = snapshot.requestLogs[0];
-  const latestAudit = snapshot.auditLogs[0];
-  const latestImport = snapshot.importExportResults[0];
-  const tokenTotal = dashboard.usageToday.inputTokens + dashboard.usageToday.outputTokens;
+  const defaultProvider = getDefaultProvider(snapshot);
+  const readyProviders = snapshot.providers.filter((provider) => provider.enabled && provider.secretRef);
+  const recentChanges = [
+    ...snapshot.providerHealthRecords.map((record) => ({
+      title: statusLabel(record.status, t),
+      meta: formatDate(record.createdAt, t),
+      state: healthState(record.status),
+    })),
+    ...snapshot.auditLogs.map((log) => ({
+      title: log.action,
+      meta: formatDate(log.createdAt, t),
+      state: log.integrityState === 'verified' ? 'ready' as const : 'warning' as const,
+    })),
+  ].slice(0, 6);
 
   if (activeTab.id === 'activity') {
     return (
-      <TabPanel moduleId="workspace" tab={activeTab}>
-        <section className="two-column">
-          <div className="panel">
-            <h2>{t('dashboard.recentConversations')}</h2>
-            <ListRows
-              rows={dashboard.recentConversations.map((conversation) => ({
-                title: conversation.title,
-                meta: t('common.valueSeparator', { left: t('common.messageCount', { count: conversation.messageCount }), right: conversation.isPinned ? t('common.pinned') : t('common.normal') }),
-              }))}
-              empty={
-                <EmptyState
-                  title={t('dashboard.noConversation.title')}
-                  reason={t('dashboard.noConversation.reason')}
-                  actionLabel={t('chat.newConversation')}
-                  onAction={() => onOpenModule({ moduleId: 'chat', tabId: 'playground' })}
-                />
-              }
-            />
-          </div>
-          <div className="panel">
-            <h2>{t('dashboard.requestAudit')}</h2>
-            <ListRows
-              rows={[
-                ...snapshot.requestLogs.slice(0, 4).map((request) => ({
-                  title: t('common.valueSeparator', { left: request.status, right: request.endpoint }),
-                  meta: request.errorMessage ?? request.modelNameSnapshot ?? t('dashboard.requestLogged'),
-                })),
-                ...snapshot.auditLogs.slice(0, 4).map((audit) => ({
-                  title: audit.action,
-                  meta: `${audit.targetType}:${audit.targetId ?? '-'}`,
-                })),
-                ...snapshot.gatewayLogs.slice(0, 4).map((log) => ({
-                  title: `${log.method} ${log.path}`,
-                  meta: t('common.valueSeparator', { left: log.statusCode, right: formatTime(log.createdAt, t('dashboard.noRecord')) }),
-                })),
-              ]}
-              empty={
-                <EmptyState
-                  title={t('dashboard.noActivity.title')}
-                  reason={t('dashboard.noActivity.reason')}
-                  actionLabel={t('dashboard.sendMessage')}
-                  onAction={() => onOpenModule({ moduleId: 'chat', tabId: 'playground' })}
-                />
-              }
-            />
-          </div>
-        </section>
+      <TabPanel moduleId="workspace" tab={activeTab} className="tool-layout">
+        <ConfigList title={activeTab.label} description={activeTab.description}>
+          <ActivityList
+            empty={t('app.recent.empty')}
+            items={snapshot.auditLogs.slice(0, 12).map((log) => ({
+              title: log.action,
+              meta: `${log.actor} / ${formatDate(log.createdAt, t)}`,
+              state: log.integrityState === 'verified' ? 'ready' : 'warning',
+            }))}
+          />
+        </ConfigList>
+        <ConfigDetail title={t('dashboard.activity.title')} description={activeTab.featureBoundary}>
+          <DataRows
+            rows={[
+              { label: t('app.rail.logs'), value: snapshot.requestLogs.length },
+              { label: t('settings.audit.integrity'), value: statusLabel(snapshot.auditIntegrity.status, t) },
+              { label: t('app.rail.currentTab'), value: activeTab.label },
+            ]}
+          />
+        </ConfigDetail>
       </TabPanel>
     );
   }
 
   if (activeTab.id === 'health') {
     return (
-      <TabPanel moduleId="workspace" tab={activeTab}>
-        <section className="overview-grid">
-          <Metric title={t('dashboard.metric.provider')} value={snapshot.providers.length} detail={t('dashboard.metric.enabled', { count: snapshot.providers.filter((provider) => provider.enabled).length })} />
-          <Metric title={t('dashboard.metric.model')} value={snapshot.models.length} detail={t('dashboard.metric.healthy', { count: snapshot.models.filter((model) => model.healthStatus === 'healthy').length })} />
-          <Metric title={t('dashboard.metric.knowledgeFiles')} value={snapshot.knowledgeFiles.length} detail={t('dashboard.metric.chunks', { count: snapshot.knowledgeFiles.reduce((sum, file) => sum + file.chunkCount, 0) })} />
-          <Metric title={t('dashboard.metric.gatewayLogs')} value={snapshot.gatewayLogs.length} detail={`${dashboard.gatewayStatus.bindHost}:${dashboard.gatewayStatus.port}`} />
-        </section>
-        <section className="two-column">
-          <div className="panel">
-            <h2>{t('dashboard.modelProviderStatus')}</h2>
-            <DataTable
-              columns={[t('dashboard.columns.provider'), t('dashboard.columns.type'), t('dashboard.columns.health'), t('dashboard.columns.default')]}
-              rows={snapshot.providers.map((provider) => [
-                provider.name,
-                provider.type,
-                <StateBadge key={`${provider.id}-health`} label={provider.healthStatus} tone={healthTone(provider.healthStatus)} />,
-                provider.id === dashboard.workspace.defaultProviderId ? t('common.yes') : t('common.no'),
-              ])}
-            />
+      <TabPanel moduleId="workspace" tab={activeTab} className="tool-layout">
+        <ConfigList title={activeTab.label} description={activeTab.description}>
+          <div className="status-stack">
+            <StatusPillLite label={defaultModel?.displayName ?? t('app.rail.unconfigured')} state={defaultModel ? healthState(defaultModel.healthStatus) : 'warning'} />
+            <StatusPillLite label={snapshot.dashboard.gatewayStatus.running ? t('shell.gateway.running') : t('shell.gateway.stopped')} state={snapshot.dashboard.gatewayStatus.running ? 'ready' : 'muted'} />
+            <StatusPillLite label={readyProviders.length > 0 ? t('common.countAvailable', { count: readyProviders.length }) : t('common.notConfigured')} state={readyProviders.length > 0 ? 'ready' : 'warning'} />
           </div>
-          <div className="panel">
-            <h2>{t('dashboard.localDataStatus')}</h2>
-            <dl className="detail-list">
-              <div><dt>{t('dashboard.local.conversations')}</dt><dd>{snapshot.conversations.length}</dd></div>
-              <div><dt>{t('dashboard.local.messages')}</dt><dd>{snapshot.messages.length}</dd></div>
-              <div><dt>{t('dashboard.local.requestLogs')}</dt><dd>{snapshot.requestLogs.length}</dd></div>
-              <div><dt>{t('dashboard.local.auditLogs')}</dt><dd>{snapshot.auditLogs.length}</dd></div>
-              <div><dt>{t('dashboard.local.gatewayRunning')}</dt><dd>{dashboard.gatewayStatus.running ? t('shell.gateway.running') : t('shell.gateway.stopped')}</dd></div>
-            </dl>
-          </div>
-        </section>
+          <ActivityList
+            empty={t('shared.empty.reason')}
+            items={snapshot.providerHealthRecords.slice(0, 8).map((record) => ({
+              title: statusLabel(record.status, t),
+              meta: record.errorMessage ?? `${record.latencyMs ?? 0}ms`,
+              state: healthState(record.status),
+            }))}
+          />
+        </ConfigList>
+        <ConfigDetail title={t('nav.workspace.health.label')} description={t('settings.about.dataLocationValue')}>
+          <DataRows
+            rows={[
+              { label: t('settings.about.bindHost'), value: `${snapshot.dashboard.gatewayStatus.bindHost}:${snapshot.dashboard.gatewayStatus.port}` },
+              { label: t('models.providerList'), value: snapshot.providers.length },
+              { label: t('app.rail.models'), value: snapshot.models.length },
+            ]}
+          />
+        </ConfigDetail>
       </TabPanel>
     );
   }
 
-  const actionEntries = [
-    { label: t('dashboard.action.chat'), icon: MessageSquareText, target: { moduleId: 'chat' as const, tabId: 'playground' } },
-    { label: t('dashboard.action.provider'), icon: ServerCog, target: { moduleId: 'models' as const, tabId: 'providers' } },
-    { label: t('dashboard.action.model'), icon: Settings2, target: { moduleId: 'models' as const, tabId: 'catalog' } },
-    { label: t('dashboard.action.gatewayKey'), icon: KeyRound, target: { moduleId: 'gateway' as const, tabId: 'keys' } },
-    { label: t('dashboard.action.import'), icon: FileInput, target: { moduleId: 'data' as const, tabId: 'import' } },
-    { label: t('dashboard.action.logs'), icon: ScrollText, target: { moduleId: 'gateway' as const, tabId: 'logs' } },
-  ];
-
   return (
-    <TabPanel moduleId="workspace" tab={activeTab} className="workbench-page">
-      <section className="workbench-overview" aria-label={t('dashboard.home.aria')}>
-        <section className="workbench-hero" aria-labelledby="workbench-summary-title">
-          <div className="workbench-hero-main">
-            <div className="section-header">
-              <div>
-                <span className="page-eyebrow">{dashboard.workspace.name}</span>
-                <h2 id="workbench-summary-title">{t('dashboard.overview.title')}</h2>
-                <p>{t('dashboard.overview.note')}</p>
-              </div>
-              <StateBadge label={dashboard.gatewayStatus.running ? t('dashboard.gateway.running') : t('dashboard.gateway.stopped')} tone={dashboard.gatewayStatus.running ? 'success' : 'warning'} />
-            </div>
-            <div className="readiness-list">
-              <div>
-                <span>{t('dashboard.defaultModel')}</span>
-                <strong>{defaultModel?.displayName ?? t('common.notConfigured')}</strong>
-                <p>{defaultProvider?.name ?? t('dashboard.defaultModel.missing')}</p>
-              </div>
-              <div>
-                <span>{t('dashboard.localGateway')}</span>
-                <strong>{dashboard.gatewayStatus.running ? t('shell.gateway.running') : t('shell.gateway.stopped')}</strong>
-                <p>
-                  {dashboard.gatewayStatus.bindHost}:{dashboard.gatewayStatus.port}
-                </p>
-              </div>
-              <div>
-                <span>{t('dashboard.metric.auditHealth')}</span>
-                <strong>{countHealthy(snapshot, t)}</strong>
-                <p>{latestAudit?.action ?? t('dashboard.activity.noAudit')}</p>
-              </div>
-            </div>
+    <TabPanel moduleId="workspace" tab={activeTab} className="tool-layout workbench-home">
+      <ConfigList title={t('dashboard.overview.title')} description={activeTab.featureBoundary}>
+        <section className="current-config-strip" aria-label={t('dashboard.home.aria')}>
+          <div>
+            <span className="eyebrow">{t('dashboard.defaultModel')}</span>
+            <strong>{defaultModel?.displayName ?? t('app.rail.unconfigured')}</strong>
+            <small>{defaultProvider?.name ?? t('common.notConfigured')}</small>
           </div>
-          <div className="next-step-panel">
-            <div>
-              <span className="page-eyebrow">{t('dashboard.actions.title')}</span>
-              <h3>{defaultModel ? t('dashboard.action.chat') : t('dashboard.action.provider')}</h3>
-              <p>{defaultModel ? t('dashboard.actions.note') : t('dashboard.defaultModel.missing')}</p>
-            </div>
-            <Toolbar align="start">
-              <button type="button" className="primary-button" onClick={() => onOpenModule({ moduleId: defaultModel ? 'chat' : 'models', tabId: defaultModel ? 'playground' : 'providers' })}>
-                {defaultModel ? <MessageSquareText size={16} /> : <ServerCog size={16} />}
-                {defaultModel ? t('dashboard.action.chat') : t('dashboard.action.provider')}
-              </button>
-            </Toolbar>
+          <div>
+            <span className="eyebrow">{t('shell.gateway')}</span>
+            <strong>{snapshot.dashboard.gatewayStatus.running ? t('shell.gateway.running') : t('shell.gateway.stopped')}</strong>
+            <small>{`${snapshot.dashboard.gatewayStatus.bindHost}:${snapshot.dashboard.gatewayStatus.port}`}</small>
+          </div>
+          <div>
+            <span className="eyebrow">{t('models.providerList')}</span>
+            <strong>{readyProviders.length > 0 ? t('common.countAvailable', { count: readyProviders.length }) : t('common.notConfigured')}</strong>
+            <small>{t('common.countTotal', { count: snapshot.providers.length })}</small>
           </div>
         </section>
 
-        <PageSection title={t('dashboard.metrics.title')} description={t('dashboard.metrics.note')} className="workbench-section">
-          <div className="metric-river">
-            <MetricTile label={t('dashboard.metric.localConversations')} value={snapshot.conversations.length} detail={t('common.messageCount', { count: snapshot.messages.length })} tone="info" />
-            <MetricTile label={t('dashboard.metric.todayRequests')} value={dashboard.usageToday.requests} detail={latestRequest ? latestRequest.status : t('dashboard.noRequest')} tone={latestRequest?.status === 'failed' ? 'danger' : 'neutral'} />
-            <MetricTile label={t('dashboard.metric.tokenUsage')} value={tokenTotal} detail={t('observability.summary.tokenBreakdown', { input: dashboard.usageToday.inputTokens, output: dashboard.usageToday.outputTokens })} />
-            <MetricTile label={t('dashboard.metric.knowledgeFiles')} value={snapshot.knowledgeFiles.length} detail={t('dashboard.metric.chunks', { count: snapshot.knowledgeFiles.reduce((sum, file) => sum + file.chunkCount, 0) })} tone="success" />
+        <ToolSection title={t('dashboard.actions.title')} description={t('dashboard.actions.note')}>
+          <div className="switch-grid">
+            <QuickAction title={t('dashboard.action.chat')} detail={t('chat.playground.note')} icon={<MessageSquareText size={18} />} onClick={() => onOpenModule({ moduleId: 'chat', tabId: 'playground' })} />
+            <QuickAction title={t('dashboard.action.provider')} detail={t('models.provider.note')} icon={<ServerCog size={18} />} onClick={() => onOpenModule({ moduleId: 'models', tabId: 'providers' })} />
+            <QuickAction title={t('dashboard.action.gatewayKey')} detail={t('gateway.keys.note')} icon={<KeyRound size={18} />} onClick={() => onOpenModule({ moduleId: 'gateway', tabId: 'keys' })} />
+            <QuickAction title={t('tools.mcp.title')} detail={t('tools.mcp.note')} icon={<PlugZap size={18} />} onClick={() => onOpenModule({ moduleId: 'tools', tabId: 'mcp' })} />
           </div>
-        </PageSection>
+        </ToolSection>
 
-        <section className="workbench-section" aria-labelledby="workbench-actions-title">
-          <div className="section-header">
-            <div>
-              <h2 id="workbench-actions-title">{t('dashboard.actions.title')}</h2>
-              <p>{t('dashboard.actions.note')}</p>
-            </div>
-          </div>
-          <div className="action-grid workbench-action-grid">
-            {actionEntries.map((entry) => {
-              const Icon = entry.icon;
-              return (
-                <ActionCard
-                  key={entry.label}
-                  title={entry.label}
-                  description={t('dashboard.actions.note')}
-                  icon={<Icon size={17} />}
-                  onClick={() => onOpenModule(entry.target)}
-                />
-              );
-            })}
-          </div>
-        </section>
+        <ToolSection title={t('chat.localConversations')} description={t('dashboard.recentConversations')}>
+          {snapshot.dashboard.recentConversations.length > 0 ? (
+            <ActivityList
+              empty={t('shared.empty.reason')}
+              items={snapshot.dashboard.recentConversations.slice(0, 5).map((conversation) => ({
+                title: conversation.title,
+                meta: t('common.messageCount', { count: conversation.messageCount }),
+                state: conversation.status === 'active' ? 'ready' : 'muted',
+              }))}
+            />
+          ) : (
+            <EmptyBlock title={t('chat.empty.title')} detail={t('chat.empty.reason')} action={<CommandButton variant="primary" onClick={() => onOpenModule({ moduleId: 'chat', tabId: 'playground' })}>{t('shell.openChat')}</CommandButton>} />
+          )}
+        </ToolSection>
+      </ConfigList>
 
-        <section className="workbench-section" aria-labelledby="workbench-activity-title">
-          <div className="section-header">
-            <div>
-              <h2 id="workbench-activity-title">{t('dashboard.activity.title')}</h2>
-              <p>{t('dashboard.activity.note')}</p>
-            </div>
-            <button type="button" onClick={() => onOpenModule({ moduleId: 'workspace', tabId: 'activity' })}>
-              <Clock3 size={16} /> {t('dashboard.activity.all')}
-            </button>
-          </div>
-          <div className="recent-activity-grid">
-            <article>
-              <span>{t('dashboard.activity.request')}</span>
-              <strong>{latestRequest ? t('common.valueSeparator', { left: latestRequest.status, right: latestRequest.endpoint }) : t('dashboard.noRequest')}</strong>
-              <p>{latestRequest?.modelNameSnapshot ?? latestRequest?.errorMessage ?? t('dashboard.activity.requestHint')}</p>
-            </article>
-            <article>
-              <span>{t('dashboard.activity.import')}</span>
-              <strong>{latestImport?.summary ?? t('dashboard.activity.noImport')}</strong>
-              <p>{latestImport ? t('common.valueSeparator', { left: latestImport.status, right: formatTime(latestImport.createdAt, t('dashboard.noRecord')) }) : t('dashboard.activity.importHint')}</p>
-            </article>
-            <article>
-              <span>{t('dashboard.activity.audit')}</span>
-              <strong>{latestAudit?.action ?? t('dashboard.activity.noAudit')}</strong>
-              <p>{latestAudit ? t('common.valueSeparator', { left: latestAudit.targetType, right: formatTime(latestAudit.createdAt, t('dashboard.noRecord')) }) : t('dashboard.activity.auditHint')}</p>
-            </article>
-            <article>
-              <span>{t('dashboard.activity.conversation')}</span>
-              <strong>{dashboard.recentConversations[0]?.title ?? t('dashboard.activity.noConversation')}</strong>
-              <p>
-                {dashboard.recentConversations[0]
-                  ? t('common.valueSeparator', { left: t('common.messageCount', { count: dashboard.recentConversations[0].messageCount }), right: formatTime(dashboard.recentConversations[0].lastMessageAt, t('dashboard.noRecord')) })
-                  : t('dashboard.activity.conversationHint')}
-              </p>
-            </article>
-          </div>
-        </section>
-      </section>
+      <ConfigDetail title={t('dashboard.activity.title')} description={t('dashboard.activity.note')}>
+        <ActivityList empty={t('app.recent.empty')} items={recentChanges} />
+        <DataRows
+          rows={[
+            { label: t('observability.summary.requests'), value: snapshot.dashboard.usageToday.requests },
+            { label: t('observability.summary.tokens'), value: snapshot.dashboard.usageToday.inputTokens + snapshot.dashboard.usageToday.outputTokens },
+            { label: t('data.migration.summary.round12'), value: snapshot.migrationRuns[0]?.status ?? t('common.none') },
+          ]}
+        />
+      </ConfigDetail>
     </TabPanel>
   );
 }

@@ -6,10 +6,21 @@ import { THEME_TOKEN_NAMES, getThemeClass, normalizeThemeMode, resolveThemeMode 
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(currentDir, '..');
-const stylesPath = resolve(repoRoot, 'src/renderer/styles.css');
+const stylePaths = [
+  resolve(repoRoot, 'src/renderer/styles.css'),
+  resolve(repoRoot, 'src/renderer/styles/tokens.css'),
+  resolve(repoRoot, 'src/renderer/styles/base.css'),
+  resolve(repoRoot, 'src/renderer/styles/shell.css'),
+  resolve(repoRoot, 'src/renderer/styles/components.css'),
+  resolve(repoRoot, 'src/renderer/styles/pages.css'),
+];
+
+function stylesCss() {
+  return stylePaths.map((stylePath) => readFileSync(stylePath, 'utf8')).join('\n');
+}
 
 function styleLines() {
-  return readFileSync(stylesPath, 'utf8').split(/\r?\n/);
+  return stylesCss().split(/\r?\n/);
 }
 
 function tokenDefinitionLine(line: string) {
@@ -17,7 +28,7 @@ function tokenDefinitionLine(line: string) {
 }
 
 function selectorBlock(selector: string) {
-  const css = readFileSync(stylesPath, 'utf8');
+  const css = stylesCss();
   const match = css.match(new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([\\s\\S]*?)\\n\\}`));
   if (!match) {
     throw new Error(`Missing selector block: ${selector}`);
@@ -40,7 +51,7 @@ describe('theme token authority', () => {
   });
 
   it('keeps shared token names in sync with renderer CSS declarations', () => {
-    const css = readFileSync(stylesPath, 'utf8');
+    const css = stylesCss();
 
     for (const token of THEME_TOKEN_NAMES) {
       expect(css).toContain(token);

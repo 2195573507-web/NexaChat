@@ -1,10 +1,10 @@
+import { Activity, Download, Save, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { ShieldCheck } from 'lucide-react';
-import type { ObservabilityFeedbackLabel, UiPreferences } from '../../shared/types';
-import { FormField, SettingsRow } from '../components/ui';
+import type { ObservabilityFeedbackLabel, ObservabilityPrivacySettings, UiPreferences } from '../../shared/types';
+import { OBSERVABILITY_EXPORT_SCOPES, OBSERVABILITY_FEEDBACK_LABELS, OBSERVABILITY_RETENTION_POLICIES } from '../../shared/observabilityRuntime';
+import { CommandButton, ConfigDetail, ConfigList, DataRows, Field, InlineNotice, SettingRow, StatusPillLite, ToggleRow, ToolSection } from '../components/AppFrame';
 import { useI18n } from '../i18n';
-import type { TabPageProps } from './shared';
-import { DataTable, Metric, StateBadge, TabPanel, statusLabel } from './shared';
+import { formatDate, healthState, statusLabel, TabPanel, type TabPageProps } from './shared';
 
 export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
   const { t } = useI18n();
@@ -12,310 +12,210 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
   const [auditQuery, setAuditQuery] = useState('');
   const [feedbackLabel, setFeedbackLabel] = useState<ObservabilityFeedbackLabel>('bug');
   const [feedbackNotes, setFeedbackNotes] = useState(t('observability.feedback.defaultNote'));
-  const [privacy, setPrivacy] = useState(snapshot.observability.privacy);
+  const [privacy, setPrivacy] = useState<ObservabilityPrivacySettings>(snapshot.observability.privacy);
+
   useEffect(() => setPrefs(snapshot.uiPreferences), [snapshot.uiPreferences]);
   useEffect(() => setPrivacy(snapshot.observability.privacy), [snapshot.observability.privacy]);
 
   if (activeTab.id === 'security') {
     return (
-      <TabPanel moduleId="settings" tab={activeTab}>
-        <section className="summary-grid">
-          <Metric title={t('settings.security.session')} value={statusLabel(snapshot.security.activeSession.state, t)} detail={snapshot.security.activeUser.displayName} />
-          <Metric title={t('settings.security.role')} value={snapshot.security.activeRole.name} detail={snapshot.security.activeRole.description} />
-          <Metric title={t('settings.security.permissions')} value={snapshot.security.activeRole.permissionKeys.length} detail={t('settings.security.permissions.note')} />
-          <Metric title={t('settings.security.denied')} value={snapshot.security.deniedCount} detail={t('settings.security.denied.note')} />
-        </section>
-        <section className="two-column">
-          <div className="panel">
-            <h2>{t('settings.security.title')}</h2>
-            <p>{t('settings.security.note')}</p>
-            <dl className="detail-list">
-              <div><dt>{t('settings.security.preload')}</dt><dd>{t('settings.security.preload.note')}</dd></div>
-              <div><dt>{t('settings.security.providerKey')}</dt><dd>{t('settings.security.providerKey.note')}</dd></div>
-              <div><dt>{t('settings.security.gatewayKey')}</dt><dd>{t('settings.security.gatewayKey.note')}</dd></div>
-              <div><dt>{t('settings.security.logRedaction')}</dt><dd>{t('settings.security.logRedaction.note')}</dd></div>
-            </dl>
-          </div>
-          <div className="panel">
-            <div className="panel-header">
-              <div>
-                <h2>{t('settings.security.auditIntegrity')}</h2>
-                <p>{t('settings.security.auditIntegrity.note')}</p>
-              </div>
-              <StateBadge label={statusLabel(snapshot.auditIntegrity.status, t)} tone={snapshot.auditIntegrity.status === 'verified' ? 'success' : snapshot.auditIntegrity.status === 'empty' ? 'muted' : 'error'} />
-            </div>
-            <dl className="detail-list">
-              <div><dt>{t('settings.audit.integrity')}</dt><dd>{t('settings.audit.integrity.checked', { count: snapshot.auditIntegrity.checkedCount, status: snapshot.auditIntegrity.status })}</dd></div>
-              <div><dt>{t('settings.columns.hash')}</dt><dd><code>{snapshot.auditIntegrity.lastHash ?? '-'}</code></dd></div>
-            </dl>
-            <div className="button-row">
-              <button type="button" onClick={() => onAction(t('settings.audit.verify'), () => api.verifyAuditIntegrity())}>
-                <ShieldCheck size={16} /> {t('settings.audit.verify')}
-              </button>
-              <button type="button" onClick={() => onAction(t('settings.audit.exported'), () => api.exportAuditLogs())}>
-                {t('settings.audit.export')}
-              </button>
-            </div>
-          </div>
-          <div className="panel">
-            <h2>{t('settings.security.keyStatus')}</h2>
-            <DataTable
-              columns={[t('settings.security.gatewayKey'), t('settings.columns.preview'), t('gateway.columns.scopes'), t('settings.columns.revoked')]}
-              rows={snapshot.gatewayKeys.map((key) => [key.name, key.keyPreview, key.scopes.join(', '), key.revokedAt ? t('common.yes') : t('common.no')])}
-            />
-          </div>
-        </section>
+      <TabPanel moduleId="settings" tab={activeTab} className="tool-layout">
+        <ConfigList title={t('settings.security.title')} description={activeTab.featureBoundary}>
+          <section className="current-config-strip">
+            <div><span className="eyebrow">{t('settings.security.localAdmin')}</span><strong>{snapshot.security.activeUser.displayName}</strong><small>{snapshot.security.activeRole.name}</small></div>
+            <div><span className="eyebrow">{t('settings.security.denied')}</span><strong>{snapshot.security.deniedCount}</strong><small>{t('settings.security.permissions')}</small></div>
+            <div><span className="eyebrow">{t('settings.audit.integrity')}</span><strong>{statusLabel(snapshot.auditIntegrity.status, t)}</strong><small>{snapshot.auditIntegrity.checkedCount}</small></div>
+          </section>
+          <DataRows rows={[
+            { label: t('settings.security.session'), value: statusLabel(snapshot.security.activeSession.state, t) },
+            { label: t('settings.security.role'), value: snapshot.security.roles.length },
+            { label: t('settings.security.permissions'), value: snapshot.security.aclGrants.length },
+          ]} />
+        </ConfigList>
+        <ConfigDetail title={t('settings.security.auditIntegrity')} description={t('nav.settings.security.boundary')}>
+          <CommandButton icon={<ShieldCheck size={15} />} onClick={() => onAction(t('settings.audit.integrity'), () => api.verifyAuditIntegrity())}>{t('settings.audit.verify')}</CommandButton>
+        </ConfigDetail>
       </TabPanel>
     );
   }
 
   if (activeTab.id === 'audit') {
     const visibleLogs = auditQuery.trim()
-      ? snapshot.auditLogs.filter((log) => JSON.stringify(log).toLowerCase().includes(auditQuery.trim().toLowerCase()))
+      ? snapshot.auditLogs.filter((log) => `${log.action} ${log.actor} ${log.targetType}`.toLowerCase().includes(auditQuery.trim().toLowerCase()))
       : snapshot.auditLogs;
     return (
-      <TabPanel moduleId="settings" tab={activeTab}>
-        <section className="panel">
-          <div className="panel-header">
-            <div>
-              <h2>{t('settings.audit.title')}</h2>
-              <p>{t('settings.audit.integrity.checked', { count: snapshot.auditIntegrity.checkedCount, status: snapshot.auditIntegrity.status })}</p>
-            </div>
-            <StateBadge label={statusLabel(snapshot.auditIntegrity.status, t)} tone={snapshot.auditIntegrity.status === 'verified' ? 'success' : snapshot.auditIntegrity.status === 'empty' ? 'muted' : 'error'} />
+      <TabPanel moduleId="settings" tab={activeTab} className="tool-layout">
+        <ConfigList title={t('settings.audit.title')} description={activeTab.featureBoundary}>
+          <div className="form-stack">
+            <Field label={t('settings.audit.search')}>
+              <input value={auditQuery} onChange={(event) => setAuditQuery(event.target.value)} aria-label={t('settings.audit.search')} />
+            </Field>
+            <span className="row-actions">
+              <CommandButton icon={<Activity size={15} />} onClick={() => onAction(t('settings.audit.integrity'), () => api.verifyAuditIntegrity())}>{t('settings.audit.verify')}</CommandButton>
+              <CommandButton icon={<Download size={15} />} onClick={() => onAction(t('settings.audit.exported'), () => api.exportAuditLogs())}>{t('settings.audit.export')}</CommandButton>
+            </span>
           </div>
-          <div className="button-row">
-            <input
-              aria-label={t('settings.audit.search')}
-              placeholder={t('settings.audit.search.placeholder')}
-              value={auditQuery}
-              onChange={(event) => setAuditQuery(event.target.value)}
-            />
-            <button type="button" onClick={() => onAction(t('settings.audit.verify'), () => api.verifyAuditIntegrity())}>{t('settings.audit.verify')}</button>
-            <button type="button" onClick={() => onAction(t('settings.audit.exported'), () => api.exportAuditLogs())}>{t('settings.audit.export')}</button>
+          <div className="activity-list">
+            {visibleLogs.slice(0, 14).map((log) => (
+              <div className="activity-row" key={log.id}>
+                <span className={`status-dot status-${healthState(log.integrityState)}`} />
+                <span>{log.action}</span>
+                <small>{log.actor} / {formatDate(log.createdAt, t)}</small>
+              </div>
+            ))}
           </div>
-          <DataTable
-            columns={[t('settings.columns.action'), t('settings.columns.target'), t('settings.columns.permission'), t('settings.columns.hash'), t('settings.columns.time')]}
-            rows={visibleLogs.map((log) => [
-              log.action,
-              `${log.targetType}:${log.targetId ?? '-'}`,
-              log.permissionKey ?? '-',
-              log.entryHash ? <code key={`${log.id}-hash`}>{log.entryHash.slice(0, 12)}</code> : '-',
-              new Date(log.createdAt).toLocaleString(),
-            ])}
-          />
-        </section>
-      </TabPanel>
-    );
-  }
-
-  if (activeTab.id === 'about') {
-    return (
-      <TabPanel moduleId="settings" tab={activeTab}>
-        <section className="two-column">
-          <div className="panel">
-            <h2>{t('settings.about.title')}</h2>
-            <dl className="detail-list">
-              <div><dt>{t('settings.about.version')}</dt><dd>{t('settings.about.versionValue')}</dd></div>
-              <div><dt>{t('settings.about.gatewayPort')}</dt><dd>{snapshot.dashboard.gatewayStatus.port}</dd></div>
-              <div><dt>{t('settings.about.bindHost')}</dt><dd>{snapshot.dashboard.gatewayStatus.bindHost}</dd></div>
-              <div><dt>{t('settings.about.dataLocation')}</dt><dd>{t('settings.about.dataLocationValue')}</dd></div>
-              <div><dt>{t('settings.about.desktopEntry')}</dt><dd>{t('settings.about.desktopEntry.note')}</dd></div>
-            </dl>
-          </div>
-          <div className="panel">
-            <h2>{t('settings.environment.title')}</h2>
-            <DataTable
-              columns={[t('settings.environment.columns.capability'), t('settings.environment.columns.status'), t('settings.environment.columns.note')]}
-              rows={[
-                [t('settings.environment.providerInference'), <StateBadge key="provider" label={t('common.notOpen')} tone="warning" />, t('settings.environment.providerInference.note')],
-                [t('settings.environment.fullRag'), <StateBadge key="rag" label={t('stage.environment-limited')} tone="warning" />, t('settings.environment.fullRag.note')],
-                [t('settings.environment.mcpAgent'), <StateBadge key="agent" label={t('common.notOpen')} tone="warning" />, t('settings.environment.mcpAgent.note')],
-                [t('settings.environment.installer'), <StateBadge key="installer" label={t('common.notConfigured')} tone="muted" />, t('settings.environment.installer.note')],
-              ]}
-            />
-          </div>
-        </section>
+        </ConfigList>
+        <ConfigDetail title={t('settings.audit.integrity')} description={t('nav.settings.audit.boundary')}>
+          <DataRows rows={[
+            { label: t('observability.columns.status'), value: statusLabel(snapshot.auditIntegrity.status, t) },
+            { label: t('settings.audit.integrity'), value: snapshot.auditIntegrity.checkedCount },
+            { label: t('common.valueSeparator', { left: 'hash', right: 'entry' }), value: snapshot.auditIntegrity.lastHash ?? t('common.none') },
+          ]} />
+        </ConfigDetail>
       </TabPanel>
     );
   }
 
   if (activeTab.id === 'feedback') {
-    const latestRequest = snapshot.observability.requestLogs[0];
     return (
-      <TabPanel moduleId="settings" tab={activeTab}>
-        <section className="two-column">
-          <div className="panel">
-            <h2>{t('observability.feedback.title')}</h2>
-            <p>{t('observability.feedback.note')}</p>
-            <div className="form-grid">
-              <FormField label={t('observability.feedback.label')}>
+      <TabPanel moduleId="settings" tab={activeTab} className="tool-layout">
+        <ConfigList title={t('observability.feedback.title')} description={activeTab.featureBoundary}>
+          <ToolSection title={t('observability.feedback.create')} description={t('observability.feedback.note')}>
+            <div className="form-stack">
+              <Field label={t('observability.feedback.label')}>
                 <select value={feedbackLabel} onChange={(event) => setFeedbackLabel(event.target.value as ObservabilityFeedbackLabel)}>
-                  <option value="thumbs_up">{t('observability.feedback.thumbs_up')}</option>
-                  <option value="thumbs_down">{t('observability.feedback.thumbs_down')}</option>
-                  <option value="bug">{t('observability.feedback.bug')}</option>
-                  <option value="unsafe">{t('observability.feedback.unsafe')}</option>
-                  <option value="other">{t('observability.feedback.other')}</option>
+                  {OBSERVABILITY_FEEDBACK_LABELS.map((label) => <option key={label} value={label}>{label}</option>)}
                 </select>
-              </FormField>
-              <FormField label={t('observability.feedback.notes')}>
-                <textarea value={feedbackNotes} onChange={(event) => setFeedbackNotes(event.target.value)} />
-              </FormField>
+              </Field>
+              <Field label={t('observability.feedback.notes')}>
+                <textarea value={feedbackNotes} onChange={(event) => setFeedbackNotes(event.target.value)} aria-label={t('observability.feedback.notes')} />
+              </Field>
+              <CommandButton variant="primary" icon={<Save size={15} />} onClick={() => onAction(t('observability.feedback.created'), () => api.createFeedback({ label: feedbackLabel, notes: feedbackNotes }))}>{t('observability.feedback.create')}</CommandButton>
             </div>
-            <button
-              type="button"
-              className="primary-button"
-              onClick={() =>
-                onAction(t('observability.feedback.created'), () =>
-                  api.createFeedback({
-                    label: feedbackLabel,
-                    requestLogId: latestRequest?.id ?? null,
-                    notes: feedbackNotes,
-                  }),
-                )
-              }
-            >
-              {t('observability.feedback.create')}
-            </button>
+          </ToolSection>
+          <div className="activity-list">
+            {snapshot.feedbackItems.slice(0, 10).map((item) => <div className="activity-row" key={item.id}><span className="status-dot status-info" /><span>{item.label}</span><small>{item.notes}</small></div>)}
           </div>
-          <div className="panel">
-            <h2>{t('observability.feedback.history')}</h2>
-            <DataTable
-              columns={[t('observability.columns.label'), t('gateway.columns.request'), t('settings.columns.details'), t('gateway.columns.time')]}
-              rows={snapshot.observability.feedbackItems.map((item) => [
-                t(`observability.feedback.${item.label}`),
-                item.requestLogId ?? '-',
-                item.notes ?? '-',
-                new Date(item.createdAt).toLocaleString(),
-              ])}
-            />
-          </div>
-        </section>
+        </ConfigList>
+        <ConfigDetail title={t('observability.feedback.title')} description={t('nav.settings.feedback.boundary')}>
+          <StatusPillLite label={snapshot.feedbackItems.length} state="info" />
+        </ConfigDetail>
       </TabPanel>
     );
   }
 
   if (activeTab.id === 'evals') {
     return (
-      <TabPanel moduleId="settings" tab={activeTab}>
-        <section className="two-column">
-          <div className="panel">
-            <h2>{t('observability.eval.title')}</h2>
-            <p>{t('observability.eval.note')}</p>
-            <DataTable
-              columns={[t('gateway.columns.name'), t('settings.columns.details'), t('gateway.columns.status'), t('gateway.columns.actions')]}
-              rows={snapshot.observability.evalSets.map((evalSet) => [
-                evalSet.name,
-                evalSet.description ?? '-',
-                <StateBadge key={`${evalSet.id}-status`} label={statusLabel(evalSet.status, t)} tone={evalSet.status === 'completed' ? 'success' : evalSet.status === 'failed' ? 'error' : 'warning'} />,
-                <button type="button" key={evalSet.id} onClick={() => onAction(t('observability.eval.started'), () => api.runEvaluation({ evalSetId: evalSet.id }))}>
-                  {t('observability.eval.run')}
-                </button>,
-              ])}
-            />
+      <TabPanel moduleId="settings" tab={activeTab} className="tool-layout">
+        <ConfigList title={t('observability.eval.title')} description={activeTab.featureBoundary}>
+          <div className="config-items">
+            {snapshot.evalSets.map((set) => (
+              <div className="config-row" key={set.id}>
+                <span><strong>{set.name}</strong><small>{set.description ?? set.prompt}</small></span>
+                <CommandButton icon={<Activity size={14} />} onClick={() => onAction(t('observability.eval.started'), () => api.runEvaluation({ evalSetId: set.id }))}>{t('observability.eval.run')}</CommandButton>
+              </div>
+            ))}
           </div>
-          <div className="panel">
-            <h2>{t('observability.eval.results')}</h2>
-            <DataTable
-              columns={[t('gateway.columns.status'), t('observability.columns.score'), t('gateway.columns.model'), t('gateway.columns.latency'), t('gateway.columns.error')]}
-              rows={snapshot.observability.evalResults.map((result) => [
-                <StateBadge key={`${result.id}-status`} label={statusLabel(result.status, t)} tone={result.status === 'completed' ? 'success' : result.status === 'failed' ? 'error' : 'warning'} />,
-                result.score ?? '-',
-                snapshot.models.find((model) => model.id === result.modelId)?.displayName ?? result.modelId ?? '-',
-                result.latencyMs ?? '-',
-                result.errorMessage ?? result.outputPreview ?? '-',
-              ])}
-            />
+          <div className="activity-list">
+            {snapshot.evalResults.slice(0, 8).map((result) => <div className="activity-row" key={result.id}><span className={`status-dot status-${healthState(result.status)}`} /><span>{statusLabel(result.status, t)}</span><small>{result.outputPreview ?? result.errorMessage}</small></div>)}
           </div>
-        </section>
+        </ConfigList>
+        <ConfigDetail title={t('observability.eval.results')} description={t('nav.settings.evals.boundary')}>
+          <DataRows rows={[
+            { label: t('common.completed'), value: snapshot.evalResults.filter((result) => result.status === 'completed').length },
+            { label: t('common.failed'), value: snapshot.evalResults.filter((result) => result.status === 'failed').length },
+          ]} />
+        </ConfigDetail>
       </TabPanel>
     );
   }
 
   if (activeTab.id === 'observability') {
     return (
-      <TabPanel moduleId="settings" tab={activeTab}>
-        <section className="two-column">
-          <div className="panel">
-            <h2>{t('observability.privacy.title')}</h2>
-            <p>{t('observability.privacy.note')}</p>
-            <div className="form-grid">
-              <FormField label={t('observability.privacy.retention')}>
-                <select value={privacy.retentionPolicy} onChange={(event) => setPrivacy({ ...privacy, retentionPolicy: event.target.value as typeof privacy.retentionPolicy })}>
-                  <option value="seven_days">{t('observability.privacy.retention.seven_days')}</option>
-                  <option value="thirty_days">{t('observability.privacy.retention.thirty_days')}</option>
-                  <option value="ninety_days">{t('observability.privacy.retention.ninety_days')}</option>
-                  <option value="forever">{t('observability.privacy.retention.forever')}</option>
-                </select>
-              </FormField>
-              <FormField label={t('observability.privacy.exportScope')}>
-                <select value={privacy.exportScope} onChange={(event) => setPrivacy({ ...privacy, exportScope: event.target.value as typeof privacy.exportScope })}>
-                  <option value="summary">{t('observability.privacy.exportScope.summary')}</option>
-                  <option value="redacted_details">{t('observability.privacy.exportScope.redacted_details')}</option>
-                </select>
-              </FormField>
-              <label className="checkbox-row">
-                <input type="checkbox" checked={privacy.includePromptSnippets} onChange={(event) => setPrivacy({ ...privacy, includePromptSnippets: event.target.checked })} />
-                {t('observability.privacy.includePromptSnippets')}
-              </label>
-              <label className="checkbox-row">
-                <input type="checkbox" checked={privacy.includeLocalPaths} onChange={(event) => setPrivacy({ ...privacy, includeLocalPaths: event.target.checked })} />
-                {t('observability.privacy.includeLocalPaths')}
-              </label>
-            </div>
-            <div className="button-row">
-              <button type="button" className="primary-button" onClick={() => onAction(t('observability.privacy.saved'), () => api.saveObservabilityPrivacy(privacy))}>
-                {t('observability.privacy.save')}
-              </button>
-              <button type="button" onClick={() => onAction(t('observability.export.created'), () => api.exportObservability())}>
-                {t('observability.export.button')}
-              </button>
-            </div>
-          </div>
-          <div className="panel">
-            <h2>{t('observability.privacy.localOnly')}</h2>
-            <dl className="detail-list">
-              <div><dt>{t('observability.privacy.cloudTelemetry')}</dt><dd>{privacy.cloudTelemetryEnabled ? t('common.yes') : t('common.no')}</dd></div>
-              <div><dt>{t('observability.summary.requests')}</dt><dd>{snapshot.observability.summary.requestCount}</dd></div>
-              <div><dt>{t('observability.summary.feedbackEval')}</dt><dd>{snapshot.observability.summary.feedbackCount + snapshot.observability.summary.evalResultCount}</dd></div>
-              <div><dt>{t('settings.columns.time')}</dt><dd>{new Date(privacy.updatedAt).toLocaleString()}</dd></div>
-            </dl>
-          </div>
-        </section>
+      <TabPanel moduleId="settings" tab={activeTab} className="tool-layout">
+        <ConfigList title={t('observability.privacy.title')} description={activeTab.featureBoundary}>
+          <SettingRow
+            title={t('observability.privacy.retention')}
+            control={<select value={privacy.retentionPolicy} onChange={(event) => setPrivacy({ ...privacy, retentionPolicy: event.target.value as typeof privacy.retentionPolicy })}>{OBSERVABILITY_RETENTION_POLICIES.map((policy) => <option value={policy} key={policy}>{policy}</option>)}</select>}
+          />
+          <SettingRow
+            title={t('observability.privacy.exportScope')}
+            control={<select value={privacy.exportScope} onChange={(event) => setPrivacy({ ...privacy, exportScope: event.target.value as typeof privacy.exportScope })}>{OBSERVABILITY_EXPORT_SCOPES.map((scope) => <option value={scope} key={scope}>{scope}</option>)}</select>}
+          />
+          <ToggleRow title={t('observability.privacy.includePromptSnippets')} checked={privacy.includePromptSnippets} onChange={(checked) => setPrivacy({ ...privacy, includePromptSnippets: checked })} />
+          <ToggleRow title={t('observability.privacy.includeLocalPaths')} checked={privacy.includeLocalPaths} onChange={(checked) => setPrivacy({ ...privacy, includeLocalPaths: checked })} />
+          <span className="row-actions">
+            <CommandButton variant="primary" icon={<Save size={15} />} onClick={() => onAction(t('observability.privacy.saved'), () => api.saveObservabilityPrivacy(privacy))}>{t('observability.privacy.save')}</CommandButton>
+            <CommandButton icon={<Download size={15} />} onClick={() => onAction(t('observability.export.created'), () => api.exportObservability())}>{t('observability.export.button')}</CommandButton>
+          </span>
+        </ConfigList>
+        <ConfigDetail title={t('observability.privacy.localOnly')} description={t('nav.settings.observability.boundary')}>
+          <DataRows rows={[
+            { label: t('observability.summary.requests'), value: snapshot.observability.summary.requestCount },
+            { label: t('observability.summary.tokens'), value: snapshot.observability.summary.inputTokens + snapshot.observability.summary.outputTokens },
+            { label: t('observability.columns.failures'), value: snapshot.observability.summary.failedRequestCount },
+          ]} />
+        </ConfigDetail>
+      </TabPanel>
+    );
+  }
+
+  if (activeTab.id === 'about') {
+    return (
+      <TabPanel moduleId="settings" tab={activeTab} className="tool-layout">
+        <ConfigList title={t('settings.about.title')} description={activeTab.featureBoundary}>
+          <DataRows rows={[
+            { label: t('settings.about.version'), value: t('settings.about.versionValue') },
+            { label: t('settings.about.bindHost'), value: snapshot.dashboard.gatewayStatus.bindHost },
+            { label: t('settings.about.gatewayPort'), value: snapshot.dashboard.gatewayStatus.port },
+            { label: t('settings.about.dataLocation'), value: t('settings.about.dataLocationValue') },
+          ]} />
+        </ConfigList>
+        <ConfigDetail title={t('settings.about.desktopEntry')} description={t('settings.about.desktopEntry.note')}>
+          <InlineNotice tone="info" title={t('stage.environment-limited')} detail={t('nav.settings.about.boundary')} />
+        </ConfigDetail>
       </TabPanel>
     );
   }
 
   return (
-    <TabPanel moduleId="settings" tab={activeTab}>
-      <section className="panel">
-        <h2>{t('settings.preferences.title')}</h2>
-        <div className="form-grid">
-          <SettingsRow label={t('settings.preferences.theme')} control={<select aria-label={t('settings.preferences.theme')} value={prefs.theme} onChange={(event) => setPrefs({ ...prefs, theme: event.target.value as UiPreferences['theme'] })}>
+    <TabPanel moduleId="settings" tab={activeTab} className="tool-layout">
+      <ConfigList title={t('settings.preferences.title')} description={activeTab.featureBoundary}>
+        <SettingRow
+          title={t('settings.preferences.theme')}
+          control={<select value={prefs.theme} onChange={(event) => setPrefs({ ...prefs, theme: event.target.value as UiPreferences['theme'] })} aria-label={t('settings.preferences.theme')}>
             <option value="system">{t('settings.preferences.theme.system')}</option>
             <option value="light">{t('settings.preferences.theme.light')}</option>
             <option value="dark">{t('settings.preferences.theme.dark')}</option>
-          </select>} />
-          <SettingsRow label={t('settings.preferences.density')} control={<select aria-label={t('settings.preferences.density')} value={prefs.density} onChange={(event) => setPrefs({ ...prefs, density: event.target.value as UiPreferences['density'] })}>
-            <option value="comfortable">{t('settings.preferences.density.comfortable')}</option>
-            <option value="compact">{t('settings.preferences.density.compact')}</option>
-          </select>} />
-          <SettingsRow label={t('settings.preferences.font')} control={<select aria-label={t('settings.preferences.font')} value={prefs.fontMode} onChange={(event) => setPrefs({ ...prefs, fontMode: event.target.value as UiPreferences['fontMode'] })}>
-            <option value="system">{t('settings.preferences.font.system')}</option>
-            <option value="kaiti">{t('settings.preferences.font.kaiti')}</option>
-          </select>} />
-          <SettingsRow label={t('settings.preferences.language')} control={<select aria-label={t('settings.preferences.language')} value={prefs.language} onChange={(event) => setPrefs({ ...prefs, language: event.target.value as UiPreferences['language'] })}>
+          </select>}
+        />
+        <SettingRow
+          title={t('settings.preferences.language')}
+          control={<select value={prefs.language} onChange={(event) => setPrefs({ ...prefs, language: event.target.value as UiPreferences['language'] })} aria-label={t('settings.preferences.language')}>
             <option value="zh-CN">{t('settings.preferences.language.zh')}</option>
             <option value="en-US">{t('settings.preferences.language.en')}</option>
-          </select>} />
-          <SettingsRow label={t('settings.preferences.motion')} control={<select aria-label={t('settings.preferences.motion')} value={prefs.reducedMotion ? 'reduced' : 'normal'} onChange={(event) => setPrefs({ ...prefs, reducedMotion: event.target.value === 'reduced' })}>
+          </select>}
+        />
+        <SettingRow
+          title={t('settings.preferences.density')}
+          control={<select value={prefs.density} onChange={(event) => setPrefs({ ...prefs, density: event.target.value as UiPreferences['density'] })} aria-label={t('settings.preferences.density')}>
+            <option value="comfortable">{t('settings.preferences.density.comfortable')}</option>
+            <option value="compact">{t('settings.preferences.density.compact')}</option>
+          </select>}
+        />
+        <SettingRow
+          title={t('settings.preferences.motion')}
+          control={<select value={prefs.reducedMotion ? 'reduced' : 'normal'} onChange={(event) => setPrefs({ ...prefs, reducedMotion: event.target.value === 'reduced' })} aria-label={t('settings.preferences.motion')}>
             <option value="normal">{t('settings.preferences.motion.normal')}</option>
             <option value="reduced">{t('settings.preferences.motion.reduced')}</option>
-          </select>} />
-        </div>
-        <button type="button" className="primary-button" onClick={() => onAction(t('settings.preferences.saved'), () => api.saveUiPreferences(prefs))}>
-          {t('settings.preferences.save')}
-        </button>
-      </section>
+          </select>}
+        />
+        <CommandButton variant="primary" icon={<Save size={15} />} onClick={() => onAction(t('settings.preferences.saved'), () => api.saveUiPreferences(prefs))}>{t('settings.preferences.save')}</CommandButton>
+      </ConfigList>
+      <ConfigDetail title={t('settings.preferences.title')} description={t('nav.settings.preferences.boundary')}>
+        <StatusPillLite label={prefs.theme} state="info" />
+        <StatusPillLite label={prefs.language} state="info" />
+      </ConfigDetail>
     </TabPanel>
   );
 }
