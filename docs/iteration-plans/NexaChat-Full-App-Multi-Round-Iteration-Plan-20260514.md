@@ -836,8 +836,8 @@ These references guide product and engineering decisions. They are not permissio
   - `git diff --check`: passed with LF/CRLF conversion warnings only.
 - Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` still targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and uses `D:\NexaChat\assets\app-icon.ico,0`.
 - Acceptance result: Passed. Valid external Gateway key calls work; invalid/revoked/disabled/scope/rate-limited keys fail correctly; logs are redacted and key-attributed; rotation uses one-time reveal; import metadata apply is reversible by rollback.
-- Commit hash: `bc5aaf67b245ce4ac1ff21c810eed06cd5cb8fe9`.
-- Push result: pending closeout push confirmation.
+- Commit hash: `bc5aaf67b245ce4ac1ff21c810eed06cd5cb8fe9` for Round 8 delivery; `68720bfebe9cc74c047e5097176d012d3d04dda9` records closeout and remote confirmation.
+- Push result: delivery and closeout commits pushed; `origin/main` confirmed at `68720bfebe9cc74c047e5097176d012d3d04dda9`.
 - Remaining issues: None for Round 8. Round 9 owns full Knowledge/RAG, real embeddings, vector index, parser pipeline, citations, and file delete/rebuild behavior.
 
 ## 15. Round 9: Knowledge Base, RAG And File Processing

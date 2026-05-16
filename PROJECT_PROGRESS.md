@@ -398,7 +398,8 @@ Desktop shortcut:
 Git:
 
 - Round 8 delivery commit hash: `bc5aaf67b245ce4ac1ff21c810eed06cd5cb8fe9`.
-- Push result: pending.
+- Round 8 closeout commit hash: `68720bfebe9cc74c047e5097176d012d3d04dda9`.
+- Push result: delivery and closeout commits pushed; `origin/main` confirmed at `68720bfebe9cc74c047e5097176d012d3d04dda9`.
 
 ## 2026-05-14 UI Shell Redesign
 
