@@ -1287,7 +1287,7 @@ These references guide product and engineering decisions. They are not permissio
   - IconLocation: `D:/NexaChat/assets/app-icon.ico,0`.
   - No shortcut was modified.
 - Acceptance result: Passed. Usage, logs, provider health history, error statistics, feedback, evals, traces, privacy settings, and redacted local export now share one local observability chain and are visible from focused Gateway/Settings/Tools surfaces.
-- Commit hash: delivery `8a94f74892705d39e4107c3c24a0878bb9a36f09`; closeout pending.
+- Commit hash: delivery `8a94f74892705d39e4107c3c24a0878bb9a36f09`; closeout `d84b413dc4967b44d88a62f182f6577423691688`.
 - Remaining issues: None for Round 13. Round 14 owns packaged desktop entry, installer/package artifact, shortcut script/check, crash recovery, and release diagnostics.
 
 ## 20. Round 14: Desktop Experience, Packaging, Shortcut And Release
