@@ -87,6 +87,65 @@ function runAdditiveMigrations(db: DatabaseSync): void {
   addColumnIfMissing(db, 'config_snapshots', 'rollback_snapshot_id', 'TEXT');
   addColumnIfMissing(db, 'config_snapshots', 'source', 'TEXT');
   addColumnIfMissing(db, 'config_snapshots', 'applied_entity_ids_json', 'TEXT');
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS data_mobility_jobs (
+      id TEXT PRIMARY KEY,
+      operation_kind TEXT NOT NULL,
+      status TEXT NOT NULL,
+      source TEXT,
+      manifest_version TEXT NOT NULL,
+      profile TEXT,
+      summary TEXT NOT NULL,
+      manifest_hash TEXT,
+      manifest_json TEXT,
+      conflict_count INTEGER NOT NULL,
+      requires_confirmation INTEGER NOT NULL,
+      encrypted INTEGER NOT NULL,
+      redacted INTEGER NOT NULL,
+      rollback_record_id TEXT,
+      related_snapshot_id TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS data_conflicts (
+      id TEXT PRIMARY KEY,
+      job_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      entity_kind TEXT NOT NULL,
+      local_id TEXT,
+      import_name TEXT NOT NULL,
+      strategy TEXT NOT NULL,
+      resolved INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS data_backups (
+      id TEXT PRIMARY KEY,
+      job_id TEXT NOT NULL,
+      profile TEXT NOT NULL,
+      encrypted INTEGER NOT NULL,
+      redacted INTEGER NOT NULL,
+      manifest_hash TEXT NOT NULL,
+      package_json TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS migration_runs (
+      id TEXT PRIMARY KEY,
+      version TEXT NOT NULL,
+      status TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      completed_at INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS rollback_records (
+      id TEXT PRIMARY KEY,
+      job_id TEXT NOT NULL,
+      rollback_snapshot_id TEXT,
+      state TEXT NOT NULL,
+      affected_entity_ids_json TEXT NOT NULL,
+      applied_at INTEGER,
+      created_at INTEGER NOT NULL
+    );
+  `);
   addColumnIfMissing(db, 'tools', 'kind', "TEXT NOT NULL DEFAULT 'fixture'");
   addColumnIfMissing(db, 'tools', 'permission_key', "TEXT NOT NULL DEFAULT 'tool:read'");
   addColumnIfMissing(db, 'tools', 'risk_level', "TEXT NOT NULL DEFAULT 'read'");

@@ -20,6 +20,12 @@ import type {
   GatewayKeyUpdateInput,
   GatewayStatus,
   ImportExportResult,
+  DataBackupCreateInput,
+  DataBackupRecord,
+  DataExportOptions,
+  DataMobilityJob,
+  DataRestorePreflightInput,
+  DataRollbackInput,
   KnowledgeDeleteInput,
   KnowledgeFile,
   KnowledgeImportInput,
@@ -78,6 +84,10 @@ export interface AppApi {
   restoreSnapshot(snapshotId: string, options?: RestoreSnapshotOptions): Promise<ImportExportResult>;
   createSnapshot(): Promise<ImportExportResult>;
   exportDiagnostics(): Promise<ImportExportResult>;
+  exportDataPackage(options?: DataExportOptions): Promise<ImportExportResult>;
+  createEncryptedBackup(input: DataBackupCreateInput): Promise<DataBackupRecord>;
+  createRestorePreflight(input: DataRestorePreflightInput): Promise<DataMobilityJob>;
+  applyDataRollback(input: DataRollbackInput): Promise<DataMobilityJob>;
   searchAuditLogs(query?: string): Promise<AuditLog[]>;
   verifyAuditIntegrity(): Promise<AuditIntegrityReport>;
   exportAuditLogs(): Promise<AuditExportResult>;
@@ -119,6 +129,10 @@ export const APP_API_METHODS = [
   'restoreSnapshot',
   'createSnapshot',
   'exportDiagnostics',
+  'exportDataPackage',
+  'createEncryptedBackup',
+  'createRestorePreflight',
+  'applyDataRollback',
   'searchAuditLogs',
   'verifyAuditIntegrity',
   'exportAuditLogs',

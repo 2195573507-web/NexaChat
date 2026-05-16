@@ -6,6 +6,9 @@ import type {
   AuditLog,
   Conversation,
   ConversationExport,
+  DataBackupRecord,
+  DataConflictRecord,
+  DataMobilityJob,
   ExecutionRun,
   ExecutionStep,
   ExecutionTraceEvent,
@@ -25,6 +28,8 @@ import type {
   PromptTemplate,
   Provider,
   RequestLog,
+  MigrationRun,
+  RollbackRecord,
   SecurityAclGrant,
   SecurityRole,
   SecuritySession,
@@ -519,6 +524,78 @@ export function mapImportExportResult(row: Row): ImportExportResult {
         ? 1
         : 0,
     requiresConfirmation: manifestJson ? /"requiresConfirmation"\s*:\s*true/.test(manifestJson) : lowerSummary.includes('确认'),
+    createdAt: Number(row.created_at),
+  };
+}
+
+export function mapDataMobilityJob(row: Row): DataMobilityJob {
+  return {
+    id: String(row.id),
+    operationKind: String(row.operation_kind) as DataMobilityJob['operationKind'],
+    status: String(row.status) as DataMobilityJob['status'],
+    source: nullableString(row.source),
+    manifestVersion: String(row.manifest_version),
+    profile: nullableString(row.profile) as DataMobilityJob['profile'],
+    summary: String(row.summary),
+    manifestHash: nullableString(row.manifest_hash),
+    manifestJson: nullableString(row.manifest_json),
+    conflictCount: Number(row.conflict_count),
+    requiresConfirmation: bool(row.requires_confirmation),
+    encrypted: bool(row.encrypted),
+    redacted: bool(row.redacted),
+    rollbackRecordId: nullableString(row.rollback_record_id),
+    relatedSnapshotId: nullableString(row.related_snapshot_id),
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
+  };
+}
+
+export function mapDataConflictRecord(row: Row): DataConflictRecord {
+  return {
+    id: String(row.id),
+    jobId: String(row.job_id),
+    type: String(row.type) as DataConflictRecord['type'],
+    entityKind: String(row.entity_kind) as DataConflictRecord['entityKind'],
+    localId: nullableString(row.local_id),
+    importName: String(row.import_name),
+    strategy: String(row.strategy) as DataConflictRecord['strategy'],
+    resolved: bool(row.resolved),
+    createdAt: Number(row.created_at),
+  };
+}
+
+export function mapDataBackupRecord(row: Row): DataBackupRecord {
+  return {
+    id: String(row.id),
+    jobId: String(row.job_id),
+    profile: String(row.profile) as DataBackupRecord['profile'],
+    encrypted: bool(row.encrypted),
+    redacted: bool(row.redacted),
+    manifestHash: String(row.manifest_hash),
+    packageJson: String(row.package_json),
+    createdAt: Number(row.created_at),
+  };
+}
+
+export function mapMigrationRun(row: Row): MigrationRun {
+  return {
+    id: String(row.id),
+    version: String(row.version) as MigrationRun['version'],
+    status: String(row.status) as MigrationRun['status'],
+    summary: String(row.summary),
+    createdAt: Number(row.created_at),
+    completedAt: nullableNumber(row.completed_at),
+  };
+}
+
+export function mapRollbackRecord(row: Row): RollbackRecord {
+  return {
+    id: String(row.id),
+    jobId: String(row.job_id),
+    rollbackSnapshotId: nullableString(row.rollback_snapshot_id),
+    state: String(row.state) as RollbackRecord['state'],
+    affectedEntityIdsJson: String(row.affected_entity_ids_json),
+    appliedAt: nullableNumber(row.applied_at),
     createdAt: Number(row.created_at),
   };
 }

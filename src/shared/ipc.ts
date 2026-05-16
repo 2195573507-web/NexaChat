@@ -20,6 +20,10 @@ import type {
   UiPreferences,
   ImportPlanApplyOptions,
   RestoreSnapshotOptions,
+  DataBackupCreateInput,
+  DataExportOptions,
+  DataRestorePreflightInput,
+  DataRollbackInput,
 } from './types.js';
 
 export const IPC_CHANNELS = {
@@ -57,6 +61,10 @@ export const IPC_CHANNELS = {
   dataRestoreSnapshot: 'data:restoreSnapshot',
   dataCreateSnapshot: 'data:createSnapshot',
   dataExportDiagnostics: 'data:exportDiagnostics',
+  dataExportPackage: 'data:exportPackage',
+  dataCreateEncryptedBackup: 'data:createEncryptedBackup',
+  dataCreateRestorePreflight: 'data:createRestorePreflight',
+  dataApplyRollback: 'data:applyRollback',
   auditSearch: 'audit:search',
   auditVerify: 'audit:verify',
   auditExport: 'audit:export',
@@ -107,6 +115,10 @@ export type IpcInvokeArgs = {
   [IPC_CHANNELS.dataRestoreSnapshot]: [string, RestoreSnapshotOptions?];
   [IPC_CHANNELS.dataCreateSnapshot]: [];
   [IPC_CHANNELS.dataExportDiagnostics]: [];
+  [IPC_CHANNELS.dataExportPackage]: [DataExportOptions?];
+  [IPC_CHANNELS.dataCreateEncryptedBackup]: [DataBackupCreateInput];
+  [IPC_CHANNELS.dataCreateRestorePreflight]: [DataRestorePreflightInput];
+  [IPC_CHANNELS.dataApplyRollback]: [DataRollbackInput];
   [IPC_CHANNELS.auditSearch]: [string?];
   [IPC_CHANNELS.auditVerify]: [];
   [IPC_CHANNELS.auditExport]: [];
@@ -165,6 +177,10 @@ const ipcPayloadArity: Record<IpcChannel, { min: number; max: number }> = {
   [IPC_CHANNELS.dataRestoreSnapshot]: { min: 1, max: 2 },
   [IPC_CHANNELS.dataCreateSnapshot]: { min: 0, max: 0 },
   [IPC_CHANNELS.dataExportDiagnostics]: { min: 0, max: 0 },
+  [IPC_CHANNELS.dataExportPackage]: { min: 0, max: 1 },
+  [IPC_CHANNELS.dataCreateEncryptedBackup]: { min: 1, max: 1 },
+  [IPC_CHANNELS.dataCreateRestorePreflight]: { min: 1, max: 1 },
+  [IPC_CHANNELS.dataApplyRollback]: { min: 1, max: 1 },
   [IPC_CHANNELS.auditSearch]: { min: 0, max: 1 },
   [IPC_CHANNELS.auditVerify]: { min: 0, max: 0 },
   [IPC_CHANNELS.auditExport]: { min: 0, max: 0 },

@@ -2,45 +2,138 @@ import { useState } from 'react';
 import { useI18n } from '../i18n';
 import type { TabPageProps } from './shared';
 import { DataTable, PlannedTabPlaceholder, StateBadge, TabPanel } from './shared';
+import { DATA_CONFIRMATION_PHRASES } from '../../shared/dataRuntime';
 
 export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
   const { t } = useI18n();
   const [manifestText, setManifestText] = useState(t('data.import.sampleManifest'));
+  const [backupPassphrase, setBackupPassphrase] = useState('nexachat-backup');
+  const [restorePassphrase, setRestorePassphrase] = useState('nexachat-backup');
+  const [rollbackPhrase, setRollbackPhrase] = useState<string>(DATA_CONFIRMATION_PHRASES.rollback);
   const latestReadyImport = snapshot.importExportResults.find((item) => item.action === 'import' && item.status === 'ready');
-  const latestSnapshot = snapshot.importExportResults.find((item) => item.action === 'snapshot');
+  const latestBackup = snapshot.dataBackups[0];
+  const latestRollback = snapshot.rollbackRecords.find((record) => record.state === 'available');
 
-  if (activeTab.id === 'snapshots') {
+  if (activeTab.id === 'backup') {
     return (
       <TabPanel moduleId="data" tab={activeTab}>
         <section className="two-column">
           <div className="panel">
-            <h2>{t('data.snapshots.title')}</h2>
-            <p>{t('data.snapshots.note')}</p>
+            <h2>{t('data.backup.title')}</h2>
+            <p>{t('data.backup.note')}</p>
+            <input
+              aria-label={t('data.backup.passphrase')}
+              value={backupPassphrase}
+              onChange={(event) => setBackupPassphrase(event.target.value)}
+            />
             <div className="button-row">
               <button type="button" onClick={() => onAction(t('data.toast.snapshotCreated'), () => api.createSnapshot())}>
                 {t('data.snapshots.create')}
               </button>
-              <button type="button" disabled={!latestSnapshot} onClick={() => latestSnapshot && onAction(t('data.toast.restoreCreated'), () => api.restoreSnapshot(latestSnapshot.id))}>
-                {t('data.snapshots.restore')}
+              <button type="button" onClick={() => onAction(t('data.toast.exportCreated'), () => api.exportDataPackage({ profile: 'metadata-redacted' }))}>
+                {t('data.export.create')}
               </button>
-              <button type="button" disabled={!latestSnapshot} onClick={() => latestSnapshot && onAction(t('data.toast.rollbackApplied'), () => api.restoreSnapshot(latestSnapshot.id, { mode: 'rollback' }))}>
-                {t('data.snapshots.rollback')}
+              <button type="button" onClick={() => onAction(t('data.toast.backupCreated'), () => api.createEncryptedBackup({ passphrase: backupPassphrase, profile: 'encrypted-full' }))}>
+                {t('data.backup.create')}
               </button>
             </div>
           </div>
           <div className="panel">
-            <h2>{t('data.snapshots.records')}</h2>
+            <h2>{t('data.backup.records')}</h2>
             <DataTable
-              columns={[t('data.columns.action'), t('data.columns.status'), t('data.columns.summary'), t('data.columns.confirmation'), t('data.columns.redacted')]}
-              rows={snapshot.importExportResults
-                .filter((item) => item.action === 'snapshot' || item.summary.includes(t('data.restore.keyword')))
+              columns={[t('data.columns.action'), t('data.columns.status'), t('data.columns.profile'), t('data.columns.encrypted'), t('data.columns.hash')]}
+              rows={snapshot.dataMobilityJobs
+                .filter((item) => item.operationKind === 'snapshot' || item.operationKind === 'export' || item.operationKind === 'encrypted-backup')
                 .map((item) => [
-                  item.action,
+                  item.operationKind,
+                  <StateBadge key={`${item.id}-status`} label={item.status} tone={item.status === 'failed' ? 'error' : item.status === 'ready' ? 'warning' : 'success'} />,
+                  item.profile ?? '-',
+                  item.encrypted ? t('common.yes') : t('common.no'),
+                  item.manifestHash ? <code key={`${item.id}-hash`}>{item.manifestHash.slice(0, 12)}</code> : '-',
+                ])}
+            />
+          </div>
+        </section>
+      </TabPanel>
+    );
+  }
+
+  if (activeTab.id === 'restore') {
+    return (
+      <TabPanel moduleId="data" tab={activeTab}>
+        <section className="two-column">
+          <div className="panel">
+            <h2>{t('data.restore.title')}</h2>
+            <p>{t('data.restore.note')}</p>
+            <input
+              aria-label={t('data.restore.passphrase')}
+              value={restorePassphrase}
+              onChange={(event) => setRestorePassphrase(event.target.value)}
+            />
+            <button
+              type="button"
+              className="primary-button"
+              disabled={!latestBackup}
+              onClick={() => latestBackup && onAction(t('data.toast.restoreCreated'), () => api.createRestorePreflight({ backupId: latestBackup.id, passphrase: restorePassphrase }))}
+            >
+              {t('data.restore.preflight')}
+            </button>
+          </div>
+          <div className="panel">
+            <h2>{t('data.restore.records')}</h2>
+            <DataTable
+              columns={[t('data.columns.action'), t('data.columns.status'), t('data.columns.summary'), t('data.columns.conflicts'), t('data.columns.confirmation'), t('data.columns.encrypted')]}
+              rows={snapshot.dataMobilityJobs
+                .filter((item) => item.operationKind === 'restore-preflight')
+                .map((item) => [
+                  item.operationKind,
                   <StateBadge key={`${item.id}-status`} label={item.status} tone={item.status === 'failed' ? 'error' : item.status === 'ready' ? 'warning' : 'success'} />,
                   item.summary,
+                  item.conflictCount,
                   item.requiresConfirmation ? t('common.required') : t('common.no'),
-                  item.redacted ? t('common.yes') : t('common.no'),
+                  item.encrypted ? t('common.yes') : t('common.no'),
                 ])}
+            />
+          </div>
+        </section>
+      </TabPanel>
+    );
+  }
+
+  if (activeTab.id === 'rollback') {
+    return (
+      <TabPanel moduleId="data" tab={activeTab}>
+        <section className="two-column">
+          <div className="panel">
+            <h2>{t('data.rollback.title')}</h2>
+            <p>{t('data.rollback.note')}</p>
+            <input
+              aria-label={t('data.rollback.confirmPhrase')}
+              value={rollbackPhrase}
+              onChange={(event) => setRollbackPhrase(event.target.value)}
+            />
+            <button
+              type="button"
+              className="primary-button"
+              disabled={!latestRollback}
+              onClick={() => latestRollback && onAction(t('data.toast.rollbackApplied'), () => api.applyDataRollback({ rollbackId: latestRollback.id, confirmationPhrase: rollbackPhrase }))}
+            >
+              {t('data.rollback.apply')}
+            </button>
+          </div>
+          <div className="panel">
+            <h2>{t('data.rollback.records')}</h2>
+            <DataTable
+              columns={[t('data.columns.status'), t('data.columns.summary'), t('data.columns.rollbackState'), t('data.columns.time')]}
+              rows={snapshot.rollbackRecords.map((record) => {
+                const job = snapshot.dataMobilityJobs.find((item) => item.id === record.jobId);
+                return [
+                  record.state,
+                  job?.summary ?? record.jobId,
+                  record.rollbackSnapshotId ?? '-',
+                  new Date(record.createdAt).toLocaleString(),
+                ];
+              })}
             />
           </div>
         </section>
@@ -124,7 +217,7 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
         <div className="panel">
           <h2>{t('data.import.confirmTitle')}</h2>
           <div className="button-row">
-            <button type="button" disabled={!latestReadyImport} onClick={() => latestReadyImport && onAction(t('data.toast.importApplied'), () => api.applyImportPlan(latestReadyImport.id, { mode: 'apply-metadata' }))}>
+            <button type="button" disabled={!latestReadyImport} onClick={() => latestReadyImport && onAction(t('data.toast.importApplied'), () => api.applyImportPlan(latestReadyImport.id, { mode: 'apply-metadata', conflictStrategy: 'import-as-new', confirmationPhrase: DATA_CONFIRMATION_PHRASES.applyImport }))}>
               {t('data.import.apply')}
             </button>
           </div>
@@ -141,6 +234,18 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
               item.conflictCount,
               item.requiresConfirmation ? t('common.required') : t('common.no'),
               item.redacted ? t('common.yes') : t('common.no'),
+            ])}
+          />
+        </div>
+        <div className="panel">
+          <h2>{t('data.conflicts.title')}</h2>
+          <DataTable
+            columns={[t('data.columns.action'), t('data.columns.conflictType'), t('data.columns.strategy'), t('data.columns.summary')]}
+            rows={snapshot.dataConflicts.map((conflict) => [
+              conflict.entityKind,
+              conflict.type,
+              conflict.strategy,
+              conflict.importName,
             ])}
           />
         </div>

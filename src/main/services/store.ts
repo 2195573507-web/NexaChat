@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, pbkdf2Sync, randomBytes } from 'node:crypto';
 import { safeStorage } from 'electron';
 import type { DatabaseSync } from 'node:sqlite';
 import { getDatabase } from '../database/connection.js';
@@ -8,6 +8,9 @@ import {
   mapAuditLog,
   mapConversation,
   mapConversationExport,
+  mapDataBackupRecord,
+  mapDataConflictRecord,
+  mapDataMobilityJob,
   mapExecutionRun,
   mapExecutionStep,
   mapExecutionTraceEvent,
@@ -26,6 +29,8 @@ import {
   mapPromptTemplate,
   mapProvider,
   mapRequestLog,
+  mapMigrationRun,
+  mapRollbackRecord,
   mapSecurityAclGrant,
   mapSecurityRole,
   mapSecuritySession,
@@ -89,6 +94,20 @@ import {
   type SecurityPermissionKey,
   type SecurityRoleId,
 } from '../../shared/securityRuntime.js';
+import {
+  DATA_CONFIRMATION_PHRASES,
+  DATA_MANIFEST_VERSION,
+  DATA_MIGRATION_VERSIONS,
+  buildRestoreDiffSummary,
+  createRedactedBackupPackage,
+  detectDataImportSource,
+  normalizeDataManifest,
+  stableHash,
+  type DataBackupProfile,
+  type DataBackupPackage,
+  type DataConflictInput,
+  type NormalizedDataManifest,
+} from '../../shared/dataRuntime.js';
 import type {
   AgentDefinition,
   AppSnapshot,
@@ -104,6 +123,13 @@ import type {
   Conversation,
   ConversationExport,
   DashboardSummary,
+  DataBackupCreateInput,
+  DataBackupRecord,
+  DataConflictRecord,
+  DataExportOptions,
+  DataMobilityJob,
+  DataRestorePreflightInput,
+  DataRollbackInput,
   ExecutionRun,
   ExecutionStartInput,
   ExecutionStep,
@@ -140,6 +166,8 @@ import type {
   ProviderInput,
   RegenerateMessageInput,
   RequestLog,
+  MigrationRun,
+  RollbackRecord,
   SecurityAclGrant,
   SecurityRole,
   SecuritySession,
@@ -238,6 +266,11 @@ export class NexaStore {
       executionTraceEvents: this.getExecutionTraceEvents(),
       approvalRequests: this.getApprovalRequests(),
       importExportResults: this.getImportExportResults(),
+      dataMobilityJobs: this.getDataMobilityJobs(),
+      dataConflicts: this.getDataConflicts(),
+      dataBackups: this.getDataBackups(),
+      migrationRuns: this.getMigrationRuns(),
+      rollbackRecords: this.getRollbackRecords(),
       auditLogs: this.getAuditLogs(),
       security: this.getSecurityState(),
       auditIntegrity: this.verifyAuditIntegrity({ persistAudit: false }),
@@ -511,6 +544,41 @@ export class NexaStore {
       .prepare('SELECT * FROM config_snapshots ORDER BY created_at DESC LIMIT 50')
       .all()
       .map((row) => mapImportExportResult(row as Record<string, unknown>));
+  }
+
+  getDataMobilityJobs(): DataMobilityJob[] {
+    return this.db
+      .prepare('SELECT * FROM data_mobility_jobs ORDER BY created_at DESC LIMIT 100')
+      .all()
+      .map((row) => mapDataMobilityJob(row as Record<string, unknown>));
+  }
+
+  getDataConflicts(jobId?: string): DataConflictRecord[] {
+    const rows = jobId
+      ? this.db.prepare('SELECT * FROM data_conflicts WHERE job_id = ? ORDER BY created_at ASC').all(jobId)
+      : this.db.prepare('SELECT * FROM data_conflicts ORDER BY created_at DESC LIMIT 100').all();
+    return rows.map((row) => mapDataConflictRecord(row as Record<string, unknown>));
+  }
+
+  getDataBackups(): DataBackupRecord[] {
+    return this.db
+      .prepare('SELECT * FROM data_backups ORDER BY created_at DESC LIMIT 50')
+      .all()
+      .map((row) => mapDataBackupRecord(row as Record<string, unknown>));
+  }
+
+  getMigrationRuns(): MigrationRun[] {
+    return this.db
+      .prepare('SELECT * FROM migration_runs ORDER BY created_at DESC LIMIT 50')
+      .all()
+      .map((row) => mapMigrationRun(row as Record<string, unknown>));
+  }
+
+  getRollbackRecords(): RollbackRecord[] {
+    return this.db
+      .prepare('SELECT * FROM rollback_records ORDER BY created_at DESC LIMIT 50')
+      .all()
+      .map((row) => mapRollbackRecord(row as Record<string, unknown>));
   }
 
   getAuditLogs(): AuditLog[] {
@@ -1786,63 +1854,49 @@ export class NexaStore {
     const id = createId('import');
     let status: ImportExportResult['status'] = 'ready';
     let summary = t('data.import.summary.ready');
-    let source = 'openai-compatible';
-    let manifest: Record<string, unknown> = {
-      requiresConfirmation: true,
-      conflictCount: 0,
-      redaction: 'secrets must be supplied interactively and are not imported from plain text',
-    };
+    let manifest: NormalizedDataManifest | Record<string, unknown> = this.emptyDataManifest('openai-compatible');
 
     try {
       const parsed = JSON.parse(manifestText) as Record<string, unknown>;
-      source = this.detectImportSource(parsed);
-      const providers = parsed.providers;
-      const models = parsed.models;
-      const keys = parsed.keys ?? parsed.apiKeys ?? parsed.gatewayKeys;
-      const hasValidList =
-        (Array.isArray(providers) && providers.length > 0) ||
-        (Array.isArray(models) && models.length > 0) ||
-        (Array.isArray(keys) && keys.length > 0) ||
-        typeof parsed.workspace === 'object';
-      if (!hasValidList) {
-        throw new Error(t('data.import.errors.requiredList'));
-      }
-      const conflictCount = Array.isArray(providers)
-        ? providers.filter((provider) =>
-            this.getProviders().some((existing) => existing.name === String((provider as { name?: unknown }).name ?? '')),
-          ).length
-        : 0;
-      manifest = {
-        ...manifest,
-        source,
-        providers: this.normalizeImportProviders(providers),
-        models: this.normalizeImportModels(models),
-        gatewayKeyTemplates: this.normalizeGatewayKeyTemplates(keys),
-        providerCount: Array.isArray(providers) ? providers.length : 0,
-        modelCount: Array.isArray(models) ? models.length : 0,
-        gatewayKeyTemplateCount: Array.isArray(keys) ? keys.length : 0,
-        conflictCount,
-        keys: 'stripped',
-      };
-      if (conflictCount > 0) {
-        summary = t('data.import.summary.conflict', { count: conflictCount });
-      }
+      const conflicts = this.detectDataConflicts(parsed);
+      manifest = normalizeDataManifest(parsed, conflicts);
+      if (manifest.conflictCount > 0) summary = t('data.import.summary.conflict', { count: manifest.conflictCount });
     } catch (error) {
       status = 'failed';
       summary = t('data.import.summary.rejected', { reason: error instanceof Error ? error.message : String(error) });
       manifest = {
+        ...this.emptyDataManifest('unknown'),
         requiresConfirmation: false,
         conflictCount: 0,
         error: summary,
       };
     }
 
+    const manifestJson = JSON.stringify(manifest);
+    const jobId = this.insertDataMobilityJob({
+      id,
+      operationKind: 'import',
+      status,
+      source: String(manifest.source ?? 'unknown'),
+      profile: 'metadata-redacted',
+      summary,
+      manifestJson,
+      manifestHash: stableHash(manifestJson),
+      conflictCount: Number(manifest.conflictCount ?? 0),
+      requiresConfirmation: Boolean(manifest.requiresConfirmation),
+      encrypted: false,
+      redacted: true,
+      rollbackRecordId: null,
+      relatedSnapshotId: null,
+      timestamp,
+    });
+    this.insertDataConflicts(jobId, Array.isArray((manifest as NormalizedDataManifest).conflicts) ? (manifest as NormalizedDataManifest).conflicts : [], timestamp);
     this.db
       .prepare(
         `INSERT INTO config_snapshots (id, action, status, summary, redacted, rollback_snapshot_id, source, applied_entity_ids_json, manifest_json, created_at)
          VALUES (?, 'import', ?, ?, 1, NULL, ?, ?, ?, ?)`,
       )
-      .run(id, status, summary, source, JSON.stringify([]), JSON.stringify(manifest), timestamp);
+      .run(id, status, summary, String(manifest.source ?? 'unknown'), JSON.stringify([]), manifestJson, timestamp);
     this.audit('import.manifest.validated', 'config_snapshot', id, { status, summary });
     return this.requireImportExportResult(id);
   }
@@ -1871,9 +1925,11 @@ export class NexaStore {
       appliedProviderIds: appliedEntityIds.filter((id) => id.startsWith('provider_')),
       appliedModelIds: appliedEntityIds.filter((id) => id.startsWith('model_')),
     };
+    const rollbackId = this.insertRollbackRecord(resultId, rollbackSnapshot.id, appliedEntityIds, 'available', null, timestamp);
     this.db
       .prepare('UPDATE config_snapshots SET status = ?, summary = ?, rollback_snapshot_id = ?, applied_entity_ids_json = ?, manifest_json = ?, created_at = ? WHERE id = ?')
       .run('completed', t('data.import.summary.applied', { count: appliedEntityIds.length }), rollbackSnapshot.id, JSON.stringify(appliedEntityIds), JSON.stringify({ ...manifest, appliedPlan: plan }), timestamp, resultId);
+    this.updateDataMobilityJob(resultId, 'completed', t('data.import.summary.applied', { count: appliedEntityIds.length }), rollbackId, rollbackSnapshot.id, timestamp, JSON.stringify({ ...manifest, appliedPlan: plan }));
     this.audit('import.plan.applied', 'config_snapshot', resultId, { mode, rollbackSnapshotId: rollbackSnapshot.id, appliedEntityIds });
     return this.requireImportExportResult(resultId);
   }
@@ -1882,11 +1938,14 @@ export class NexaStore {
     this.requirePermission(SECURITY_ACTION_PERMISSIONS.dataRestore, 'config_snapshot', snapshotId);
     const snapshot = this.requireImportExportResult(snapshotId);
     const timestamp = now();
-    const id = createId('restore');
+    const id = createId(options.mode === 'rollback' ? 'rollback' : 'restore');
     const mode = options.mode ?? 'preflight';
     const appliedEntityIds = this.parseStringList(snapshot.manifestJson ? this.parseManifest(snapshot.manifestJson).appliedPlan : null, 'appliedProviderIds')
       .concat(this.parseStringList(snapshot.manifestJson ? this.parseManifest(snapshot.manifestJson).appliedPlan : null, 'appliedModelIds'));
     if (mode === 'rollback') {
+      if (options.confirmationPhrase && options.confirmationPhrase !== DATA_CONFIRMATION_PHRASES.rollback) {
+        throw new Error(t('data.restore.errors.confirmation'));
+      }
       for (const entityId of appliedEntityIds) {
         if (entityId.startsWith('model_')) {
           this.db.prepare('UPDATE models SET enabled = 0, updated_at = ? WHERE id = ?').run(timestamp, entityId);
@@ -1895,20 +1954,39 @@ export class NexaStore {
           this.db.prepare('UPDATE providers SET enabled = 0, updated_at = ? WHERE id = ?').run(timestamp, entityId);
         }
       }
+      this.markRollbackApplied(snapshot.id, appliedEntityIds, timestamp);
     }
     const manifest = {
+      version: DATA_MANIFEST_VERSION,
       sourceSnapshotId: snapshot.id,
       requiresConfirmation: true,
       conflictCount: appliedEntityIds.length,
       mode,
       affectedEntityIds: appliedEntityIds,
     };
+    this.insertDataMobilityJob({
+      id,
+      operationKind: mode === 'rollback' ? 'rollback' : 'restore-preflight',
+      status: mode === 'rollback' ? 'completed' : 'ready',
+      source: snapshot.source ?? 'nexachat',
+      profile: 'metadata-redacted',
+      summary: mode === 'rollback' ? t('data.snapshot.summary.rollbackApplied', { count: appliedEntityIds.length }) : t('data.snapshot.summary.restore'),
+      manifestJson: JSON.stringify(manifest),
+      manifestHash: stableHash(manifest),
+      conflictCount: appliedEntityIds.length,
+      requiresConfirmation: mode !== 'rollback',
+      encrypted: false,
+      redacted: true,
+      rollbackRecordId: null,
+      relatedSnapshotId: snapshot.id,
+      timestamp,
+    });
     this.db
       .prepare(
         `INSERT INTO config_snapshots (id, action, status, summary, redacted, rollback_snapshot_id, source, applied_entity_ids_json, manifest_json, created_at)
-         VALUES (?, 'cleanup-preview', ?, ?, 1, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
       )
-      .run(id, mode === 'rollback' ? 'completed' : 'ready', mode === 'rollback' ? t('data.snapshot.summary.rollbackApplied', { count: appliedEntityIds.length }) : t('data.snapshot.summary.restore'), snapshot.id, snapshot.source ?? null, JSON.stringify(appliedEntityIds), JSON.stringify(manifest), timestamp);
+      .run(id, mode === 'rollback' ? 'rollback' : 'restore-preflight', mode === 'rollback' ? 'completed' : 'ready', mode === 'rollback' ? t('data.snapshot.summary.rollbackApplied', { count: appliedEntityIds.length }) : t('data.snapshot.summary.restore'), snapshot.id, snapshot.source ?? null, JSON.stringify(appliedEntityIds), JSON.stringify(manifest), timestamp);
     this.audit('snapshot.restore.previewed', 'config_snapshot', snapshotId, manifest);
     return this.requireImportExportResult(id);
   }
@@ -1917,18 +1995,31 @@ export class NexaStore {
     this.requirePermission(SECURITY_ACTION_PERMISSIONS.dataExport, 'config_snapshot', null);
     const timestamp = now();
     const id = createId('snapshot');
-    const manifest = {
-      providers: this.getProviders().length,
-      models: this.getModels().length,
-      conversations: this.getConversations().length,
-      redaction: 'secrets excluded by default',
-    };
+    const manifest = this.buildDataExportPayload('metadata-redacted');
+    const manifestJson = JSON.stringify(manifest);
+    this.insertDataMobilityJob({
+      id,
+      operationKind: 'snapshot',
+      status: 'completed',
+      source: 'nexachat',
+      profile: 'metadata-redacted',
+      summary: t('data.snapshot.summary.created'),
+      manifestJson,
+      manifestHash: stableHash(manifestJson),
+      conflictCount: 0,
+      requiresConfirmation: false,
+      encrypted: false,
+      redacted: true,
+      rollbackRecordId: null,
+      relatedSnapshotId: null,
+      timestamp,
+    });
     this.db
       .prepare(
         `INSERT INTO config_snapshots (id, action, status, summary, redacted, rollback_snapshot_id, source, applied_entity_ids_json, manifest_json, created_at)
          VALUES (?, 'snapshot', 'completed', ?, 1, NULL, 'nexachat', ?, ?, ?)`,
       )
-      .run(id, t('data.snapshot.summary.created'), JSON.stringify([]), JSON.stringify(manifest), timestamp);
+      .run(id, t('data.snapshot.summary.created'), JSON.stringify([]), manifestJson, timestamp);
     this.audit('snapshot.created', 'config_snapshot', id, manifest);
     return this.requireImportExportResult(id);
   }
@@ -1944,6 +2035,23 @@ export class NexaStore {
       redaction: 'Authorization, API keys, custom sensitive headers and local paths are redacted.',
       diagnoses: diagnoses.map((item) => item.code),
     };
+    this.insertDataMobilityJob({
+      id,
+      operationKind: 'diagnostics',
+      status: 'completed',
+      source: 'nexachat',
+      profile: 'metadata-redacted',
+      summary: t('data.diagnostics.summary.created'),
+      manifestJson: JSON.stringify(diagnostics),
+      manifestHash: stableHash(diagnostics),
+      conflictCount: 0,
+      requiresConfirmation: false,
+      encrypted: false,
+      redacted: true,
+      rollbackRecordId: null,
+      relatedSnapshotId: null,
+      timestamp,
+    });
     this.db
       .prepare(
         `INSERT INTO config_snapshots (id, action, status, summary, redacted, rollback_snapshot_id, source, applied_entity_ids_json, manifest_json, created_at)
@@ -1952,6 +2060,138 @@ export class NexaStore {
       .run(id, t('data.diagnostics.summary.created'), JSON.stringify([]), JSON.stringify(diagnostics), timestamp);
     this.audit('diagnostics.exported', 'diagnostics', id, diagnostics);
     return this.requireImportExportResult(id);
+  }
+
+  exportDataPackage(options: DataExportOptions = {}): ImportExportResult {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.dataExport, 'data_package', null);
+    const timestamp = now();
+    const id = createId('export');
+    const profile = options.profile ?? 'metadata-redacted';
+    const pkg = createRedactedBackupPackage(this.buildDataExportPayload(profile), profile);
+    this.insertDataMobilityJob({
+      id,
+      operationKind: 'export',
+      status: 'completed',
+      source: 'nexachat',
+      profile,
+      summary: t('data.export.summary.created'),
+      manifestJson: JSON.stringify(pkg),
+      manifestHash: pkg.manifestHash,
+      conflictCount: 0,
+      requiresConfirmation: false,
+      encrypted: false,
+      redacted: true,
+      rollbackRecordId: null,
+      relatedSnapshotId: null,
+      timestamp,
+    });
+    this.db
+      .prepare(
+        `INSERT INTO config_snapshots (id, action, status, summary, redacted, rollback_snapshot_id, source, applied_entity_ids_json, manifest_json, created_at)
+         VALUES (?, 'export', 'completed', ?, 1, NULL, 'nexachat', ?, ?, ?)`,
+      )
+      .run(id, t('data.export.summary.created'), JSON.stringify([]), JSON.stringify(pkg), timestamp);
+    this.audit('data.package.exported', 'data_package', id, { profile, encrypted: false, redacted: true });
+    return this.requireImportExportResult(id);
+  }
+
+  createEncryptedBackup(input: DataBackupCreateInput): DataBackupRecord {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.dataExport, 'data_backup', null);
+    const timestamp = now();
+    const jobId = createId('backup_job');
+    const backupId = createId('backup');
+    const pkg = this.createEncryptedBackupPackage(this.buildDataExportPayload(input.profile ?? 'encrypted-full'), input.passphrase);
+    this.insertDataMobilityJob({
+      id: jobId,
+      operationKind: 'encrypted-backup',
+      status: 'completed',
+      source: 'nexachat',
+      profile: 'encrypted-full',
+      summary: t('data.backup.summary.created'),
+      manifestJson: JSON.stringify({ ...pkg, payload: '[ENCRYPTED_PAYLOAD]' }),
+      manifestHash: pkg.manifestHash,
+      conflictCount: 0,
+      requiresConfirmation: false,
+      encrypted: true,
+      redacted: true,
+      rollbackRecordId: null,
+      relatedSnapshotId: null,
+      timestamp,
+    });
+    this.db
+      .prepare(
+        `INSERT INTO data_backups (id, job_id, profile, encrypted, redacted, manifest_hash, package_json, created_at)
+         VALUES (?, ?, ?, 1, 1, ?, ?, ?)`,
+      )
+      .run(backupId, jobId, 'encrypted-full', pkg.manifestHash, JSON.stringify(pkg), timestamp);
+    this.audit('data.backup.encrypted.created', 'data_backup', backupId, { profile: 'encrypted-full', encrypted: true, manifestHash: pkg.manifestHash });
+    return this.requireDataBackup(backupId);
+  }
+
+  createRestorePreflight(input: DataRestorePreflightInput): DataMobilityJob {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.dataRestore, 'data_backup', input.backupId ?? null);
+    const timestamp = now();
+    const id = createId('restore');
+    const pkg = this.resolveBackupPackage(input);
+    const payload = pkg.encrypted ? this.decryptBackupPackage(pkg, input.passphrase ?? '') : JSON.parse(pkg.payload) as Record<string, unknown>;
+    const manifest = this.payloadToDataManifest(payload);
+    const diff = buildRestoreDiffSummary(manifest);
+    const manifestJson = JSON.stringify({ manifest, diff });
+    this.insertDataMobilityJob({
+      id,
+      operationKind: 'restore-preflight',
+      status: 'ready',
+      source: manifest.source,
+      profile: pkg.profile,
+      summary: t('data.restore.summary.preflight', { added: diff.added.length, changed: diff.changed.length }),
+      manifestJson,
+      manifestHash: stableHash(manifestJson),
+      conflictCount: manifest.conflictCount,
+      requiresConfirmation: true,
+      encrypted: pkg.encrypted,
+      redacted: true,
+      rollbackRecordId: null,
+      relatedSnapshotId: input.backupId ?? null,
+      timestamp,
+    });
+    this.insertDataConflicts(id, manifest.conflicts, timestamp);
+    this.audit('data.restore.preflight.created', 'data_backup', input.backupId ?? id, { encrypted: pkg.encrypted, diff });
+    return this.requireDataMobilityJob(id);
+  }
+
+  applyDataRollback(input: DataRollbackInput): DataMobilityJob {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.dataRestore, 'rollback_record', input.rollbackId);
+    if (input.confirmationPhrase !== DATA_CONFIRMATION_PHRASES.rollback) {
+      throw new Error(t('data.restore.errors.confirmation'));
+    }
+    const rollback = this.requireRollbackRecord(input.rollbackId);
+    const affected = JSON.parse(rollback.affectedEntityIdsJson) as string[];
+    const timestamp = now();
+    for (const entityId of affected) {
+      if (entityId.startsWith('model_')) this.db.prepare('UPDATE models SET enabled = 0, updated_at = ? WHERE id = ?').run(timestamp, entityId);
+      if (entityId.startsWith('provider_')) this.db.prepare('UPDATE providers SET enabled = 0, updated_at = ? WHERE id = ?').run(timestamp, entityId);
+    }
+    this.db.prepare("UPDATE rollback_records SET state = 'applied', applied_at = ? WHERE id = ?").run(timestamp, rollback.id);
+    const jobId = createId('rollback');
+    this.insertDataMobilityJob({
+      id: jobId,
+      operationKind: 'rollback',
+      status: 'completed',
+      source: 'nexachat',
+      profile: 'metadata-redacted',
+      summary: t('data.snapshot.summary.rollbackApplied', { count: affected.length }),
+      manifestJson: JSON.stringify({ affectedEntityIds: affected, rollbackRecordId: rollback.id }),
+      manifestHash: stableHash(affected),
+      conflictCount: affected.length,
+      requiresConfirmation: false,
+      encrypted: false,
+      redacted: true,
+      rollbackRecordId: rollback.id,
+      relatedSnapshotId: rollback.rollbackSnapshotId,
+      timestamp,
+    });
+    this.audit('data.rollback.applied', 'rollback_record', rollback.id, { affectedCount: affected.length });
+    return this.requireDataMobilityJob(jobId);
   }
 
   private seed(): void {
@@ -3010,6 +3250,322 @@ export class NexaStore {
         gateway: this.getGatewayStatus().running ? 'running' : 'stopped',
       }),
     });
+  }
+
+  private emptyDataManifest(source: string): NormalizedDataManifest {
+    return {
+      version: DATA_MANIFEST_VERSION,
+      source,
+      providers: [],
+      models: [],
+      gatewayKeyTemplates: [],
+      conflictCount: 0,
+      conflicts: [],
+      redaction: {
+        secrets: 'stripped',
+        localPaths: 'redacted',
+      },
+      requiresConfirmation: true,
+    };
+  }
+
+  private detectDataConflicts(parsed: Record<string, unknown>): DataConflictInput[] {
+    const conflicts: DataConflictInput[] = [];
+    const existingProviders = this.getProviders();
+    const providers = Array.isArray(parsed.providers) ? parsed.providers as Array<Record<string, unknown>> : [];
+    for (const provider of providers) {
+      const name = String(provider.name ?? provider.label ?? '').trim();
+      const existing = existingProviders.find((candidate) => candidate.name === name);
+      if (existing) {
+        conflicts.push({
+          type: 'provider-name',
+          entityKind: 'provider',
+          localId: existing.id,
+          importName: name,
+          strategy: 'keep-local',
+        });
+      }
+    }
+    const models = Array.isArray(parsed.models) ? parsed.models as Array<Record<string, unknown>> : [];
+    for (const model of models) {
+      const name = String(model.name ?? model.id ?? model.model ?? '').trim();
+      const existing = this.getModels().find((candidate) => candidate.name === name);
+      if (existing) {
+        conflicts.push({
+          type: 'model-name',
+          entityKind: 'model',
+          localId: existing.id,
+          importName: name,
+          strategy: 'keep-local',
+        });
+      }
+    }
+    const keyTemplates = parsed.keys ?? parsed.apiKeys ?? parsed.gatewayKeys;
+    if (Array.isArray(keyTemplates) && keyTemplates.length > 0) {
+      for (const key of keyTemplates.slice(0, 20)) {
+        const item = key as Record<string, unknown>;
+        conflicts.push({
+          type: 'secret-stripped',
+          entityKind: 'secret',
+          localId: null,
+          importName: String(item.name ?? item.label ?? 'Imported secret template'),
+          strategy: 'skip',
+        });
+      }
+    }
+    return conflicts;
+  }
+
+  private insertDataMobilityJob(input: {
+    id: string;
+    operationKind: DataMobilityJob['operationKind'];
+    status: DataMobilityJob['status'];
+    source: string | null;
+    profile: DataMobilityJob['profile'];
+    summary: string;
+    manifestJson: string | null;
+    manifestHash: string | null;
+    conflictCount: number;
+    requiresConfirmation: boolean;
+    encrypted: boolean;
+    redacted: boolean;
+    rollbackRecordId: string | null;
+    relatedSnapshotId: string | null;
+    timestamp: number;
+  }): string {
+    this.db
+      .prepare(
+        `INSERT INTO data_mobility_jobs (id, operation_kind, status, source, manifest_version, profile, summary, manifest_hash, manifest_json, conflict_count, requires_confirmation, encrypted, redacted, rollback_record_id, related_snapshot_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET status = excluded.status, summary = excluded.summary, manifest_hash = excluded.manifest_hash, manifest_json = excluded.manifest_json, conflict_count = excluded.conflict_count, requires_confirmation = excluded.requires_confirmation, rollback_record_id = excluded.rollback_record_id, related_snapshot_id = excluded.related_snapshot_id, updated_at = excluded.updated_at`,
+      )
+      .run(
+        input.id,
+        input.operationKind,
+        input.status,
+        input.source,
+        DATA_MANIFEST_VERSION,
+        input.profile,
+        input.summary,
+        input.manifestHash,
+        input.manifestJson,
+        input.conflictCount,
+        input.requiresConfirmation ? 1 : 0,
+        input.encrypted ? 1 : 0,
+        input.redacted ? 1 : 0,
+        input.rollbackRecordId,
+        input.relatedSnapshotId,
+        input.timestamp,
+        input.timestamp,
+      );
+    this.ensureMigrationRun(input.timestamp);
+    return input.id;
+  }
+
+  private insertDataConflicts(jobId: string, conflicts: DataConflictInput[], timestamp: number): void {
+    for (const conflict of conflicts) {
+      this.db
+        .prepare(
+          `INSERT INTO data_conflicts (id, job_id, type, entity_kind, local_id, import_name, strategy, resolved, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          createId('conflict'),
+          jobId,
+          conflict.type,
+          conflict.entityKind,
+          conflict.localId,
+          conflict.importName,
+          conflict.strategy ?? 'keep-local',
+          0,
+          timestamp,
+        );
+    }
+  }
+
+  private updateDataMobilityJob(
+    id: string,
+    status: DataMobilityJob['status'],
+    summary: string,
+    rollbackRecordId: string | null,
+    relatedSnapshotId: string | null,
+    timestamp: number,
+    manifestJson?: string,
+  ): void {
+    this.db
+      .prepare(
+        `UPDATE data_mobility_jobs
+         SET status = ?, summary = ?, rollback_record_id = ?, related_snapshot_id = ?, manifest_json = COALESCE(?, manifest_json), manifest_hash = COALESCE(?, manifest_hash), updated_at = ?
+         WHERE id = ?`,
+      )
+      .run(status, summary, rollbackRecordId, relatedSnapshotId, manifestJson ?? null, manifestJson ? stableHash(manifestJson) : null, timestamp, id);
+  }
+
+  private insertRollbackRecord(
+    jobId: string,
+    rollbackSnapshotId: string | null,
+    affectedEntityIds: string[],
+    state: RollbackRecord['state'],
+    appliedAt: number | null,
+    timestamp: number,
+  ): string {
+    const id = createId('rollback_record');
+    this.db
+      .prepare(
+        `INSERT INTO rollback_records (id, job_id, rollback_snapshot_id, state, affected_entity_ids_json, applied_at, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, jobId, rollbackSnapshotId, state, JSON.stringify(affectedEntityIds), appliedAt, timestamp);
+    return id;
+  }
+
+  private markRollbackApplied(jobId: string, fallbackEntityIds: string[], timestamp: number): void {
+    const existing = this.db.prepare("SELECT * FROM rollback_records WHERE job_id = ? AND state = 'available' ORDER BY created_at DESC LIMIT 1").get(jobId);
+    if (existing) {
+      this.db.prepare("UPDATE rollback_records SET state = 'applied', applied_at = ? WHERE id = ?").run(timestamp, (existing as { id: string }).id);
+      return;
+    }
+    this.insertRollbackRecord(jobId, null, fallbackEntityIds, 'applied', timestamp, timestamp);
+  }
+
+  private buildDataExportPayload(profile: DataBackupProfile): Record<string, unknown> {
+    return {
+      version: DATA_MANIFEST_VERSION,
+      profile,
+      exportedAt: now(),
+      providers: this.getProviders().map((provider) => ({
+        name: provider.name,
+        type: provider.type,
+        baseUrl: provider.baseUrl,
+        enabled: provider.enabled,
+        authType: provider.authType,
+        secretRef: provider.secretRef ? '[REDACTED]' : null,
+      })),
+      models: this.getModels().map((model) => ({
+        providerId: model.providerId,
+        name: model.name,
+        displayName: model.displayName,
+        contextWindow: model.contextWindow,
+        enabled: model.enabled,
+      })),
+      gatewayKeys: this.getGatewayKeys().map((key) => ({
+        name: key.name,
+        scopes: key.scopes,
+        state: key.state,
+        keyPreview: key.keyPreview,
+      })),
+      conversations: this.getConversations().map((conversation) => ({
+        id: conversation.id,
+        title: conversation.title,
+        status: conversation.status,
+        messageCount: conversation.messageCount,
+      })),
+      uiPreferences: this.getUiPreferences(),
+      security: {
+        activeRole: this.getSecurityState().activeRole.id,
+        permissionKeys: this.getSecurityState().permissionKeys,
+      },
+    };
+  }
+
+  private createEncryptedBackupPackage(payload: unknown, passphrase: string): DataBackupPackage {
+    const normalized = passphrase.trim();
+    if (normalized.length < 8) {
+      throw new Error(t('data.backup.errors.passphrase'));
+    }
+    const salt = randomBytes(16);
+    const iv = randomBytes(12);
+    const key = pbkdf2Sync(normalized, salt, 120000, 32, 'sha256');
+    const plaintext = JSON.stringify(createRedactedBackupPackage(payload, 'encrypted-full'));
+    const cipher = createCipheriv('aes-256-gcm', key, iv);
+    const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+    return {
+      version: DATA_MANIFEST_VERSION,
+      profile: 'encrypted-full',
+      encrypted: true,
+      redacted: true,
+      manifestHash: createHash('sha256').update(plaintext).digest('hex'),
+      payload: encrypted.toString('base64'),
+      salt: salt.toString('base64'),
+      iv: iv.toString('base64'),
+      authTag: authTag.toString('base64'),
+    };
+  }
+
+  private decryptBackupPackage(pkg: DataBackupPackage, passphrase: string): Record<string, unknown> {
+    if (!pkg.encrypted) {
+      return JSON.parse(pkg.payload) as Record<string, unknown>;
+    }
+    if (!pkg.salt || !pkg.iv || !pkg.authTag) {
+      throw new Error(t('data.restore.errors.backupInvalid'));
+    }
+    try {
+      const key = pbkdf2Sync(passphrase.trim(), Buffer.from(pkg.salt, 'base64'), 120000, 32, 'sha256');
+      const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(pkg.iv, 'base64'));
+      decipher.setAuthTag(Buffer.from(pkg.authTag, 'base64'));
+      const plaintext = Buffer.concat([decipher.update(Buffer.from(pkg.payload, 'base64')), decipher.final()]).toString('utf8');
+      if (createHash('sha256').update(plaintext).digest('hex') !== pkg.manifestHash) {
+        throw new Error(t('data.restore.errors.integrity'));
+      }
+      return JSON.parse(plaintext) as Record<string, unknown>;
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : t('data.restore.errors.backupInvalid'));
+    }
+  }
+
+  private resolveBackupPackage(input: DataRestorePreflightInput): DataBackupPackage {
+    if (input.packageText?.trim()) {
+      return JSON.parse(input.packageText) as DataBackupPackage;
+    }
+    if (input.backupId) {
+      const backup = this.requireDataBackup(input.backupId);
+      return JSON.parse(backup.packageJson) as DataBackupPackage;
+    }
+    throw new Error(t('data.restore.errors.backupRequired'));
+  }
+
+  private payloadToDataManifest(payload: Record<string, unknown>): NormalizedDataManifest {
+    const nestedPayload = typeof payload.payload === 'string' && !payload.encrypted
+      ? JSON.parse(String(payload.payload)) as Record<string, unknown>
+      : payload;
+    const body = (nestedPayload.profile && typeof nestedPayload.payload === 'string')
+      ? JSON.parse(String(nestedPayload.payload)) as Record<string, unknown>
+      : nestedPayload;
+    const sourcePayload = typeof body.payload === 'object' && body.payload !== null ? body.payload as Record<string, unknown> : body;
+    const conflicts = this.detectDataConflicts(sourcePayload);
+    try {
+      return normalizeDataManifest(sourcePayload, conflicts);
+    } catch {
+      return this.emptyDataManifest(detectDataImportSource(sourcePayload));
+    }
+  }
+
+  private ensureMigrationRun(timestamp: number): void {
+    const version = DATA_MIGRATION_VERSIONS[0];
+    const existing = this.db.prepare('SELECT id FROM migration_runs WHERE version = ?').get(version);
+    if (existing) return;
+    this.db
+      .prepare('INSERT INTO migration_runs (id, version, status, summary, created_at, completed_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(createId('migration'), version, 'completed', t('data.migration.summary.round12'), timestamp, timestamp);
+  }
+
+  private requireDataMobilityJob(id: string): DataMobilityJob {
+    const row = this.db.prepare('SELECT * FROM data_mobility_jobs WHERE id = ?').get(id);
+    if (!row) throw new Error(`Data mobility job not found: ${id}`);
+    return mapDataMobilityJob(row as Record<string, unknown>);
+  }
+
+  private requireDataBackup(id: string): DataBackupRecord {
+    const row = this.db.prepare('SELECT * FROM data_backups WHERE id = ?').get(id);
+    if (!row) throw new Error(`Data backup not found: ${id}`);
+    return mapDataBackupRecord(row as Record<string, unknown>);
+  }
+
+  private requireRollbackRecord(id: string): RollbackRecord {
+    const row = this.db.prepare('SELECT * FROM rollback_records WHERE id = ?').get(id);
+    if (!row) throw new Error(`Rollback record not found: ${id}`);
+    return mapRollbackRecord(row as Record<string, unknown>);
   }
 
   private requireImportExportResult(id: string): ImportExportResult {

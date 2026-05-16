@@ -1134,6 +1134,58 @@ These references guide product and engineering decisions. They are not permissio
 25. **Deliverables**: Import/export/backup/recovery system, UI, tests, docs.
 26. **Next Round Input**: Reliable data/log base for observability and evaluation.
 
+### Round 12 Execution Status
+
+- Status: Completed.
+- Completion date: 2026-05-16.
+- Parallel lanes:
+  - Lane A: data mobility authority, manifest/conflict/migration/snapshot schema, and Store persistence.
+  - Lane B: import/export, encrypted backup, restore preflight, rollback, redaction, and permission/audit enforcement.
+  - Lane C: Data UI IA, i18n, navigation, browser mock parity, tests, desktop shortcut readback, docs, and Git closeout.
+  - Lane D/E: read-only UI/i18n and test audit lanes for Round 12.
+- Main changed files:
+  - `src/shared/dataRuntime.ts`.
+  - `src/shared/types.ts`, `src/shared/api.ts`, `src/shared/ipc.ts`, `src/shared/securityRuntime.ts`, `src/shared/navigation.ts`, `src/shared/i18n.ts`.
+  - `src/main/database/schema.ts`, `src/main/database/connection.ts`, `src/main/repositories/mappers.ts`, `src/main/services/store.ts`, `src/main/ipc.ts`.
+  - `src/preload/index.ts`.
+  - `src/renderer/modules/DataPage.tsx`, `src/renderer/mockApi.ts`, `src/renderer/AppShell.tsx`.
+  - `tests/data-runtime.test.ts`, `tests/ipc-contract.test.ts`, `tests/ui-smoke.spec.ts`.
+- Added/modified functionality:
+  - Added centralized data mobility authority for manifest version, operation kinds, backup profiles, conflict types/strategies, rollback states, migration version, wizard steps, redaction rules, stable hashes, and restore diff summaries.
+  - Added `data_mobility_jobs`, `data_conflicts`, `data_backups`, `migration_runs`, and `rollback_records` schema and migration support.
+  - Kept old `validateImportManifest`, `applyImportPlan`, `restoreSnapshot`, `createSnapshot`, and `exportDiagnostics` API compatibility while backing them with structured Round 12 records.
+  - Added new AppApi/IPC/preload methods for redacted export package, encrypted backup, restore preflight, and rollback application.
+  - Implemented AES-256-GCM encrypted backup in the main process with PBKDF2 passphrase derivation, redacted payloads, package hash, and wrong/invalid backup errors.
+  - Added restore preflight from backup records or package text with structured diff summary and conflict records.
+  - Added rollback records that disable only records created by the import, without deleting existing local records.
+  - Reworked Data module navigation from `import/snapshots/diagnostics/cleanup` to `import/backup/restore/rollback/diagnostics/cleanup`; `/data/snapshots` is now a legacy alias to `/data/backup`, and `/data/backup` is a first-class route.
+  - Rebuilt Data UI around import/export, encrypted backup, restore preflight, conflict/rollback, and diagnostics records using structured job fields instead of summary-text filtering.
+  - Updated browser mock parity for data mobility jobs, conflicts, backups, migrations, rollback records, encrypted backup, restore preflight, and rollback.
+- Deleted/replaced old links:
+  - Replaced `cleanup-preview` as the production restore/rollback action with `restore-preflight` and `rollback`.
+  - Replaced `summary.includes(...)` restore filtering with structured `operationKind` and rollback records.
+  - Replaced `/data/backup -> /data/snapshots` old alias with first-class `/data/backup`; `/data/snapshots` now redirects forward.
+  - Replaced preview-only import/apply state with structured job, conflict, backup, migration, and rollback records.
+- Test commands and results:
+  - `npm.cmd run typecheck`: passed.
+  - `npm.cmd run test -- tests/data-runtime.test.ts tests/ipc-contract.test.ts tests/app.test.tsx tests/gateway-runtime.test.ts`: passed, 4 files / 17 tests.
+  - Full `npm.cmd run test`: passed, 14 files / 47 tests.
+  - `npm.cmd run test:ui-smoke`: passed, 15 Playwright tests after fixing browser mock restore-preflight parity and showing operation kind in the restore table.
+  - `npm.cmd run build`: passed.
+  - `npm.cmd run verify`: passed, including typecheck, full unit test suite, and build.
+  - `npm.cmd run test:electron-smoke`: passed, Electron shell rendered.
+  - `git diff --check`: passed with LF/CRLF conversion warnings only.
+- Desktop shortcut result:
+  - `C:/Users/至亲/Desktop/NexaChat.lnk` exists.
+  - TargetPath: `D:/NexaChat/node_modules/electron/dist/electron.exe`.
+  - Arguments: `"D:/NexaChat"`.
+  - WorkingDirectory: `D:/NexaChat`.
+  - IconLocation: `D:/NexaChat/assets/app-icon.ico,0`.
+  - No shortcut was modified.
+- Acceptance result: Passed for Round 12. Export/import and encrypted backup are structured, redacted, permission-gated, conflict-aware, restore-preflight capable, and rollback-capable without silent overwrite or plaintext secret export.
+- Commit hash: pending delivery commit; pending closeout commit.
+- Remaining issues: None for Round 12. Round 13 owns observability, usage aggregation, feedback, evaluation, trace dashboard, privacy settings, and retention.
+
 ## 19. Round 13: Observability, Usage, Logs, Feedback And Evaluation
 
 1. **Round Name**: Observability, Usage, Logs, Feedback And Evaluation.

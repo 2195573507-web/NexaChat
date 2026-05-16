@@ -442,3 +442,34 @@
 - Committed Round 11 hash backfill as `2f80ef6e3bf06ca370f8df0ff9adcc2813080850`.
 - Direct `git push origin main` failed because GitHub HTTPS timed out.
 - Pushed through Git OpenSSL plus local proxy; `origin/main` confirmed at `2f80ef6e3bf06ca370f8df0ff9adcc2813080850`.
+
+## 2026-05-16 Full App Round 12 Execution
+
+- Reconfirmed real project root with `git rev-parse --show-toplevel`: `D:/NexaChat`.
+- Continued the active `/goal` at Round 12 after Round 0-11 completion and remote delivery.
+- Rechecked requested skills: `using-superpower` is unavailable and `using-superpowers` is available.
+- Used parallel lanes:
+  - Lane A: data mobility authority, manifest/conflict/migration/snapshot schema, and Store persistence.
+  - Lane B: import/export, encrypted backup, restore preflight, rollback, redaction, and permission/audit enforcement.
+  - Lane C: Data UI information architecture, i18n, navigation, browser mock parity, tests, desktop shortcut readback, docs, and Git closeout.
+  - Lane D/E: read-only UI/i18n and test audit lanes for Round 12.
+- Added `src/shared/dataRuntime.ts`.
+- Added `data_mobility_jobs`, `data_conflicts`, `data_backups`, `migration_runs`, and `rollback_records` schema/migration support.
+- Extended shared types, API, IPC, preload, main handlers, mappers, security permission mapping, navigation, i18n, Store, Data UI, and browser mock parity.
+- Implemented redacted export package, AES-256-GCM encrypted backup, restore preflight, conflict records, migration records, and rollback records.
+- Replaced `cleanup-preview` restore/rollback reuse with `restore-preflight` and `rollback`.
+- Replaced summary-text restore filtering with structured `operationKind` and rollback records.
+- Reworked Data navigation to first-class `import`, `backup`, `restore`, `rollback`, `diagnostics`, and `cleanup` pages; `/data/snapshots` now forwards to `/data/backup`.
+- Added `tests/data-runtime.test.ts` and extended IPC/UI smoke coverage.
+- Ran `npm.cmd run typecheck`: passed.
+- Ran `npm.cmd run test -- tests/data-runtime.test.ts tests/ipc-contract.test.ts tests/app.test.tsx tests/gateway-runtime.test.ts`: passed, 4 files / 17 tests.
+- First `npm.cmd run test:ui-smoke` after Round 12 changes failed because the browser mock returned the legacy restore action and the restore table did not expose `restore-preflight`.
+- Fixed browser mock restore-preflight parity and showed operation kind in the restore table.
+- Reran `npm.cmd run test:ui-smoke`: passed, 15 Playwright tests.
+- Ran `npm.cmd run test`: passed, 14 files / 47 tests.
+- Ran `npm.cmd run build`: passed.
+- Ran `npm.cmd run verify`: passed, including typecheck, full unit test suite, and build.
+- Ran `npm.cmd run test:electron-smoke`: passed; Electron shell rendered.
+- Ran `git diff --check`: passed after fixing a trailing-whitespace issue; remaining output was LF/CRLF conversion warnings only.
+- Checked `C:\Users\至亲\Desktop\NexaChat.lnk`: target, arguments, working directory, and icon still point to the current local Electron launch entry.
+- Updated the authoritative blueprint Round 12 execution record, `PROJECT_PROGRESS.md`, matrix, `docs/implementation/round-12-data-config-import-export-backup-recovery-closure.md`, `task_plan.md`, `progress.md`, and `findings.md`; commit hash is pending until Git commit.

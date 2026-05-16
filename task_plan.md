@@ -52,6 +52,7 @@ At least three agents were launched concurrently before implementation work cont
 - Full App Round 9 Knowledge/RAG file processing: complete as implementation, verification, commit, and push.
 - Full App Round 10 Agent/MCP/Tool/Workflow execution model: complete as implementation, verification, commit, and push.
 - Full App Round 11 Security/users/permissions/audit: complete as implementation, verification, commits, push, and remote confirmation.
+- Full App Round 12 Data Config/import/export/backup/recovery: complete as implementation and verification; delivery/closeout commit and push in progress.
 - Phase 1: complete.
 - Phase 2: complete.
 - Phase 3: complete.
@@ -73,6 +74,7 @@ At least three agents were launched concurrently before implementation work cont
 - Implemented local gateway endpoints `/v1/models`, `/v1/chat/completions`, `/v1/embeddings`, and reserved `/v1/responses`; `/v1/chat/completions` now reuses the real Provider adapter chain instead of local response generation.
 - Implemented the Round 10 execution model with tools, runs, steps, trace events, approval requests, safe fixtures, and Run Center UI.
 - Implemented the Round 11 security model with permission authority, local owner session, RBAC/ACL evaluation, main-process IPC/Store enforcement, audit hash-chain integrity, redacted export/search, and Settings visibility.
+- Implemented the Round 12 data mobility model with versioned manifests, conflict records, encrypted backup records, restore preflight, migration records, rollback records, redacted export packages, and structured Data UI pages.
 - Implemented renderer shell, dashboard, chat, model center, knowledge, tools/MCP/Agent, gateway, data config, and settings/security pages.
 - Implemented browser fallback API for Vite/Playwright tests.
 - Added Vitest and Playwright smoke tests.

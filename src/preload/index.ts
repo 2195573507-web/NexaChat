@@ -20,6 +20,10 @@ import type {
   UiPreferences,
   ImportPlanApplyOptions,
   RestoreSnapshotOptions,
+  DataBackupCreateInput,
+  DataExportOptions,
+  DataRestorePreflightInput,
+  DataRollbackInput,
 } from '../shared/types.js';
 
 function invoke<C extends IpcChannel>(channel: C, ...args: IpcInvokeArgs[C]) {
@@ -61,6 +65,10 @@ const api: AppApi = {
   restoreSnapshot: (snapshotId: string, options?: RestoreSnapshotOptions) => invoke(IPC_CHANNELS.dataRestoreSnapshot, snapshotId, options),
   createSnapshot: () => invoke(IPC_CHANNELS.dataCreateSnapshot),
   exportDiagnostics: () => invoke(IPC_CHANNELS.dataExportDiagnostics),
+  exportDataPackage: (options?: DataExportOptions) => invoke(IPC_CHANNELS.dataExportPackage, options),
+  createEncryptedBackup: (input: DataBackupCreateInput) => invoke(IPC_CHANNELS.dataCreateEncryptedBackup, input),
+  createRestorePreflight: (input: DataRestorePreflightInput) => invoke(IPC_CHANNELS.dataCreateRestorePreflight, input),
+  applyDataRollback: (input: DataRollbackInput) => invoke(IPC_CHANNELS.dataApplyRollback, input),
   searchAuditLogs: (query?: string) => invoke(IPC_CHANNELS.auditSearch, query),
   verifyAuditIntegrity: () => invoke(IPC_CHANNELS.auditVerify),
   exportAuditLogs: () => invoke(IPC_CHANNELS.auditExport),

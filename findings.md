@@ -99,6 +99,15 @@
 - Audit export must redact at export time even though details are already redacted on insert, because future details can evolve. The export test asserts the generated Gateway key never appears in exported content.
 - Round 12 should not keep overloading `config_snapshots(cleanup-preview)` for real restore/rollback. Import/export, backup, migration, conflict maps, and rollback records need a proper data mobility authority.
 
+## Full App Round 12 Findings
+
+- The root data mobility gap was not only missing backup UI. Import validation, apply, snapshots, restore preview, diagnostics, and cleanup preview were sharing `config_snapshots`, so restore and rollback needed their own structured authority before adding encrypted backup.
+- `src/shared/dataRuntime.ts` is now the authority for manifest version, operation kinds, backup profiles, conflict types/strategies, rollback states, migration version, redaction rules, stable hashes, package creation, manifest normalization, and restore diff summaries.
+- Encrypted backup must remain main-process-owned. The shared runtime is renderer-safe and does not import Node crypto; Store owns AES-256-GCM encryption and PBKDF2 passphrase derivation.
+- Data UI should filter by structured `operationKind`, not by translated summary text. This fixed the old restore/rollback visibility path and made UI smoke assert `restore-preflight` directly.
+- Browser mock parity matters for recovery flows. The first Round 12 UI smoke failure exposed that the mock still returned a legacy restore action shape; fixing the mock preserved AppApi parity.
+- Round 13 should build observability from existing request logs, usage records, gateway logs, audit logs, execution traces, and Round 12 mobility jobs without creating duplicate log pages.
+
 ## Initial Repository State
 
 - Repository root: `D:\NexaChat`.

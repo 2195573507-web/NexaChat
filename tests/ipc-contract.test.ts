@@ -27,6 +27,12 @@ describe('IPC contract authority', () => {
     expect(() => assertIpcPayload(IPC_CHANNELS.auditSearch, ['gateway'])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.auditVerify, [])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.auditExport, [])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.dataApplyImportPlan, ['import_1', { mode: 'apply-metadata' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.dataRestoreSnapshot, ['snapshot_1', { mode: 'rollback' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.dataExportPackage, [])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.dataCreateEncryptedBackup, [{ passphrase: 'round-12-passphrase' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.dataCreateRestorePreflight, [{ backupId: 'backup_1', passphrase: 'round-12-passphrase' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.dataApplyRollback, [{ rollbackId: 'rollback_1', confirmationPhrase: 'ROLLBACK DATA' }])).not.toThrow();
   });
 
   it('prevents raw IPC string registration and invocation from returning', () => {

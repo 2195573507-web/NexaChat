@@ -550,6 +550,57 @@ Git:
 - Round 11 remote-confirmation commit hash: `2f80ef6e3bf06ca370f8df0ff9adcc2813080850`.
 - Push result: delivery, closeout, and hash-backfill commits pushed; `origin/main` confirmed at `2f80ef6e3bf06ca370f8df0ff9adcc2813080850`.
 
+## 2026-05-16 Full App Round 12 Data Config, Import/Export, Backup And Recovery
+
+Round 12 of the authoritative full-app blueprint is implemented and verified. It replaces the overloaded snapshot/cleanup-preview data path with structured data mobility jobs, conflict records, encrypted backup records, migration records, rollback records, and Data module pages for import, backup, restore, rollback, diagnostics, and cleanup.
+
+Parallel execution lanes:
+
+- Lane A: data mobility authority, manifest/conflict/migration/snapshot schema, and Store persistence.
+- Lane B: import/export, encrypted backup, restore preflight, rollback, redaction, and permission/audit enforcement.
+- Lane C: Data UI information architecture, i18n, navigation, browser mock parity, tests, desktop shortcut readback, docs, and Git closeout.
+- Lane D/E: read-only UI/i18n and test audit lanes for Round 12.
+
+Key changes:
+
+- Added `src/shared/dataRuntime.ts` for manifest version, operation kinds, backup profiles, conflict types/strategies, rollback states, migration version, wizard steps, redaction rules, stable hashes, package creation, manifest normalization, and restore diff summaries.
+- Added schema/migration support for `data_mobility_jobs`, `data_conflicts`, `data_backups`, `migration_runs`, and `rollback_records`.
+- Added shared types, mappers, snapshot arrays, API/IPC/preload/main handlers for data jobs, conflicts, backups, migrations, rollback records, export package creation, encrypted backup, restore preflight, and rollback.
+- Kept `validateImportManifest`, `applyImportPlan`, `createSnapshot`, `restoreSnapshot`, and `exportDiagnostics` compatibility while backing them with structured Round 12 records.
+- Implemented AES-256-GCM encrypted backup in the main process with PBKDF2 passphrase derivation, redacted payloads, package hash validation, and invalid/wrong backup errors.
+- Added restore preflight from stored backup records or package text, plus conflict records and restore diff summaries.
+- Added rollback records that disable only entities created by the import plan.
+- Reworked the Data module navigation from `import/snapshots/diagnostics/cleanup` to `import/backup/restore/rollback/diagnostics/cleanup`; `/data/snapshots` is now a legacy alias to the first-class `/data/backup` route.
+- Rebuilt Data UI around import/export, encrypted backup, restore preflight, conflict/rollback, diagnostics, and cleanup boundaries using structured job fields instead of summary-text filtering.
+- Updated browser mock parity for data mobility jobs, conflicts, backups, migrations, rollback records, encrypted backup, restore preflight, and rollback.
+- Added `tests/data-runtime.test.ts`.
+- Added `docs/implementation/round-12-data-config-import-export-backup-recovery-closure.md`.
+
+Verification completed:
+
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test -- tests/data-runtime.test.ts tests/ipc-contract.test.ts tests/app.test.tsx tests/gateway-runtime.test.ts`: passed, 4 files / 17 tests.
+- Full `npm.cmd run test`: passed, 14 files / 47 tests.
+- `npm.cmd run test:ui-smoke`: passed, 15 Playwright tests after fixing browser mock restore-preflight parity and showing operation kind in the restore table.
+- `npm.cmd run build`: passed.
+- `npm.cmd run verify`: passed, including typecheck, full unit test suite, and build.
+- `npm.cmd run test:electron-smoke`: passed; Electron shell rendered.
+- `git diff --check`: passed with LF/CRLF conversion warnings only.
+
+Desktop shortcut:
+
+- `C:\Users\至亲\Desktop\NexaChat.lnk` exists and still points to `D:\NexaChat\node_modules\electron\dist\electron.exe`.
+- Arguments remain `"D:\NexaChat"`.
+- Working directory remains `D:\NexaChat`.
+- Icon remains `D:\NexaChat\assets\app-icon.ico,0`.
+- No shortcut was modified in Round 12.
+
+Git:
+
+- Round 12 delivery commit hash: pending.
+- Round 12 closeout commit hash: pending.
+- Push result: pending.
+
 ## 2026-05-14 UI Shell Redesign
 
 This round rebuilt the visible desktop shell, sidebar hierarchy, topbar, workbench home, and visual system so NexaChat reads as a formal compact desktop tool instead of a crowded prototype/debug panel.
@@ -718,7 +769,7 @@ The user required agent assistance with at least three agents running and at lea
 - Production-grade streaming state machine and cancellation.
 - Full document parsing, RAG, embedding/rerank providers, vector DB, OCR, and knowledge evaluation.
 - MCP execution, custom tool execution, real Agent Run Center, trace replay, workflow canvas, human approval execution, and code sandbox.
-- Full conflict-aware import/export execution, destructive restore execution, migrations, cleanup execution, and encrypted backup with secrets.
+- Destructive cleanup execution and broader file-attachment backup policies beyond redacted metadata packages.
 - Packaging, installer, desktop shortcut creation, and shortcut verification.
 
 ## Verification

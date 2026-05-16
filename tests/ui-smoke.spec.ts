@@ -264,6 +264,32 @@ test('data import rejects invalid manifests and records the failure visibly', as
   await expect(page.getByText(/rejected|refused|invalid|Import/i)).toBeVisible();
 });
 
+test('data mobility backup restore and rollback use structured Round 12 records', async ({ page }) => {
+  const data = navModules.find((module) => module.id === 'data')!;
+  await page.goto('/data/import');
+  await page.getByLabel(translate('zh-CN', 'data.import.aria')).fill('{"providers":[{"name":"Round 12 UI Provider","baseUrl":"http://127.0.0.1:11434/v1"}],"models":[{"providerName":"Round 12 UI Provider","name":"round-12-ui-model"}]}');
+  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'data.import.preflight')) }).click();
+  await expect(page.locator('main [data-tab="import"]').getByText('ready').first()).toBeVisible();
+  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'data.import.apply')) }).click();
+  await expect(page.locator('main [data-tab="import"]').getByText('completed').first()).toBeVisible();
+
+  await openFeature(page, data, data.tabs.find((tab) => tab.id === 'backup')!);
+  await page.getByLabel(translate('zh-CN', 'data.backup.passphrase')).fill('round-12-passphrase');
+  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'data.backup.create')) }).click();
+  await expect(page.locator('main [data-tab="backup"]').getByText('encrypted-backup').first()).toBeVisible();
+
+  await openFeature(page, data, data.tabs.find((tab) => tab.id === 'restore')!);
+  await page.getByLabel(translate('zh-CN', 'data.restore.passphrase')).fill('round-12-passphrase');
+  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'data.restore.preflight')) }).click();
+  await expect(page.locator('main [data-tab="restore"]').getByText('restore-preflight').first()).toBeVisible();
+
+  await openFeature(page, data, data.tabs.find((tab) => tab.id === 'rollback')!);
+  await expect(page.locator('main [data-tab="rollback"]').getByText(/available|applied/).first()).toBeVisible();
+  await expectNoVisibleRouteLeak(page);
+  await expectNoHorizontalOverflow(page, '.app-shell');
+  await expectNoHorizontalOverflow(page, '.content-grid');
+});
+
 test('knowledge import retrieval rebuild delete and chat citations use one RAG chain', async ({ page }) => {
   const knowledge = navModules.find((module) => module.id === 'knowledge')!;
   await page.goto('/knowledge/files');

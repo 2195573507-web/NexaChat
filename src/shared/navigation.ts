@@ -215,8 +215,16 @@ export const navModules: NavModule[] = [
         default: true,
       },
       {
-        id: 'snapshots',
-        icon: 'camera',
+        id: 'backup',
+        icon: 'archive',
+      },
+      {
+        id: 'restore',
+        icon: 'rotate-ccw',
+      },
+      {
+        id: 'rollback',
+        icon: 'history',
       },
       {
         id: 'diagnostics',
@@ -308,8 +316,8 @@ export const routeAliasRegistry: RouteAliasEntry[] = [
   alias('/gateway/virtual-models', '/gateway/docs', 'gateway', 'Virtual models are not executable yet and are documented in gateway docs.'),
   alias('/gateway/routes', '/gateway/docs', 'gateway', 'Gateway route examples live in docs until route rules are implemented.'),
   alias('/gateway/integrations', '/data/import', 'data', 'External integration import belongs to data import preflight.'),
-  alias('/data/import-export', '/data/import', 'data', 'Import/export currently maps to import preflight.'),
-  alias('/data/backup', '/data/snapshots', 'data', 'Backup maps to snapshots until encrypted backup lands.'),
+  alias('/data/import-export', '/data/import', 'data', 'Import/export maps to the Round 12 data mobility import/export workbench.'),
+  alias('/data/snapshots', '/data/backup', 'data', 'Legacy snapshots route now maps to encrypted backup and snapshot history.'),
   alias('/settings/request-logs', '/gateway/logs', 'gateway', 'Request logs moved to gateway logs.'),
   alias('/settings/usage', '/gateway/logs', 'gateway', 'Usage is currently visible with request logs.'),
   alias('/settings/evals', '/models/router', 'models', 'Evals are planned and model-related until Round 13.'),

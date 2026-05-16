@@ -25,6 +25,15 @@ import type {
   SecuritySessionState,
   SecurityUserStatus,
 } from './securityRuntime.js';
+import type {
+  DataBackupProfile,
+  DataConflictStrategy,
+  DataConflictType,
+  DataJobStatus,
+  DataMigrationVersion,
+  DataOperationKind,
+  DataRollbackState,
+} from './dataRuntime.js';
 
 export type ModuleStage = 'ready' | 'implemented' | 'planned' | 'reserved' | 'environment-limited';
 
@@ -482,10 +491,33 @@ export interface GatewayKeyRotateInput {
 
 export interface ImportPlanApplyOptions {
   mode?: 'record-only' | 'apply-metadata';
+  conflictStrategy?: DataConflictStrategy;
+  confirmationPhrase?: string;
 }
 
 export interface RestoreSnapshotOptions {
   mode?: 'preflight' | 'rollback';
+  confirmationPhrase?: string;
+}
+
+export interface DataExportOptions {
+  profile?: DataBackupProfile;
+}
+
+export interface DataBackupCreateInput {
+  profile?: DataBackupProfile;
+  passphrase: string;
+}
+
+export interface DataRestorePreflightInput {
+  backupId?: string;
+  packageText?: string;
+  passphrase?: string;
+}
+
+export interface DataRollbackInput {
+  rollbackId: string;
+  confirmationPhrase?: string;
 }
 
 export interface GatewayImportPlan {
@@ -745,7 +777,7 @@ export interface ApprovalDecisionInput {
 
 export interface ImportExportResult {
   id: string;
-  action: 'import' | 'export' | 'snapshot' | 'cleanup-preview';
+  action: 'import' | 'export' | 'snapshot' | 'cleanup-preview' | 'encrypted-backup' | 'restore-preflight' | 'rollback' | 'migration';
   status: 'ready' | 'completed' | 'failed';
   summary: string;
   redacted: boolean;
@@ -756,6 +788,68 @@ export interface ImportExportResult {
   errorMessage: string | null;
   conflictCount: number;
   requiresConfirmation: boolean;
+  createdAt: number;
+}
+
+export interface DataConflictRecord {
+  id: string;
+  jobId: string;
+  type: DataConflictType;
+  entityKind: 'provider' | 'model' | 'workspace' | 'secret';
+  localId: string | null;
+  importName: string;
+  strategy: DataConflictStrategy;
+  resolved: boolean;
+  createdAt: number;
+}
+
+export interface DataMobilityJob {
+  id: string;
+  operationKind: DataOperationKind;
+  status: DataJobStatus;
+  source: string | null;
+  manifestVersion: string;
+  profile: DataBackupProfile | null;
+  summary: string;
+  manifestHash: string | null;
+  manifestJson: string | null;
+  conflictCount: number;
+  requiresConfirmation: boolean;
+  encrypted: boolean;
+  redacted: boolean;
+  rollbackRecordId: string | null;
+  relatedSnapshotId: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface DataBackupRecord {
+  id: string;
+  jobId: string;
+  profile: DataBackupProfile;
+  encrypted: boolean;
+  redacted: boolean;
+  manifestHash: string;
+  packageJson: string;
+  createdAt: number;
+}
+
+export interface MigrationRun {
+  id: string;
+  version: DataMigrationVersion;
+  status: DataJobStatus;
+  summary: string;
+  createdAt: number;
+  completedAt: number | null;
+}
+
+export interface RollbackRecord {
+  id: string;
+  jobId: string;
+  rollbackSnapshotId: string | null;
+  state: DataRollbackState;
+  affectedEntityIdsJson: string;
+  appliedAt: number | null;
   createdAt: number;
 }
 
@@ -838,6 +932,11 @@ export interface AppSnapshot {
   executionTraceEvents: ExecutionTraceEvent[];
   approvalRequests: ApprovalRequest[];
   importExportResults: ImportExportResult[];
+  dataMobilityJobs: DataMobilityJob[];
+  dataConflicts: DataConflictRecord[];
+  dataBackups: DataBackupRecord[];
+  migrationRuns: MigrationRun[];
+  rollbackRecords: RollbackRecord[];
   auditLogs: AuditLog[];
   security: SecurityState;
   auditIntegrity: AuditIntegrityReport;

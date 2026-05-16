@@ -22,6 +22,9 @@ import type {
   GatewayStatus,
   HealthStatus,
   ImportExportResult,
+  DataBackupRecord,
+  DataConflictRecord,
+  DataMobilityJob,
   KnowledgeChunk,
   KnowledgeCitation,
   KnowledgeDeleteInput,
@@ -52,12 +55,15 @@ import type {
   SecurityState,
   AuditIntegrityReport,
   AuditExportResult,
+  MigrationRun,
+  RollbackRecord,
 } from '../shared/types';
 import type { AppApi } from '../shared/api';
 import { translate } from '../shared/i18n';
 import { normalizeThemeMode } from '../shared/theme';
 import { EXECUTION_TOOL_IDS, TOOL_FIXTURES, normalizeApprovalDecision, normalizeExecutionStartInput } from '../shared/executionRuntime';
 import { SECURITY_PERMISSION_KEYS } from '../shared/securityRuntime';
+import { DATA_MANIFEST_VERSION, DATA_CONFIRMATION_PHRASES, stableHash } from '../shared/dataRuntime';
 import {
   KNOWLEDGE_RUNTIME_POLICY,
   chunkKnowledgeText,
@@ -97,6 +103,11 @@ interface MockState {
   executionTraceEvents: ExecutionTraceEvent[];
   approvalRequests: ApprovalRequest[];
   importExportResults: ImportExportResult[];
+  dataMobilityJobs: DataMobilityJob[];
+  dataConflicts: DataConflictRecord[];
+  dataBackups: DataBackupRecord[];
+  migrationRuns: MigrationRun[];
+  rollbackRecords: RollbackRecord[];
   auditLogs: AuditLog[];
   uiPreferences: UiPreferences;
 }
@@ -382,6 +393,18 @@ function createSeedState(): MockState {
     executionTraceEvents: [],
     approvalRequests: [],
     importExportResults: [],
+    dataMobilityJobs: [],
+    dataConflicts: [],
+    dataBackups: [],
+    migrationRuns: [{
+      id: createId('migration'),
+      version: 'round-12-data-mobility-v1',
+      status: 'completed',
+      summary: t('data.migration.summary.round12'),
+      createdAt: now(),
+      completedAt: now(),
+    }],
+    rollbackRecords: [],
     auditLogs: [createAuditLog('mock.init', 'workspace', workspaceId, { runtime: 'browser' })],
     uiPreferences: {
       theme: 'system',
@@ -514,6 +537,11 @@ function buildSnapshot(state: MockState): AppSnapshot {
     executionTraceEvents: state.executionTraceEvents,
     approvalRequests: state.approvalRequests,
     importExportResults: state.importExportResults,
+    dataMobilityJobs: state.dataMobilityJobs,
+    dataConflicts: state.dataConflicts,
+    dataBackups: state.dataBackups,
+    migrationRuns: state.migrationRuns,
+    rollbackRecords: state.rollbackRecords,
     auditLogs: state.auditLogs,
     security: buildSecurityState(),
     auditIntegrity,
@@ -778,19 +806,21 @@ export function createMockApi(): AppApi {
 
   function createResult(action: ImportExportResult['action'], summary: string, redacted: boolean, options: { failed?: boolean; conflictCount?: number } = {}): ImportExportResult {
     const timestamp = now();
-    const status: ImportExportResult['status'] = options.failed ? 'failed' : action === 'import' || action === 'cleanup-preview' ? 'ready' : 'completed';
+    const status: ImportExportResult['status'] = options.failed ? 'failed' : action === 'import' || action === 'restore-preflight' || action === 'cleanup-preview' ? 'ready' : 'completed';
     const conflictCount = options.conflictCount ?? 0;
+    const manifest = {
+      version: DATA_MANIFEST_VERSION,
+      requiresConfirmation: status === 'ready',
+      conflictCount,
+      source: 'browser-mock',
+    };
     const result: ImportExportResult = {
       id: createId(action.replace('-', '_')),
       action,
       status,
       summary,
       redacted,
-      manifestJson: JSON.stringify({
-        requiresConfirmation: status === 'ready',
-        conflictCount,
-        source: 'browser-mock',
-      }),
+      manifestJson: JSON.stringify(manifest),
       rollbackSnapshotId: null,
       source: 'browser-mock',
       appliedEntityIdsJson: JSON.stringify([]),
@@ -800,6 +830,26 @@ export function createMockApi(): AppApi {
       createdAt: timestamp,
     };
     state.importExportResults.unshift(result);
+    const job: DataMobilityJob = {
+      id: result.id,
+      operationKind: action === 'cleanup-preview' || action === 'restore-preflight' ? 'restore-preflight' : action === 'encrypted-backup' ? 'encrypted-backup' : action === 'snapshot' ? 'snapshot' : action === 'export' ? 'export' : action === 'rollback' ? 'rollback' : action === 'migration' ? 'migration' : 'import',
+      status,
+      source: 'browser-mock',
+      manifestVersion: DATA_MANIFEST_VERSION,
+      profile: action === 'encrypted-backup' ? 'encrypted-full' : 'metadata-redacted',
+      summary,
+      manifestHash: stableHash(manifest),
+      manifestJson: JSON.stringify(manifest),
+      conflictCount,
+      requiresConfirmation: status === 'ready',
+      encrypted: action === 'encrypted-backup',
+      redacted,
+      rollbackRecordId: null,
+      relatedSnapshotId: null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    state.dataMobilityJobs.unshift(job);
     pushAudit(`data.${action}`, 'importExportResult', result.id);
     return result;
   }
@@ -1523,13 +1573,40 @@ export function createMockApi(): AppApi {
       }
       result.status = 'completed';
       result.summary = t('data.import.summary.browserApplied');
+      const job = state.dataMobilityJobs.find((item) => item.id === result.id);
+      const rollbackId = createId('rollback_record');
+      if (job) {
+        job.status = 'completed';
+        job.summary = result.summary;
+        job.rollbackRecordId = rollbackId;
+        job.updatedAt = now();
+      }
+      state.rollbackRecords.unshift({
+        id: rollbackId,
+        jobId: result.id,
+        rollbackSnapshotId: result.rollbackSnapshotId,
+        state: 'available',
+        affectedEntityIdsJson: JSON.stringify(['provider_mock_import']),
+        appliedAt: null,
+        createdAt: now(),
+      });
       pushAudit('data.applyImportPlan', 'importExportResult', result.id);
       return clone(result);
     },
 
-    async restoreSnapshot(snapshotId: string) {
-      findById(state.importExportResults, snapshotId, 'Snapshot');
-      const result = createResult('cleanup-preview', t('data.snapshot.summary.browserRestore'), true);
+    async restoreSnapshot(snapshotId: string, options) {
+      const snapshot = findById(state.importExportResults, snapshotId, 'Snapshot');
+      if (options?.mode === 'rollback') {
+        const result = createResult('rollback', t('data.snapshot.summary.rollbackApplied', { count: 1 }), true);
+        state.rollbackRecords
+          .filter((record) => record.jobId === snapshot.id && record.state === 'available')
+          .forEach((record) => {
+            record.state = 'applied';
+            record.appliedAt = now();
+          });
+        return clone(result);
+      }
+      const result = createResult('restore-preflight', t('data.snapshot.summary.browserRestore'), true);
       return clone(result);
     },
 
@@ -1549,6 +1626,50 @@ export function createMockApi(): AppApi {
         true,
       );
       return clone(result);
+    },
+
+    async exportDataPackage() {
+      const result = createResult('export', t('data.export.summary.created'), true);
+      return clone(result);
+    },
+
+    async createEncryptedBackup(input) {
+      if (input.passphrase.trim().length < 8) {
+        throw new Error(t('data.backup.errors.passphrase'));
+      }
+      const result = createResult('encrypted-backup', t('data.backup.summary.created'), true);
+      const backup: DataBackupRecord = {
+        id: createId('backup'),
+        jobId: result.id,
+        profile: 'encrypted-full',
+        encrypted: true,
+        redacted: true,
+        manifestHash: stableHash(result.manifestJson ?? result.id),
+        packageJson: JSON.stringify({ version: DATA_MANIFEST_VERSION, encrypted: true, payload: '[ENCRYPTED_PAYLOAD]' }),
+        createdAt: now(),
+      };
+      state.dataBackups.unshift(backup);
+      pushAudit('data.backup.encrypted.created', 'dataBackup', backup.id);
+      return clone(backup);
+    },
+
+    async createRestorePreflight(input) {
+      if (!input.backupId && !input.packageText) {
+        throw new Error(t('data.restore.errors.backupRequired'));
+      }
+      const result = createResult('restore-preflight', t('data.restore.summary.preflight', { added: 1, changed: 0 }), true);
+      return clone(findById(state.dataMobilityJobs, result.id, 'Data mobility job'));
+    },
+
+    async applyDataRollback(input) {
+      if (input.confirmationPhrase !== DATA_CONFIRMATION_PHRASES.rollback) {
+        throw new Error(t('data.restore.errors.confirmation'));
+      }
+      const rollback = findById(state.rollbackRecords, input.rollbackId, 'Rollback record');
+      rollback.state = 'applied';
+      rollback.appliedAt = now();
+      const result = createResult('rollback', t('data.snapshot.summary.rollbackApplied', { count: 1 }), true);
+      return clone(findById(state.dataMobilityJobs, result.id, 'Data mobility job'));
     },
 
     async searchAuditLogs(query?: string) {

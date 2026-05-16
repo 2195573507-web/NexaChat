@@ -1,5 +1,6 @@
 import {
   Activity,
+  Archive,
   Bot,
   Boxes,
   BrainCircuit,
@@ -18,6 +19,7 @@ import {
   MessagesSquare,
   PlugZap,
   Route,
+  RotateCcw,
   ScrollText,
   Search,
   SearchCheck,
@@ -75,6 +77,8 @@ const childIcons: Record<string, LucideIcon> = {
   brackets: Braces,
   'file-check': FileCheck,
   camera: Camera,
+  archive: Archive,
+  'rotate-ccw': RotateCcw,
   'triangle-alert': TriangleAlert,
   'trash-2': Trash2,
   'sliders-horizontal': SlidersHorizontal,
