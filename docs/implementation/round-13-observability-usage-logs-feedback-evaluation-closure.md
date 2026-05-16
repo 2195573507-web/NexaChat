@@ -71,5 +71,5 @@ Passed at the targeted Round 13 boundary. Usage, request logs, gateway logs, Pro
 
 - Delivery commit hash: `8a94f74892705d39e4107c3c24a0878bb9a36f09`.
 - Closeout commit hash: `d84b413dc4967b44d88a62f182f6577423691688`.
-- Push result: pending.
+- Push result: delivery, closeout, and hash-backfill commits pushed; `origin/main` confirmed at `932ecbcb91b6d3c9c8d27857d89890b4f3b4d9d6`.
 - Remaining issues: None for Round 13. Round 14 owns packaged desktop entry, installer/package artifact, shortcut script/check, crash recovery, and release diagnostics.
