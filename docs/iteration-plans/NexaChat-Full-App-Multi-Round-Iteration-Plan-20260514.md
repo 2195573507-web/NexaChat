@@ -1101,7 +1101,8 @@ These references guide product and engineering decisions. They are not permissio
   - IconLocation: `D:/NexaChat/assets/app-icon.ico,0`.
   - No shortcut was modified.
 - Acceptance result: Passed for the Round 11 boundary. Main-process permission enforcement rejects unauthorized actions, audit integrity verifies and detects tampering, security UI reports integrity, and exported audit logs are redacted.
-- Commit hash: `0bac7f927c90e2087c3bb80a81833ca4c599b629` for Round 11 delivery; `aa7bac441a4a0173f2a6e4749f3e53f4d6be364d` records closeout.
+- Commit hash: `0bac7f927c90e2087c3bb80a81833ca4c599b629` for Round 11 delivery; `aa7bac441a4a0173f2a6e4749f3e53f4d6be364d` records closeout; `2f80ef6e3bf06ca370f8df0ff9adcc2813080850` records hash backfill and remote confirmation.
+- Push result: delivery, closeout, and hash-backfill commits pushed; `origin/main` confirmed at `2f80ef6e3bf06ca370f8df0ff9adcc2813080850`.
 - Remaining issues: None for Round 11 after final verification. Round 12 owns full import/export, encrypted backup, migration framework, conflict handling, and rollback.
 
 ## 18. Round 12: Data Config, Import/Export, Backup And Recovery

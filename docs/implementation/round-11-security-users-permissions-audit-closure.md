@@ -69,5 +69,6 @@ Passed at the targeted Round 11 boundary. Main-process permission checks now cov
 
 - Delivery commit hash: `0bac7f927c90e2087c3bb80a81833ca4c599b629`.
 - Closeout commit hash: `aa7bac441a4a0173f2a6e4749f3e53f4d6be364d`.
-- Push result: pending.
+- Remote-confirmation commit hash: `2f80ef6e3bf06ca370f8df0ff9adcc2813080850`.
+- Push result: delivery, closeout, and hash-backfill commits pushed; `origin/main` confirmed at `2f80ef6e3bf06ca370f8df0ff9adcc2813080850`.
 - Remaining issues: None for Round 11. Round 12 owns full import/export, encrypted backup, migration framework, conflict handling, and rollback.
