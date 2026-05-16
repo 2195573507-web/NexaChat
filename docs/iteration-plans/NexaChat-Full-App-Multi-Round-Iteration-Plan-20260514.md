@@ -1464,8 +1464,8 @@ These references guide product and engineering decisions. They are not permissio
   - IconLocation resolves to `D:/NexaChat/assets/app-icon.ico,0`.
   - The shortcut remains the packaged Round 14 entry and is verified by `npm.cmd run test:desktop-entry` inside `npm.cmd run verify:release`.
 - Acceptance result: Passed. Release convergence now has one repeatable command, all configured gates pass, docs freshness is enforced, the packaged desktop entry remains valid, and Round 15 legacy route aliases have been deleted.
-- Commit hash: pending until Round 15 delivery commit.
-- Remaining issues: None for Round 15. Git delivery, push, remote confirmation, and final overall acceptance commit remain.
+- Commit hash: delivery `938d017ceede16475369a537227b86be7096b9cc`.
+- Remaining issues: None for Round 15. Push, remote confirmation, and final overall acceptance commit remain.
 
 ## 22. Overall Convergence Acceptance Standards
 

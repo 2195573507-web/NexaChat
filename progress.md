@@ -565,3 +565,4 @@
 - Updated the authoritative blueprint Round 15 execution record, `PROJECT_PROGRESS.md`, matrix, `task_plan.md`, `progress.md`, and `findings.md`; commit hash is pending until the Round 15 delivery commit.
 - Ran `npm.cmd run verify:release`: passed; covered typecheck, 18 Vitest files / 55 tests, production build, 16 Playwright UI smoke tests, Electron smoke, package release, package smoke, installer smoke, packaged shortcut readback, hardcode scan, duplicate scan, security scan, dead-link scan, docs scan, and `git diff --check`.
 - `git diff --check` passed as part of `verify:release`, with LF/CRLF conversion warnings only.
+- Committed Round 15 delivery as `938d017ceede16475369a537227b86be7096b9cc` and started delivery-hash backfill.

@@ -2,7 +2,7 @@
 
 ## 2026-05-16 Full App Round 15 Test System, Quality Gates And Release Convergence
 
-Round 15 of `docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md` is completed as implementation and verification; delivery commit is pending.
+Round 15 of `docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md` is completed as implementation and verification; delivery commit is `938d017ceede16475369a537227b86be7096b9cc`.
 
 Parallel execution lanes:
 
@@ -36,7 +36,7 @@ Desktop shortcut status:
 
 Git:
 
-- Round 15 delivery commit hash: pending.
+- Round 15 delivery commit hash: `938d017ceede16475369a537227b86be7096b9cc`.
 - Push result: pending.
 
 ## 2026-05-16 Full App Round 14 Desktop Experience, Packaging, Shortcut And Release
