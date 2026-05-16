@@ -546,7 +546,7 @@ Desktop shortcut:
 Git:
 
 - Round 11 delivery commit hash: `0bac7f927c90e2087c3bb80a81833ca4c599b629`.
-- Round 11 closeout commit hash: pending.
+- Round 11 closeout commit hash: `aa7bac441a4a0173f2a6e4749f3e53f4d6be364d`.
 - Push result: pending.
 
 ## 2026-05-14 UI Shell Redesign
