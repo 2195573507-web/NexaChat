@@ -29,6 +29,51 @@ CREATE TABLE IF NOT EXISTS providers (
 CREATE INDEX IF NOT EXISTS idx_providers_type ON providers(type);
 CREATE INDEX IF NOT EXISTS idx_providers_enabled ON providers(enabled);
 
+CREATE TABLE IF NOT EXISTS security_users (
+  id TEXT PRIMARY KEY,
+  display_name TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS security_roles (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL,
+  permission_keys_json TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS security_sessions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  role_id TEXT NOT NULL,
+  state TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER,
+  last_seen_at INTEGER NOT NULL,
+  revoked_at INTEGER,
+  FOREIGN KEY(user_id) REFERENCES security_users(id),
+  FOREIGN KEY(role_id) REFERENCES security_roles(id)
+);
+
+CREATE TABLE IF NOT EXISTS acl_grants (
+  id TEXT PRIMARY KEY,
+  subject_type TEXT NOT NULL,
+  subject_id TEXT NOT NULL,
+  resource_type TEXT NOT NULL,
+  resource_id TEXT,
+  permission_key TEXT NOT NULL,
+  effect TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_security_sessions_state ON security_sessions(state, last_seen_at);
+CREATE INDEX IF NOT EXISTS idx_acl_grants_subject ON acl_grants(subject_type, subject_id, permission_key);
+
 CREATE TABLE IF NOT EXISTS secrets (
   id TEXT PRIMARY KEY,
   label TEXT NOT NULL,
@@ -552,6 +597,10 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   target_type TEXT NOT NULL,
   target_id TEXT,
   details_json TEXT,
+  permission_key TEXT,
+  previous_hash TEXT,
+  entry_hash TEXT,
+  integrity_state TEXT NOT NULL DEFAULT 'verified',
   created_at INTEGER NOT NULL
 );
 

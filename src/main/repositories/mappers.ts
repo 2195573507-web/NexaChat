@@ -1,6 +1,8 @@
 import type {
   AgentDefinition,
   ApprovalRequest,
+  AuditExportResult,
+  AuditIntegrityReport,
   AuditLog,
   Conversation,
   ConversationExport,
@@ -23,6 +25,10 @@ import type {
   PromptTemplate,
   Provider,
   RequestLog,
+  SecurityAclGrant,
+  SecurityRole,
+  SecuritySession,
+  SecurityUser,
   ToolDefinition,
   UiPreferences,
   UsageRecord,
@@ -525,6 +531,78 @@ export function mapAuditLog(row: Row): AuditLog {
     targetType: String(row.target_type),
     targetId: nullableString(row.target_id),
     detailsJson: nullableString(row.details_json),
+    permissionKey: nullableString(row.permission_key) as AuditLog['permissionKey'],
+    previousHash: nullableString(row.previous_hash),
+    entryHash: nullableString(row.entry_hash),
+    integrityState: String(row.integrity_state ?? 'verified') as AuditLog['integrityState'],
+    createdAt: Number(row.created_at),
+  };
+}
+
+export function mapSecurityUser(row: Row): SecurityUser {
+  return {
+    id: String(row.id),
+    displayName: String(row.display_name),
+    status: String(row.status) as SecurityUser['status'],
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
+  };
+}
+
+export function mapSecurityRole(row: Row): SecurityRole {
+  return {
+    id: String(row.id) as SecurityRole['id'],
+    name: String(row.name),
+    description: String(row.description),
+    permissionKeys: JSON.parse(String(row.permission_keys_json)) as SecurityRole['permissionKeys'],
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
+  };
+}
+
+export function mapSecuritySession(row: Row): SecuritySession {
+  return {
+    id: String(row.id),
+    userId: String(row.user_id),
+    roleId: String(row.role_id) as SecuritySession['roleId'],
+    state: String(row.state) as SecuritySession['state'],
+    createdAt: Number(row.created_at),
+    expiresAt: nullableNumber(row.expires_at),
+    lastSeenAt: Number(row.last_seen_at),
+    revokedAt: nullableNumber(row.revoked_at),
+  };
+}
+
+export function mapSecurityAclGrant(row: Row): SecurityAclGrant {
+  return {
+    id: String(row.id),
+    subjectType: String(row.subject_type) as SecurityAclGrant['subjectType'],
+    subjectId: String(row.subject_id),
+    resourceType: String(row.resource_type),
+    resourceId: nullableString(row.resource_id),
+    permissionKey: String(row.permission_key) as SecurityAclGrant['permissionKey'],
+    effect: String(row.effect) as SecurityAclGrant['effect'],
+    createdAt: Number(row.created_at),
+    expiresAt: nullableNumber(row.expires_at),
+  };
+}
+
+export function mapAuditIntegrityReport(row: Row): AuditIntegrityReport {
+  return {
+    status: String(row.status) as AuditIntegrityReport['status'],
+    checkedAt: Number(row.checked_at),
+    checkedCount: Number(row.checked_count),
+    firstBrokenAuditId: nullableString(row.first_broken_audit_id),
+    lastHash: nullableString(row.last_hash),
+  };
+}
+
+export function mapAuditExportResult(row: Row): AuditExportResult {
+  return {
+    id: String(row.id),
+    redacted: bool(row.redacted),
+    content: String(row.content),
+    integrity: mapAuditIntegrityReport(row.integrity as Row),
     createdAt: Number(row.created_at),
   };
 }

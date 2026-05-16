@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { safeStorage } from 'electron';
 import type { DatabaseSync } from 'node:sqlite';
 import { getDatabase } from '../database/connection.js';
@@ -26,6 +26,10 @@ import {
   mapPromptTemplate,
   mapProvider,
   mapRequestLog,
+  mapSecurityAclGrant,
+  mapSecurityRole,
+  mapSecuritySession,
+  mapSecurityUser,
   mapToolDefinition,
   mapUiPreferences,
   mapUsageRecord,
@@ -76,9 +80,20 @@ import {
   normalizeApprovalDecision,
   normalizeExecutionStartInput,
 } from '../../shared/executionRuntime.js';
+import {
+  SECURITY_ACTION_PERMISSIONS,
+  SECURITY_PERMISSION_KEYS,
+  SECURITY_ROLES,
+  evaluatePermission,
+  getSecurityRole,
+  type SecurityPermissionKey,
+  type SecurityRoleId,
+} from '../../shared/securityRuntime.js';
 import type {
   AgentDefinition,
   AppSnapshot,
+  AuditExportResult,
+  AuditIntegrityReport,
   ApprovalDecisionInput,
   ApprovalRequest,
   AuditLog,
@@ -125,6 +140,11 @@ import type {
   ProviderInput,
   RegenerateMessageInput,
   RequestLog,
+  SecurityAclGrant,
+  SecurityRole,
+  SecuritySession,
+  SecurityState,
+  SecurityUser,
   RetryMessageInput,
   RouteDecision,
   SendMessageInput,
@@ -145,6 +165,8 @@ import {
 const DEFAULT_WORKSPACE_ID = 'ws_default';
 const DEFAULT_PREFS_ID = 'ui_default';
 const GATEWAY_ENABLED_SETTING_KEY = 'gateway.enabled';
+const DEFAULT_SECURITY_USER_ID = 'user_local_admin';
+const DEFAULT_SECURITY_SESSION_ID = 'session_local_admin';
 const t = (key: Parameters<typeof translate>[1], params?: Parameters<typeof translate>[2]) => translate('zh-CN', key, params);
 
 export interface GatewayAuthorizationResult {
@@ -182,6 +204,13 @@ export class NexaStore {
     return getDatabase().path;
   }
 
+  getRawDatabaseForTesting(): DatabaseSync {
+    if (process.env.NODE_ENV !== 'test' && !process.env.VITEST) {
+      throw new Error('Raw database access is only available in tests.');
+    }
+    return this.db;
+  }
+
   getSnapshot(): AppSnapshot {
     return {
       dashboard: this.getDashboardSummary(),
@@ -210,6 +239,8 @@ export class NexaStore {
       approvalRequests: this.getApprovalRequests(),
       importExportResults: this.getImportExportResults(),
       auditLogs: this.getAuditLogs(),
+      security: this.getSecurityState(),
+      auditIntegrity: this.verifyAuditIntegrity({ persistAudit: false }),
       uiPreferences: this.getUiPreferences(),
     };
   }
@@ -345,6 +376,49 @@ export class NexaStore {
     };
   }
 
+  getSecurityUsers(): SecurityUser[] {
+    return this.db
+      .prepare('SELECT * FROM security_users ORDER BY created_at ASC')
+      .all()
+      .map((row) => mapSecurityUser(row as Record<string, unknown>));
+  }
+
+  getSecurityRoles(): SecurityRole[] {
+    return this.db
+      .prepare('SELECT * FROM security_roles ORDER BY id ASC')
+      .all()
+      .map((row) => mapSecurityRole(row as Record<string, unknown>));
+  }
+
+  getSecuritySessions(): SecuritySession[] {
+    return this.db
+      .prepare('SELECT * FROM security_sessions ORDER BY last_seen_at DESC')
+      .all()
+      .map((row) => mapSecuritySession(row as Record<string, unknown>));
+  }
+
+  getAclGrants(): SecurityAclGrant[] {
+    return this.db
+      .prepare('SELECT * FROM acl_grants ORDER BY created_at DESC')
+      .all()
+      .map((row) => mapSecurityAclGrant(row as Record<string, unknown>));
+  }
+
+  getSecurityState(): SecurityState {
+    const activeSession = this.getActiveSession();
+    const activeUser = this.requireSecurityUser(activeSession.userId);
+    const activeRole = this.requireSecurityRole(activeSession.roleId);
+    return {
+      activeUser,
+      activeSession,
+      activeRole,
+      roles: this.getSecurityRoles(),
+      aclGrants: this.getAclGrants(),
+      permissionKeys: [...SECURITY_PERMISSION_KEYS],
+      deniedCount: this.countAuditAction('security.permission.denied'),
+    };
+  }
+
   setGatewayRuntime(enabled: boolean, recentError: string | null = null): GatewayStatus {
     this.gatewayEnabled = enabled;
     this.gatewayRecentError = recentError;
@@ -446,6 +520,84 @@ export class NexaStore {
       .map((row) => mapAuditLog(row as Record<string, unknown>));
   }
 
+  countAuditAction(action: string): number {
+    const row = this.db
+      .prepare('SELECT COUNT(*) AS count FROM audit_logs WHERE action = ?')
+      .get(action) as { count: number } | undefined;
+    return Number(row?.count ?? 0);
+  }
+
+  searchAuditLogs(query = ''): AuditLog[] {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.auditRead, 'audit_log', null);
+    const normalized = query.trim().toLowerCase();
+    const logs = this.getAuditLogs();
+    const result = normalized
+      ? logs.filter((log) => JSON.stringify(log).toLowerCase().includes(normalized))
+      : logs;
+    this.audit('audit.searched', 'audit_log', null, { query: normalized ? '[FILTERED]' : 'all', resultCount: result.length }, SECURITY_ACTION_PERMISSIONS.auditRead);
+    return result;
+  }
+
+  verifyAuditIntegrity(options: { persistAudit?: boolean } = {}): AuditIntegrityReport {
+    if (options.persistAudit !== false) {
+      this.requirePermission(SECURITY_ACTION_PERMISSIONS.auditVerify, 'audit_log', null);
+    }
+    const rows = this.db
+      .prepare('SELECT * FROM audit_logs ORDER BY created_at ASC, id ASC')
+      .all()
+      .map((row) => mapAuditLog(row as Record<string, unknown>));
+    let previousHash: string | null = null;
+    let firstBrokenAuditId: string | null = null;
+    for (const row of rows) {
+      const expectedHash = computeAuditHash({
+        id: row.id,
+        action: row.action,
+        actor: row.actor,
+        targetType: row.targetType,
+        targetId: row.targetId,
+        detailsJson: row.detailsJson,
+        permissionKey: row.permissionKey,
+        previousHash: row.previousHash,
+        createdAt: row.createdAt,
+      });
+      if (row.previousHash !== previousHash || row.entryHash !== expectedHash || row.integrityState !== 'verified') {
+        firstBrokenAuditId = row.id;
+        break;
+      }
+      previousHash = row.entryHash;
+    }
+    const report: AuditIntegrityReport = {
+      status: rows.length === 0 ? 'empty' : firstBrokenAuditId ? 'broken' : 'verified',
+      checkedAt: now(),
+      checkedCount: rows.length,
+      firstBrokenAuditId,
+      lastHash: previousHash,
+    };
+    if (options.persistAudit !== false) {
+      this.audit('audit.integrity.verified', 'audit_log', firstBrokenAuditId, report, SECURITY_ACTION_PERMISSIONS.auditVerify);
+    }
+    return report;
+  }
+
+  exportAuditLogs(): AuditExportResult {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.auditExport, 'audit_log', null);
+    const integrity = this.verifyAuditIntegrity({ persistAudit: false });
+    const id = createId('audit_export');
+    const createdAt = now();
+    const content = JSON.stringify({
+      exportedAt: createdAt,
+      redacted: true,
+      integrity,
+      auditLogs: this.getAuditLogs().map((log) => ({
+        ...log,
+        detailsJson: log.detailsJson ? redactSensitive(log.detailsJson) : null,
+      })),
+    }, null, 2);
+    const result: AuditExportResult = { id, redacted: true, content, integrity, createdAt };
+    this.audit('audit.exported', 'audit_log', id, { auditCount: this.getAuditLogs().length, integrityStatus: integrity.status }, SECURITY_ACTION_PERMISSIONS.auditExport);
+    return result;
+  }
+
   getUiPreferences(): UiPreferences {
     const row = this.db.prepare('SELECT * FROM ui_preferences WHERE id = ?').get(DEFAULT_PREFS_ID);
     if (!row) {
@@ -454,7 +606,26 @@ export class NexaStore {
     return mapUiPreferences(row as Record<string, unknown>);
   }
 
+  requirePermission(permissionKey: SecurityPermissionKey, resourceType: string | null = null, resourceId: string | null = null): void {
+    const session = this.getActiveSession();
+    const grants = this.getAclGrants();
+    const result = evaluatePermission({
+      permissionKey,
+      roleId: session.roleId,
+      userId: session.userId,
+      resourceType,
+      resourceId,
+      aclGrants: grants,
+    });
+    this.touchSession(session.id);
+    if (!result.allowed) {
+      this.audit('security.permission.denied', resourceType ?? 'permission', resourceId, result, permissionKey);
+      throw new Error(t('settings.security.permissionDenied', { permission: permissionKey }));
+    }
+  }
+
   createProvider(input: ProviderInput): Provider {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.providerWrite, 'provider', null);
     const timestamp = now();
     const providerId = createId('provider');
     const secretRef = input.apiKey ? this.saveSecret(`${input.name} API Key`, input.apiKey) : null;
@@ -480,6 +651,7 @@ export class NexaStore {
   }
 
   createModel(input: ModelInput): Model {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.modelWrite, 'model', null);
     const provider = this.requireProvider(input.providerId);
     const timestamp = now();
     const id = createId('model');
@@ -518,6 +690,7 @@ export class NexaStore {
   }
 
   async testProvider(providerId: string): Promise<Provider> {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.providerTest, 'provider', providerId);
     const provider = this.requireProvider(providerId);
     const start = now();
     const adapterName = getProviderAdapterName(provider.type);
@@ -577,6 +750,7 @@ export class NexaStore {
   }
 
   createConversation(title = t('chat.seed.newConversation')): Conversation {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.chatWrite, 'conversation', null);
     const workspace = this.getDefaultWorkspace();
     const timestamp = now();
     const id = createId('conv');
@@ -593,6 +767,7 @@ export class NexaStore {
     conversationId: string,
     flags: Partial<Pick<Conversation, 'isPinned' | 'isFavorite' | 'status'>>,
   ): Conversation {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.chatManage, 'conversation', conversationId);
     const conversation = this.requireConversation(conversationId);
     const timestamp = now();
     this.db
@@ -609,6 +784,7 @@ export class NexaStore {
   }
 
   async retryMessage(input: RetryMessageInput): Promise<ChatResponse> {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.chatWrite, 'message', input.messageId);
     const message = this.requireMessage(input.messageId);
     const userMessage = message.role === 'user'
       ? message
@@ -634,6 +810,7 @@ export class NexaStore {
   }
 
   async regenerateMessage(input: RegenerateMessageInput): Promise<ChatResponse> {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.chatWrite, 'message', input.assistantMessageId);
     const assistantMessage = this.requireMessage(input.assistantMessageId);
     if (assistantMessage.role !== 'assistant') {
       throw new Error(t('chat.errors.regenerateAssistantOnly'));
@@ -660,6 +837,7 @@ export class NexaStore {
   }
 
   cancelMessage(input: CancelMessageInput): ChatResponse {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.chatManage, 'request_log', input.requestLogId);
     const requestLog = this.requireRequestLog(input.requestLogId);
     if (!requestLog.conversationId || !requestLog.messageId) {
       throw new Error(t('chat.errors.cancelRequestMissing'));
@@ -701,6 +879,7 @@ export class NexaStore {
   }
 
   async compareModels(input: CompareModelsInput): Promise<CompareModelsResponse> {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.chatWrite, 'conversation', input.conversationId ?? null);
     const uniqueModelIds = Array.from(new Set(input.modelIds)).filter(Boolean).slice(0, 3);
     if (uniqueModelIds.length < 2) {
       throw new Error(t('chat.errors.compareNeedsModels'));
@@ -732,6 +911,7 @@ export class NexaStore {
   }
 
   exportConversation(input: ExportConversationInput): ConversationExport {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.chatExport, 'conversation', input.conversationId);
     const conversation = this.requireConversation(input.conversationId);
     const format = isConversationExportFormat(input.format) ? input.format : 'markdown';
     const redacted = input.redacted !== false;
@@ -760,6 +940,7 @@ export class NexaStore {
   }
 
   async sendMessage(input: SendMessageInput): Promise<ChatResponse> {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.chatWrite, 'conversation', input.conversationId ?? null);
     if (!input.content.trim()) {
       throw new Error(t('models.errors.messageRequired'));
     }
@@ -1053,6 +1234,7 @@ export class NexaStore {
   }
 
   createGatewayKey(input: GatewayKeyCreateInput | string): GatewayKeyCreated {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.gatewayKeyWrite, 'gateway_api_key', null);
     const normalizedInput: GatewayKeyCreateInput = typeof input === 'string' ? { name: input } : input;
     const name = normalizedInput.name.trim() || 'Local integration key';
     const scopes = normalizeGatewayScopes(normalizedInput.scopes);
@@ -1073,6 +1255,7 @@ export class NexaStore {
   }
 
   updateGatewayKey(input: GatewayKeyUpdateInput): GatewayApiKey {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.gatewayKeyWrite, 'gateway_api_key', input.gatewayKeyId);
     const existing = this.requireGatewayKey(input.gatewayKeyId);
     const name = input.name !== undefined ? input.name.trim() || existing.name : existing.name;
     const scopes = input.scopes !== undefined ? normalizeGatewayScopes(input.scopes) : existing.scopes;
@@ -1098,6 +1281,7 @@ export class NexaStore {
   }
 
   rotateGatewayKey(input: GatewayKeyRotateInput): GatewayKeyCreated {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.gatewayKeyWrite, 'gateway_api_key', input.gatewayKeyId);
     const oldKey = this.requireGatewayKey(input.gatewayKeyId);
     const created = this.createGatewayKey({
       name: `${oldKey.name} rotated`,
@@ -1118,6 +1302,7 @@ export class NexaStore {
   }
 
   revokeGatewayKey(gatewayKeyId: string): GatewayApiKey {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.gatewayKeyWrite, 'gateway_api_key', gatewayKeyId);
     const key = this.requireGatewayKey(gatewayKeyId);
     const timestamp = now();
     this.db
@@ -1128,6 +1313,7 @@ export class NexaStore {
   }
 
   toggleGateway(enabled: boolean): GatewayStatus {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.gatewayRuntimeWrite, 'gateway', null);
     this.gatewayEnabled = enabled;
     this.setSetting(GATEWAY_ENABLED_SETTING_KEY, enabled ? 'true' : 'false');
     this.audit(enabled ? 'gateway.enabled' : 'gateway.disabled', 'gateway', null, { bindHost: GATEWAY_BIND_HOST, port: GATEWAY_PORT });
@@ -1242,6 +1428,7 @@ export class NexaStore {
   }
 
   saveUiPreferences(preferences: UiPreferences): UiPreferences {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.settingsWrite, 'ui_preferences', DEFAULT_PREFS_ID);
     const timestamp = now();
     const normalizedPreferences: UiPreferences = {
       ...preferences,
@@ -1267,6 +1454,7 @@ export class NexaStore {
   }
 
   createKnowledgeFile(input: KnowledgeImportInput): KnowledgeFile {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.knowledgeWrite, 'file', null);
     const timestamp = now();
     const id = createId('file');
     const normalized = normalizeKnowledgeImport(input);
@@ -1327,6 +1515,7 @@ export class NexaStore {
   }
 
   rebuildKnowledgeFile(input: KnowledgeRebuildInput): KnowledgeFile {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.knowledgeWrite, 'file', input.fileId);
     const file = this.requireKnowledgeFile(input.fileId);
     const timestamp = now();
     if (file.deletedAt) {
@@ -1356,6 +1545,7 @@ export class NexaStore {
   }
 
   deleteKnowledgeFile(input: KnowledgeDeleteInput): KnowledgeFile {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.knowledgeWrite, 'file', input.fileId);
     const file = this.requireKnowledgeFile(input.fileId);
     const timestamp = now();
     this.db
@@ -1377,6 +1567,7 @@ export class NexaStore {
   }
 
   previewKnowledgeRetrieval(input: KnowledgeRetrievalInput): KnowledgeRetrievalResult {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.knowledgeRead, 'knowledge_retrieval', null);
     return this.retrieveKnowledge(input.query, {
       topK: input.topK,
       strategy: input.strategy,
@@ -1385,6 +1576,7 @@ export class NexaStore {
   }
 
   createMcpServer(name: string, transport: McpServer['transport'], commandOrUrl: string): McpServer {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.mcpWrite, 'mcp_server', null);
     const timestamp = now();
     const id = createId('mcp');
     this.db
@@ -1398,6 +1590,7 @@ export class NexaStore {
   }
 
   updateMcpPermission(serverId: string, permissionState: McpServer['permissionState']): McpServer {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.mcpPermissionWrite, 'mcp_server', serverId);
     const timestamp = now();
     const enabled = permissionState === 'granted' ? 1 : 0;
     this.db
@@ -1408,6 +1601,7 @@ export class NexaStore {
   }
 
   createAgent(name: string, goal: string): AgentDefinition {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.agentWrite, 'agent', null);
     const timestamp = now();
     const id = createId('agent');
     this.db
@@ -1431,6 +1625,7 @@ export class NexaStore {
   }
 
   startExecutionRun(input: ExecutionStartInput): ExecutionRun {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.executionRun, 'execution_run', null);
     const normalized = normalizeExecutionStartInput(input);
     const timestamp = now();
     const runId = createId('run');
@@ -1533,6 +1728,7 @@ export class NexaStore {
   }
 
   decideApproval(input: ApprovalDecisionInput): ExecutionRun {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.executionApprove, 'approval_request', input.approvalId);
     const normalized = normalizeApprovalDecision(input);
     const approval = this.requireApprovalRequest(normalized.approvalId);
     const timestamp = now();
@@ -1585,6 +1781,7 @@ export class NexaStore {
   }
 
   validateImportManifest(manifestText: string): ImportExportResult {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.dataImport, 'config_snapshot', null);
     const timestamp = now();
     const id = createId('import');
     let status: ImportExportResult['status'] = 'ready';
@@ -1651,6 +1848,7 @@ export class NexaStore {
   }
 
   applyImportPlan(resultId: string, options: ImportPlanApplyOptions = {}): ImportExportResult {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.dataImport, 'config_snapshot', resultId);
     const result = this.requireImportExportResult(resultId);
     if (result.action !== 'import' || result.status !== 'ready') {
       throw new Error(t('data.import.errors.readyOnly'));
@@ -1681,6 +1879,7 @@ export class NexaStore {
   }
 
   restoreSnapshot(snapshotId: string, options: RestoreSnapshotOptions = {}): ImportExportResult {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.dataRestore, 'config_snapshot', snapshotId);
     const snapshot = this.requireImportExportResult(snapshotId);
     const timestamp = now();
     const id = createId('restore');
@@ -1715,6 +1914,7 @@ export class NexaStore {
   }
 
   createSnapshot(): ImportExportResult {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.dataExport, 'config_snapshot', null);
     const timestamp = now();
     const id = createId('snapshot');
     const manifest = {
@@ -1734,6 +1934,7 @@ export class NexaStore {
   }
 
   exportDiagnostics(): ImportExportResult {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.dataExport, 'diagnostics', null);
     const timestamp = now();
     const id = createId('export');
     const diagnostics = {
@@ -1755,6 +1956,7 @@ export class NexaStore {
 
   private seed(): void {
     const timestamp = now();
+    this.seedSecurity(timestamp);
     const workspaceCount = Number((this.db.prepare('SELECT COUNT(*) AS count FROM workspaces').get() as { count: number }).count);
     if (workspaceCount === 0) {
       this.db
@@ -1817,6 +2019,89 @@ export class NexaStore {
     if (keyCount === 0) {
       this.createGatewayKey('Local app integration');
     }
+  }
+
+  private seedSecurity(timestamp: number): void {
+    for (const role of SECURITY_ROLES) {
+      const localizedRole = getSecurityRole(role.id);
+      this.db
+        .prepare(
+          `INSERT INTO security_roles (id, name, description, permission_keys_json, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET name = excluded.name, description = excluded.description, permission_keys_json = excluded.permission_keys_json, updated_at = excluded.updated_at`,
+        )
+        .run(
+          role.id,
+          t(localizedRole.nameKey as Parameters<typeof t>[0]),
+          t(localizedRole.descriptionKey as Parameters<typeof t>[0]),
+          JSON.stringify(role.permissionKeys),
+          timestamp,
+          timestamp,
+        );
+    }
+    this.backfillAuditHashes();
+
+    const userCount = Number((this.db.prepare('SELECT COUNT(*) AS count FROM security_users').get() as { count: number }).count);
+    if (userCount === 0) {
+      this.db
+        .prepare('INSERT INTO security_users (id, display_name, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+        .run(DEFAULT_SECURITY_USER_ID, t('settings.security.localAdmin'), 'active', timestamp, timestamp);
+      this.audit('security.bootstrap', 'security_user', DEFAULT_SECURITY_USER_ID, { roleId: 'owner' }, SECURITY_ACTION_PERMISSIONS.securityManage);
+    }
+
+    const activeSession = this.db
+      .prepare("SELECT * FROM security_sessions WHERE state = 'active' ORDER BY last_seen_at DESC LIMIT 1")
+      .get();
+    if (!activeSession) {
+      this.db
+        .prepare(
+          `INSERT INTO security_sessions (id, user_id, role_id, state, created_at, expires_at, last_seen_at, revoked_at)
+           VALUES (?, ?, ?, 'active', ?, NULL, ?, NULL)`,
+        )
+        .run(DEFAULT_SECURITY_SESSION_ID, DEFAULT_SECURITY_USER_ID, 'owner', timestamp, timestamp);
+      this.audit('security.session.created', 'security_session', DEFAULT_SECURITY_SESSION_ID, { userId: DEFAULT_SECURITY_USER_ID, roleId: 'owner' }, SECURITY_ACTION_PERMISSIONS.securityManage);
+    } else {
+      this.touchSession(String((activeSession as { id: string }).id));
+    }
+  }
+
+  private getActiveSession(): SecuritySession {
+    const row = this.db
+      .prepare("SELECT * FROM security_sessions WHERE state = 'active' ORDER BY last_seen_at DESC LIMIT 1")
+      .get();
+    if (row) {
+      return mapSecuritySession(row as Record<string, unknown>);
+    }
+    const timestamp = now();
+    this.db
+      .prepare(
+        `INSERT INTO security_sessions (id, user_id, role_id, state, created_at, expires_at, last_seen_at, revoked_at)
+         VALUES (?, ?, ?, 'active', ?, NULL, ?, NULL)`,
+      )
+      .run(DEFAULT_SECURITY_SESSION_ID, DEFAULT_SECURITY_USER_ID, 'owner', timestamp, timestamp);
+    return this.requireSecuritySession(DEFAULT_SECURITY_SESSION_ID);
+  }
+
+  private touchSession(sessionId: string): void {
+    this.db.prepare('UPDATE security_sessions SET last_seen_at = ? WHERE id = ?').run(now(), sessionId);
+  }
+
+  private requireSecurityUser(id: string): SecurityUser {
+    const row = this.db.prepare('SELECT * FROM security_users WHERE id = ?').get(id);
+    if (!row) throw new Error(`Security user not found: ${id}`);
+    return mapSecurityUser(row as Record<string, unknown>);
+  }
+
+  private requireSecurityRole(id: SecurityRoleId): SecurityRole {
+    const row = this.db.prepare('SELECT * FROM security_roles WHERE id = ?').get(id);
+    if (!row) throw new Error(`Security role not found: ${id}`);
+    return mapSecurityRole(row as Record<string, unknown>);
+  }
+
+  private requireSecuritySession(id: string): SecuritySession {
+    const row = this.db.prepare('SELECT * FROM security_sessions WHERE id = ?').get(id);
+    if (!row) throw new Error(`Security session not found: ${id}`);
+    return mapSecuritySession(row as Record<string, unknown>);
   }
 
   private seedExecutionTools(timestamp: number): void {
@@ -2509,10 +2794,72 @@ export class NexaStore {
     return { code: PROVIDER_RUNTIME_ERROR_CODES.upstreamError, message: redactSensitive(String(error)), retryable: false };
   }
 
-  private audit(action: string, targetType: string, targetId: string | null, details: unknown): void {
+  private audit(
+    action: string,
+    targetType: string,
+    targetId: string | null,
+    details: unknown,
+    permissionKey: SecurityPermissionKey | null = null,
+  ): void {
+    const active = this.db
+      .prepare("SELECT user_id FROM security_sessions WHERE state = 'active' ORDER BY last_seen_at DESC LIMIT 1")
+      .get() as { user_id: string } | undefined;
+    const actor = active?.user_id ?? 'system';
+    const id = createId('audit');
+    const createdAt = now();
+    const detailsJson = redactSensitive(details);
+    const previousHash = this.getLatestAuditHash();
+    const entryHash = computeAuditHash({
+      id,
+      action,
+      actor,
+      targetType,
+      targetId,
+      detailsJson,
+      permissionKey,
+      previousHash,
+      createdAt,
+    });
     this.db
-      .prepare('INSERT INTO audit_logs (id, action, actor, target_type, target_id, details_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(createId('audit'), action, 'local-user', targetType, targetId, redactSensitive(details), now());
+      .prepare(
+        `INSERT INTO audit_logs (id, action, actor, target_type, target_id, details_json, permission_key, previous_hash, entry_hash, integrity_state, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'verified', ?)`,
+      )
+      .run(id, action, actor, targetType, targetId, detailsJson, permissionKey, previousHash, entryHash, createdAt);
+  }
+
+  private getLatestAuditHash(): string | null {
+    const row = this.db
+      .prepare('SELECT entry_hash FROM audit_logs WHERE entry_hash IS NOT NULL ORDER BY created_at DESC, id DESC LIMIT 1')
+      .get() as { entry_hash: string | null } | undefined;
+    return row?.entry_hash ?? null;
+  }
+
+  private backfillAuditHashes(): void {
+    const rows = this.db
+      .prepare('SELECT * FROM audit_logs ORDER BY created_at ASC, id ASC')
+      .all()
+      .map((row) => mapAuditLog(row as Record<string, unknown>));
+    let previousHash: string | null = null;
+    for (const row of rows) {
+      const entryHash = computeAuditHash({
+        id: row.id,
+        action: row.action,
+        actor: row.actor,
+        targetType: row.targetType,
+        targetId: row.targetId,
+        detailsJson: row.detailsJson,
+        permissionKey: row.permissionKey,
+        previousHash,
+        createdAt: row.createdAt,
+      });
+      if (row.previousHash !== previousHash || row.entryHash !== entryHash || row.integrityState !== 'verified') {
+        this.db
+          .prepare("UPDATE audit_logs SET previous_hash = ?, entry_hash = ?, integrity_state = 'verified' WHERE id = ?")
+          .run(previousHash, entryHash, row.id);
+      }
+      previousHash = entryHash;
+    }
   }
 
   private requireProvider(id: string): Provider {
@@ -2718,6 +3065,32 @@ function safeJsonParse(value: string): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+function computeAuditHash(input: {
+  id: string;
+  action: string;
+  actor: string;
+  targetType: string;
+  targetId: string | null;
+  detailsJson: string | null;
+  permissionKey: SecurityPermissionKey | null;
+  previousHash: string | null;
+  createdAt: number;
+}): string {
+  return createHash('sha256')
+    .update(JSON.stringify({
+      id: input.id,
+      action: input.action,
+      actor: input.actor,
+      targetType: input.targetType,
+      targetId: input.targetId,
+      detailsJson: input.detailsJson,
+      permissionKey: input.permissionKey,
+      previousHash: input.previousHash,
+      createdAt: input.createdAt,
+    }))
+    .digest('hex');
 }
 
 export const store = new NexaStore();

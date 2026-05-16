@@ -498,6 +498,57 @@ Git:
 - Round 10 closeout commit hash: `3f267dca0d0a7ec67272e3e7e800e01b7ca440cd`.
 - Push result: delivery and closeout commits pushed; `origin/main` confirmed at `3f267dca0d0a7ec67272e3e7e800e01b7ca440cd`.
 
+## 2026-05-16 Full App Round 11 Execution
+
+Round 11 of the authoritative full-app blueprint is implemented and in closeout verification. It turns security from UI hints plus mutable audit rows into a main-process permission boundary with local owner session bootstrap, role/ACL policy, tamper-evident audit records, integrity verification, redacted export, and Settings visibility.
+
+Parallel execution lanes:
+
+- Lane A: security runtime authority, permission/role/session/ACL registry, IPC permission map, and Store permission enforcement.
+- Lane B: schema/migration, local admin/session bootstrap, audit hash chain, integrity verification, audit search/export, and redaction.
+- Lane C: Settings security/audit UI, browser mock parity, i18n, targeted tests, full verification, desktop shortcut readback, docs, and Git closeout.
+- Lane D: read-only Round 12 import/export/backup/recovery pre-audit.
+
+Key changes:
+
+- Added `src/shared/securityRuntime.ts` for permission keys, roles, session/user states, ACL effects, IPC permission mapping, action-permission mapping, audit actions, and redaction key authority.
+- Added `security_users`, `security_roles`, `security_sessions`, `acl_grants`, and audit hash-chain columns with migration support.
+- Bootstrapped a local admin user and active owner session without adding login friction to the desktop shell.
+- Added main-process permission enforcement before IPC handlers and inside sensitive Store methods.
+- Added ACL denial behavior with `security.permission.denied` audit evidence.
+- Added tamper-evident audit rows with `previous_hash`, `entry_hash`, permission key, integrity state, search, verification, and redacted export.
+- Added security state and audit integrity state to `AppSnapshot`.
+- Updated Settings security/audit UI to show active session, role, permission count, denied count, audit integrity, search, verify, export, and hash evidence.
+- Updated browser mock parity for security/audit APIs.
+- Added `tests/security-runtime.test.ts`.
+- Raised Vitest timeout to 15000 ms because the larger security-backed suite previously hit the 5 s runner ceiling.
+- Fixed a Round 11 chain issue where reading `getSnapshot()` indirectly wrote `audit.searched`; denied-count display now uses a read-only audit action count.
+
+Verification completed:
+
+- `npm.cmd run test -- tests/security-runtime.test.ts tests/ipc-contract.test.ts`: passed, 2 files / 7 tests.
+- `npm.cmd run typecheck`: passed.
+- Full `npm.cmd run test`: passed, 13 files / 41 tests.
+- `npm.cmd run test:ui-smoke`: passed, 14 Playwright tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run verify`: passed, including typecheck, full unit test suite, and build.
+- `npm.cmd run test:electron-smoke`: passed; Electron shell rendered.
+- `git diff --check`: passed with LF/CRLF conversion warnings only.
+
+Desktop shortcut:
+
+- `C:\Users\至亲\Desktop\NexaChat.lnk` exists and still points to `D:\NexaChat\node_modules\electron\dist\electron.exe`.
+- Arguments remain `"D:\NexaChat"`.
+- Working directory remains `D:\NexaChat`.
+- Icon remains `D:\NexaChat\assets\app-icon.ico,0`.
+- No shortcut was modified in Round 11.
+
+Git:
+
+- Round 11 delivery commit hash: pending.
+- Round 11 closeout commit hash: pending.
+- Push result: pending.
+
 ## 2026-05-14 UI Shell Redesign
 
 This round rebuilt the visible desktop shell, sidebar hierarchy, topbar, workbench home, and visual system so NexaChat reads as a formal compact desktop tool instead of a crowded prototype/debug panel.

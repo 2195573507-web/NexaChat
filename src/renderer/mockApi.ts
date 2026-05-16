@@ -49,11 +49,15 @@ import type {
   UsageRecord,
   Workspace,
   ToolDefinition,
+  SecurityState,
+  AuditIntegrityReport,
+  AuditExportResult,
 } from '../shared/types';
 import type { AppApi } from '../shared/api';
 import { translate } from '../shared/i18n';
 import { normalizeThemeMode } from '../shared/theme';
 import { EXECUTION_TOOL_IDS, TOOL_FIXTURES, normalizeApprovalDecision, normalizeExecutionStartInput } from '../shared/executionRuntime';
+import { SECURITY_PERMISSION_KEYS } from '../shared/securityRuntime';
 import {
   KNOWLEDGE_RUNTIME_POLICY,
   chunkKnowledgeText,
@@ -132,6 +136,10 @@ function createAuditLog(action: string, targetType: string, targetId: string | n
     targetType,
     targetId,
     detailsJson: details === undefined ? null : JSON.stringify(details),
+    permissionKey: null,
+    previousHash: null,
+    entryHash: `mock_hash_${idCounter}`,
+    integrityState: 'verified',
     createdAt: now(),
   };
 }
@@ -467,6 +475,7 @@ function buildSnapshot(state: MockState): AppSnapshot {
   if (!state.gatewayStatus.running) {
     setupGaps.push(t('dashboard.setup.browserGatewayDisabled'));
   }
+  const auditIntegrity = buildAuditIntegrity(state.auditLogs);
 
   return {
     dashboard: {
@@ -506,7 +515,56 @@ function buildSnapshot(state: MockState): AppSnapshot {
     approvalRequests: state.approvalRequests,
     importExportResults: state.importExportResults,
     auditLogs: state.auditLogs,
+    security: buildSecurityState(),
+    auditIntegrity,
     uiPreferences: state.uiPreferences,
+  };
+}
+
+function buildSecurityState(): SecurityState {
+  const timestamp = now();
+  const activeUser = {
+    id: 'browser_user',
+    displayName: 'Browser Mock Admin',
+    status: 'active' as const,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+  const activeRole = {
+    id: 'owner' as const,
+    name: t('settings.security.role.owner'),
+    description: t('settings.security.role.owner.note'),
+    permissionKeys: [...SECURITY_PERMISSION_KEYS],
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+  return {
+    activeUser,
+    activeSession: {
+      id: 'browser_session',
+      userId: activeUser.id,
+      roleId: activeRole.id,
+      state: 'active',
+      createdAt: timestamp,
+      expiresAt: null,
+      lastSeenAt: timestamp,
+      revokedAt: null,
+    },
+    activeRole,
+    roles: [activeRole],
+    aclGrants: [],
+    permissionKeys: [...SECURITY_PERMISSION_KEYS],
+    deniedCount: 0,
+  };
+}
+
+function buildAuditIntegrity(auditLogs: AuditLog[]): AuditIntegrityReport {
+  return {
+    status: auditLogs.length > 0 ? 'verified' : 'empty',
+    checkedAt: now(),
+    checkedCount: auditLogs.length,
+    firstBrokenAuditId: null,
+    lastHash: auditLogs[0]?.entryHash ?? null,
   };
 }
 
@@ -1490,6 +1548,34 @@ export function createMockApi(): AppApi {
         t('data.diagnostics.summary.browserCreated', { requests: state.requestLogs.length, audits: state.auditLogs.length }),
         true,
       );
+      return clone(result);
+    },
+
+    async searchAuditLogs(query?: string) {
+      const normalized = query?.trim().toLowerCase() ?? '';
+      const logs = normalized
+        ? state.auditLogs.filter((log) => JSON.stringify(log).toLowerCase().includes(normalized))
+        : state.auditLogs;
+      pushAudit('audit.search', 'auditLog', null, { resultCount: logs.length });
+      return clone(logs);
+    },
+
+    async verifyAuditIntegrity() {
+      const report = buildAuditIntegrity(state.auditLogs);
+      pushAudit('audit.verify', 'auditLog', null, { status: report.status });
+      return clone(report);
+    },
+
+    async exportAuditLogs() {
+      const integrity = buildAuditIntegrity(state.auditLogs);
+      const result: AuditExportResult = {
+        id: createId('audit_export'),
+        redacted: true,
+        content: JSON.stringify({ redacted: true, integrity, auditLogs: state.auditLogs }, null, 2),
+        integrity,
+        createdAt: now(),
+      };
+      pushAudit('audit.export', 'auditLog', result.id, { status: integrity.status });
       return clone(result);
     },
 

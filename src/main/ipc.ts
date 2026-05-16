@@ -2,6 +2,7 @@ import { app, ipcMain, shell } from 'electron';
 import { store } from './services/store.js';
 import { startLocalGateway, stopLocalGateway } from './services/localGateway.js';
 import { assertIpcPayload, IPC_CHANNELS, type IpcChannel } from '../shared/ipc.js';
+import { IPC_PERMISSION_BY_CHANNEL } from '../shared/securityRuntime.js';
 import type {
   CancelMessageInput,
   CompareModelsInput,
@@ -27,6 +28,7 @@ import type {
 function handleIpc<C extends IpcChannel>(channel: C, handler: (...args: any[]) => unknown): void {
   ipcMain.handle(channel, (_event, ...args: unknown[]) => {
     assertIpcPayload(channel, args);
+    store.requirePermission(IPC_PERMISSION_BY_CHANNEL[channel]);
     return handler(...args);
   });
 }
@@ -81,6 +83,9 @@ export function registerIpcHandlers(): void {
   handleIpc(IPC_CHANNELS.dataRestoreSnapshot, (snapshotId: string, options?: RestoreSnapshotOptions) => store.restoreSnapshot(snapshotId, options));
   handleIpc(IPC_CHANNELS.dataCreateSnapshot, () => store.createSnapshot());
   handleIpc(IPC_CHANNELS.dataExportDiagnostics, () => store.exportDiagnostics());
+  handleIpc(IPC_CHANNELS.auditSearch, (query?: string) => store.searchAuditLogs(query));
+  handleIpc(IPC_CHANNELS.auditVerify, () => store.verifyAuditIntegrity());
+  handleIpc(IPC_CHANNELS.auditExport, () => store.exportAuditLogs());
   handleIpc(IPC_CHANNELS.systemOpenLogs, async () => {
     await shell.openPath(app.getPath('logs'));
   });

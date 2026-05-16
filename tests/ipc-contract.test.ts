@@ -24,6 +24,9 @@ describe('IPC contract authority', () => {
     expect(() => assertIpcPayload(IPC_CHANNELS.knowledgePreviewRetrieval, [{ query: 'hello' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.executionStartRun, [{ kind: 'tool', mode: 'preview', toolId: 'nexachat.status.read' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.executionDecideApproval, [{ approvalId: 'approval_1', decision: 'approved' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.auditSearch, ['gateway'])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.auditVerify, [])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.auditExport, [])).not.toThrow();
   });
 
   it('prevents raw IPC string registration and invocation from returning', () => {

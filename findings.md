@@ -90,6 +90,15 @@
 - MCP grant is still only permission state. It does not imply external MCP tool execution, which remains blocked until Round 11/permissions and later MCP protocol hardening.
 - Workflow is represented as a run kind and shared UI boundary, not a fake canvas. Building a canvas before execution security would recreate shell debt.
 
+## Full App Round 11 Findings
+
+- The durable security boundary is main process plus Store, not renderer route metadata. `src/shared/securityRuntime.ts` now maps every IPC channel to a permission key, and Store methods also check permissions as defense in depth.
+- Local-first admin bootstrap can avoid launch friction, but it must be explicit and main-process-owned. The current active session is a local owner session, not a renderer-controlled login shortcut.
+- Audit integrity must treat reads differently from actions. `getSnapshot()` initially counted denied events through `searchAuditLogs()` and therefore wrote `audit.searched` during display reads; this was fixed with a read-only audit action count.
+- ACL denies must run before broad role grants. The Round 11 permission evaluator denies a matching ACL grant even for the owner role, and tests cover this behavior against Gateway key revoke.
+- Audit export must redact at export time even though details are already redacted on insert, because future details can evolve. The export test asserts the generated Gateway key never appears in exported content.
+- Round 12 should not keep overloading `config_snapshots(cleanup-preview)` for real restore/rollback. Import/export, backup, migration, conflict maps, and rollback records need a proper data mobility authority.
+
 ## Initial Repository State
 
 - Repository root: `D:\NexaChat`.

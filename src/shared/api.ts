@@ -2,6 +2,9 @@ import type {
   AgentDefinition,
   ApprovalDecisionInput,
   AppSnapshot,
+  AuditExportResult,
+  AuditIntegrityReport,
+  AuditLog,
   ChatResponse,
   CompareModelsInput,
   CompareModelsResponse,
@@ -75,6 +78,9 @@ export interface AppApi {
   restoreSnapshot(snapshotId: string, options?: RestoreSnapshotOptions): Promise<ImportExportResult>;
   createSnapshot(): Promise<ImportExportResult>;
   exportDiagnostics(): Promise<ImportExportResult>;
+  searchAuditLogs(query?: string): Promise<AuditLog[]>;
+  verifyAuditIntegrity(): Promise<AuditIntegrityReport>;
+  exportAuditLogs(): Promise<AuditExportResult>;
   openLogs(): Promise<void>;
 }
 
@@ -113,6 +119,9 @@ export const APP_API_METHODS = [
   'restoreSnapshot',
   'createSnapshot',
   'exportDiagnostics',
+  'searchAuditLogs',
+  'verifyAuditIntegrity',
+  'exportAuditLogs',
   'openLogs',
 ] as const satisfies readonly (keyof AppApi)[];
 

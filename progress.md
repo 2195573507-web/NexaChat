@@ -407,3 +407,33 @@
 - Updated the authoritative blueprint Round 10 execution record, `PROJECT_PROGRESS.md`, matrix, `docs/implementation/round-10-execution-model-closure.md`, `task_plan.md`, and `findings.md`; commit hash is pending until Git commit.
 - Committed Round 10 delivery as `ddab2066c67044c367e7c28cf8126e450d2a074d` and backfilled the hash into the blueprint, matrix, progress, project progress, and closure document.
 - Committed Round 10 closeout as `3f267dca0d0a7ec67272e3e7e800e01b7ca440cd`, pushed it to `origin/main`, and confirmed the remote ref at the same hash.
+
+## 2026-05-16 Full App Round 11 Execution
+
+- Reconfirmed real project root with `git rev-parse --show-toplevel`: `D:/NexaChat`.
+- Rechecked requested skills: `using-superpower` is unavailable and `using-superpowers` is available.
+- Continued the active `/goal` at Round 11 after Round 0-10 completion and remote delivery.
+- Used parallel lanes:
+  - Lane A: security runtime authority, permission/role/session/ACL registry, IPC permission map, and Store permission enforcement.
+  - Lane B: schema/migration, local admin/session bootstrap, audit hash chain, integrity verification, audit search/export, and redaction.
+  - Lane C: Settings security/audit UI, browser mock parity, i18n, targeted tests, full verification, desktop shortcut readback, docs, and Git closeout.
+  - Lane D: read-only Round 12 import/export/backup/recovery pre-audit.
+- Added `src/shared/securityRuntime.ts`.
+- Added `security_users`, `security_roles`, `security_sessions`, `acl_grants`, and audit hash-chain columns.
+- Added local admin and active owner session bootstrap.
+- Added centralized IPC permission mapping and main-process permission checks before IPC handler execution.
+- Added defense-in-depth Store permission checks for sensitive Provider, Model, Chat, Gateway, Knowledge, MCP, Agent, Execution, Data, Settings, Audit, and System actions.
+- Added audit hash-chain generation, existing-row hash backfill, integrity verification, redacted export, and search.
+- Added security state and audit integrity to `AppSnapshot`.
+- Updated Settings security/audit UI, browser mock parity, i18n, IPC/API/preload contracts, and tests.
+- Fixed a Round 11 chain issue where reading `getSnapshot()` indirectly wrote `audit.searched`; denied-count display now uses a read-only audit action count.
+- Ran `npm.cmd run test -- tests/security-runtime.test.ts tests/ipc-contract.test.ts`: passed, 2 files / 7 tests.
+- Ran `npm.cmd run typecheck`: passed.
+- Ran `npm.cmd run test`: passed, 13 files / 41 tests.
+- Ran `npm.cmd run test:ui-smoke`: passed, 14 Playwright tests.
+- Ran `npm.cmd run build`: passed.
+- Ran `npm.cmd run verify`: passed, including typecheck, full unit test suite, and build.
+- Ran `npm.cmd run test:electron-smoke`: passed; Electron shell rendered.
+- Ran `git diff --check`: passed with LF/CRLF conversion warnings only.
+- Checked `C:\Users\至亲\Desktop\NexaChat.lnk`: target, arguments, working directory, and icon still point to the current local Electron launch entry.
+- Updated the authoritative blueprint Round 11 execution record, `PROJECT_PROGRESS.md`, matrix, `docs/implementation/round-11-security-users-permissions-audit-closure.md`, `task_plan.md`, `progress.md`, and `findings.md`; commit hash is pending until Git commit.

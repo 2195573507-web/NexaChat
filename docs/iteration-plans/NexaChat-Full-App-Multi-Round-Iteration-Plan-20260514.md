@@ -1051,6 +1051,59 @@ These references guide product and engineering decisions. They are not permissio
 25. **Deliverables**: Security authority, audit integrity, UI, tests, docs.
 26. **Next Round Input**: Secure data handling foundation for import/export and backup.
 
+### Round 11 Execution Status
+
+- Status: Completed.
+- Completion date: 2026-05-16.
+- Parallel lanes:
+  - Lane A: security runtime authority, role/permission/ACL evaluation, IPC permission mapping, and main-process enforcement.
+  - Lane B: schema/migration, local admin/session bootstrap, audit hash chain, export/search/integrity verification, and redaction.
+  - Lane C: Settings security/audit UI, browser mock parity, i18n, unit/UI/Electron verification, desktop shortcut readback, and docs/Git closeout.
+  - Lane D: read-only Round 12 import/export/backup/recovery pre-audit.
+- Main changed files:
+  - `src/shared/securityRuntime.ts`.
+  - `src/shared/ipc.ts`, `src/shared/api.ts`, `src/shared/types.ts`, `src/shared/i18n.ts`.
+  - `src/main/database/schema.ts`, `src/main/database/connection.ts`, `src/main/repositories/mappers.ts`, `src/main/ipc.ts`, `src/main/services/store.ts`.
+  - `src/preload/index.ts`.
+  - `src/renderer/modules/SettingsPage.tsx`, `src/renderer/mockApi.ts`.
+  - `tests/security-runtime.test.ts`, `tests/ipc-contract.test.ts`, `tests/app.test.tsx`, `tests/ui-smoke.spec.ts`, `vite.config.ts`.
+- Added/modified functionality:
+  - Added centralized security authority for permission keys, roles, session/user states, ACL effects, IPC permission mapping, audit actions, action-permission mapping, and redaction keys.
+  - Added security users, roles, sessions, ACL grants, and audit hash-chain columns with additive migration support.
+  - Bootstrapped a local owner/admin user and active local session without adding login friction to the desktop launch path.
+  - Added main-process permission enforcement before IPC handlers and inside sensitive Store methods.
+  - Added defense-in-depth ACL denial behavior with audit evidence for rejected sensitive actions.
+  - Added tamper-evident audit records with previous hash, entry hash, permission key, integrity state, integrity verification, search, and redacted export.
+  - Added security and audit state to `AppSnapshot` and expanded Settings security/audit UI with session, role, permission count, denied count, integrity status, search, verify, and export actions.
+  - Added browser mock parity for security state, audit integrity, audit search, audit verify, and audit export.
+  - Raised Vitest test timeout to 15000 ms because the full parallel suite now performs more Store/security bootstrap work and previously hit the 5 s test runner ceiling.
+  - Fixed a Round 11 chain issue where reading `getSnapshot()` indirectly wrote `audit.searched`; denied-count is now a read-only audit action count.
+- Deleted/replaced old links:
+  - Replaced unrestricted IPC handler execution with `IPC_PERMISSION_BY_CHANNEL` enforcement.
+  - Replaced role/action strings scattered through Store/UI with `src/shared/securityRuntime.ts`.
+  - Replaced mutable audit-only log rows with tamper-evident hash-chain rows.
+  - Kept UI permission labels as display hints only; main process remains the enforcement authority.
+  - Kept local single-user owner bootstrap only as explicit local-first compatibility for this round; no renderer-only permission truth remains.
+- Test commands and results:
+  - `npm.cmd run test -- tests/security-runtime.test.ts tests/ipc-contract.test.ts`: passed, 2 files / 7 tests.
+  - `npm.cmd run typecheck`: passed.
+  - Full `npm.cmd run test`: passed, 13 files / 41 tests.
+  - `npm.cmd run test:ui-smoke`: passed, 14 Playwright tests.
+  - `npm.cmd run build`: passed.
+  - `npm.cmd run verify`: passed, including typecheck, full unit test suite, and build.
+  - `npm.cmd run test:electron-smoke`: passed, Electron shell rendered.
+  - `git diff --check`: passed with LF/CRLF conversion warnings only.
+- Desktop shortcut result:
+  - `C:/Users/至亲/Desktop/NexaChat.lnk` exists.
+  - TargetPath: `D:/NexaChat/node_modules/electron/dist/electron.exe`.
+  - Arguments: `"D:/NexaChat"`.
+  - WorkingDirectory: `D:/NexaChat`.
+  - IconLocation: `D:/NexaChat/assets/app-icon.ico,0`.
+  - No shortcut was modified.
+- Acceptance result: Passed for the Round 11 boundary. Main-process permission enforcement rejects unauthorized actions, audit integrity verifies and detects tampering, security UI reports integrity, and exported audit logs are redacted.
+- Commit hash: pending delivery commit; pending closeout commit.
+- Remaining issues: None for Round 11 after final verification. Round 12 owns full import/export, encrypted backup, migration framework, conflict handling, and rollback.
+
 ## 18. Round 12: Data Config, Import/Export, Backup And Recovery
 
 1. **Round Name**: Data Config, Import/Export, Backup And Recovery.

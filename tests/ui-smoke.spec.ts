@@ -130,6 +130,21 @@ test('model gateway data and settings key flows stay real on new routes', async 
 
   await openFeature(page, settings, settings.tabs.find((tab) => tab.id === 'security')!);
   await expect(page.locator('main [data-tab="security"]').getByRole('heading', { name: translate('zh-CN', 'settings.security.title') }).first()).toBeVisible();
+  await expect(page.locator('main [data-tab="security"]').getByRole('heading', { name: translate('zh-CN', 'settings.security.auditIntegrity') }).first()).toBeVisible();
+  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'settings.audit.verify')) }).first().click();
+  await expect(page.locator('main [data-tab="security"]').getByText(translate('zh-CN', 'settings.audit.integrity')).first()).toBeVisible();
+});
+
+test('security audit tab verifies integrity and exports redacted audit data', async ({ page }) => {
+  await page.goto('/settings/audit');
+  await expect(page.locator('main [data-tab="audit"]').getByRole('heading', { name: translate('zh-CN', 'settings.audit.title') }).first()).toBeVisible();
+  await expect(page.locator('main [data-tab="audit"]').getByText(translate('zh-CN', 'settings.audit.integrity')).first()).toBeVisible();
+  await page.getByLabel(translate('zh-CN', 'settings.audit.search')).fill('gateway');
+  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'settings.audit.verify')) }).click();
+  await expect(page.locator('main [data-tab="audit"]').getByText(translate('zh-CN', 'settings.audit.integrity')).first()).toBeVisible();
+  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'settings.audit.export')) }).click();
+  await page.getByLabel(translate('zh-CN', 'settings.audit.search')).fill('');
+  await expect(page.locator('main [data-tab="audit"]').getByRole('cell', { name: 'audit.export' }).first()).toBeVisible();
 });
 
 test('all modules and feature routes sync sidebar subnav route and panel', async ({ page }) => {

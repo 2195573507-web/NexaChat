@@ -92,6 +92,10 @@ function runAdditiveMigrations(db: DatabaseSync): void {
   addColumnIfMissing(db, 'tools', 'risk_level', "TEXT NOT NULL DEFAULT 'read'");
   addColumnIfMissing(db, 'tools', 'requires_approval', 'INTEGER NOT NULL DEFAULT 0');
   addColumnIfMissing(db, 'tools', 'enabled', 'INTEGER NOT NULL DEFAULT 1');
+  addColumnIfMissing(db, 'audit_logs', 'permission_key', 'TEXT');
+  addColumnIfMissing(db, 'audit_logs', 'previous_hash', 'TEXT');
+  addColumnIfMissing(db, 'audit_logs', 'entry_hash', 'TEXT');
+  addColumnIfMissing(db, 'audit_logs', 'integrity_state', "TEXT NOT NULL DEFAULT 'verified'");
 }
 
 function addColumnIfMissing(db: DatabaseSync, table: string, column: string, definition: string): void {

@@ -18,8 +18,65 @@ import type {
   MessageStatus,
   PromptTemplateScope,
 } from './conversationRuntime.js';
+import type {
+  AuditIntegrityStatus,
+  SecurityPermissionKey,
+  SecurityRoleId,
+  SecuritySessionState,
+  SecurityUserStatus,
+} from './securityRuntime.js';
 
 export type ModuleStage = 'ready' | 'implemented' | 'planned' | 'reserved' | 'environment-limited';
+
+export interface SecurityUser {
+  id: string;
+  displayName: string;
+  status: SecurityUserStatus;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface SecurityRole {
+  id: SecurityRoleId;
+  name: string;
+  description: string;
+  permissionKeys: SecurityPermissionKey[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface SecuritySession {
+  id: string;
+  userId: string;
+  roleId: SecurityRoleId;
+  state: SecuritySessionState;
+  createdAt: number;
+  expiresAt: number | null;
+  lastSeenAt: number;
+  revokedAt: number | null;
+}
+
+export interface SecurityAclGrant {
+  id: string;
+  subjectType: 'user' | 'role';
+  subjectId: string;
+  resourceType: string;
+  resourceId: string | null;
+  permissionKey: SecurityPermissionKey;
+  effect: 'allow' | 'deny';
+  createdAt: number;
+  expiresAt: number | null;
+}
+
+export interface SecurityState {
+  activeUser: SecurityUser;
+  activeSession: SecuritySession;
+  activeRole: SecurityRole;
+  roles: SecurityRole[];
+  aclGrants: SecurityAclGrant[];
+  permissionKeys: SecurityPermissionKey[];
+  deniedCount: number;
+}
 
 export interface NavTab {
   id: string;
@@ -709,6 +766,26 @@ export interface AuditLog {
   targetType: string;
   targetId: string | null;
   detailsJson: string | null;
+  permissionKey: SecurityPermissionKey | null;
+  previousHash: string | null;
+  entryHash: string | null;
+  integrityState: AuditIntegrityStatus;
+  createdAt: number;
+}
+
+export interface AuditIntegrityReport {
+  status: AuditIntegrityStatus;
+  checkedAt: number;
+  checkedCount: number;
+  firstBrokenAuditId: string | null;
+  lastHash: string | null;
+}
+
+export interface AuditExportResult {
+  id: string;
+  redacted: boolean;
+  content: string;
+  integrity: AuditIntegrityReport;
   createdAt: number;
 }
 
@@ -762,5 +839,7 @@ export interface AppSnapshot {
   approvalRequests: ApprovalRequest[];
   importExportResults: ImportExportResult[];
   auditLogs: AuditLog[];
+  security: SecurityState;
+  auditIntegrity: AuditIntegrityReport;
   uiPreferences: UiPreferences;
 }

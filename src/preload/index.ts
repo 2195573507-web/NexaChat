@@ -61,6 +61,9 @@ const api: AppApi = {
   restoreSnapshot: (snapshotId: string, options?: RestoreSnapshotOptions) => invoke(IPC_CHANNELS.dataRestoreSnapshot, snapshotId, options),
   createSnapshot: () => invoke(IPC_CHANNELS.dataCreateSnapshot),
   exportDiagnostics: () => invoke(IPC_CHANNELS.dataExportDiagnostics),
+  searchAuditLogs: (query?: string) => invoke(IPC_CHANNELS.auditSearch, query),
+  verifyAuditIntegrity: () => invoke(IPC_CHANNELS.auditVerify),
+  exportAuditLogs: () => invoke(IPC_CHANNELS.auditExport),
   openLogs: () => invoke(IPC_CHANNELS.systemOpenLogs),
 };
 

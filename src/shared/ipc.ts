@@ -57,6 +57,9 @@ export const IPC_CHANNELS = {
   dataRestoreSnapshot: 'data:restoreSnapshot',
   dataCreateSnapshot: 'data:createSnapshot',
   dataExportDiagnostics: 'data:exportDiagnostics',
+  auditSearch: 'audit:search',
+  auditVerify: 'audit:verify',
+  auditExport: 'audit:export',
   systemOpenLogs: 'system:openLogs',
 } as const;
 
@@ -104,6 +107,9 @@ export type IpcInvokeArgs = {
   [IPC_CHANNELS.dataRestoreSnapshot]: [string, RestoreSnapshotOptions?];
   [IPC_CHANNELS.dataCreateSnapshot]: [];
   [IPC_CHANNELS.dataExportDiagnostics]: [];
+  [IPC_CHANNELS.auditSearch]: [string?];
+  [IPC_CHANNELS.auditVerify]: [];
+  [IPC_CHANNELS.auditExport]: [];
   [IPC_CHANNELS.systemOpenLogs]: [];
 };
 
@@ -159,5 +165,8 @@ const ipcPayloadArity: Record<IpcChannel, { min: number; max: number }> = {
   [IPC_CHANNELS.dataRestoreSnapshot]: { min: 1, max: 2 },
   [IPC_CHANNELS.dataCreateSnapshot]: { min: 0, max: 0 },
   [IPC_CHANNELS.dataExportDiagnostics]: { min: 0, max: 0 },
+  [IPC_CHANNELS.auditSearch]: { min: 0, max: 1 },
+  [IPC_CHANNELS.auditVerify]: { min: 0, max: 0 },
+  [IPC_CHANNELS.auditExport]: { min: 0, max: 0 },
   [IPC_CHANNELS.systemOpenLogs]: { min: 0, max: 0 },
 };

@@ -100,6 +100,10 @@ describe('NexaChat renderer', () => {
     openFeature(settings, settings.tabs.find((tab) => tab.id === 'security')!);
     expect(activePanel()).toHaveAttribute('data-tab', 'security');
     expect(activePanel()).toHaveTextContent(translate('zh-CN', 'settings.security.title'));
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'settings.security.auditIntegrity'));
+    openFeature(settings, settings.tabs.find((tab) => tab.id === 'audit')!);
+    expect(activePanel()).toHaveAttribute('data-tab', 'audit');
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'settings.audit.verify'));
   });
 });
 

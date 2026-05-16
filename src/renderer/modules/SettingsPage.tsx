@@ -1,17 +1,25 @@
 import { useEffect, useState } from 'react';
+import { ShieldCheck } from 'lucide-react';
 import type { UiPreferences } from '../../shared/types';
 import { useI18n } from '../i18n';
 import type { TabPageProps } from './shared';
-import { DataTable, StateBadge, TabPanel } from './shared';
+import { DataTable, Metric, StateBadge, TabPanel, statusLabel } from './shared';
 
 export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
   const { t } = useI18n();
   const [prefs, setPrefs] = useState<UiPreferences>(snapshot.uiPreferences);
+  const [auditQuery, setAuditQuery] = useState('');
   useEffect(() => setPrefs(snapshot.uiPreferences), [snapshot.uiPreferences]);
 
   if (activeTab.id === 'security') {
     return (
       <TabPanel moduleId="settings" tab={activeTab}>
+        <section className="summary-grid">
+          <Metric title={t('settings.security.session')} value={statusLabel(snapshot.security.activeSession.state, t)} detail={snapshot.security.activeUser.displayName} />
+          <Metric title={t('settings.security.role')} value={snapshot.security.activeRole.name} detail={snapshot.security.activeRole.description} />
+          <Metric title={t('settings.security.permissions')} value={snapshot.security.activeRole.permissionKeys.length} detail={t('settings.security.permissions.note')} />
+          <Metric title={t('settings.security.denied')} value={snapshot.security.deniedCount} detail={t('settings.security.denied.note')} />
+        </section>
         <section className="two-column">
           <div className="panel">
             <h2>{t('settings.security.title')}</h2>
@@ -22,6 +30,27 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
               <div><dt>{t('settings.security.gatewayKey')}</dt><dd>{t('settings.security.gatewayKey.note')}</dd></div>
               <div><dt>{t('settings.security.logRedaction')}</dt><dd>{t('settings.security.logRedaction.note')}</dd></div>
             </dl>
+          </div>
+          <div className="panel">
+            <div className="panel-header">
+              <div>
+                <h2>{t('settings.security.auditIntegrity')}</h2>
+                <p>{t('settings.security.auditIntegrity.note')}</p>
+              </div>
+              <StateBadge label={statusLabel(snapshot.auditIntegrity.status, t)} tone={snapshot.auditIntegrity.status === 'verified' ? 'success' : snapshot.auditIntegrity.status === 'empty' ? 'muted' : 'error'} />
+            </div>
+            <dl className="detail-list">
+              <div><dt>{t('settings.audit.integrity')}</dt><dd>{t('settings.audit.integrity.checked', { count: snapshot.auditIntegrity.checkedCount, status: snapshot.auditIntegrity.status })}</dd></div>
+              <div><dt>{t('settings.columns.hash')}</dt><dd><code>{snapshot.auditIntegrity.lastHash ?? '-'}</code></dd></div>
+            </dl>
+            <div className="button-row">
+              <button type="button" onClick={() => onAction(t('settings.audit.verify'), () => api.verifyAuditIntegrity())}>
+                <ShieldCheck size={16} /> {t('settings.audit.verify')}
+              </button>
+              <button type="button" onClick={() => onAction(t('settings.audit.exported'), () => api.exportAuditLogs())}>
+                {t('settings.audit.export')}
+              </button>
+            </div>
           </div>
           <div className="panel">
             <h2>{t('settings.security.keyStatus')}</h2>
@@ -36,13 +65,38 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
   }
 
   if (activeTab.id === 'audit') {
+    const visibleLogs = auditQuery.trim()
+      ? snapshot.auditLogs.filter((log) => JSON.stringify(log).toLowerCase().includes(auditQuery.trim().toLowerCase()))
+      : snapshot.auditLogs;
     return (
       <TabPanel moduleId="settings" tab={activeTab}>
         <section className="panel">
-          <h2>{t('settings.audit.title')}</h2>
+          <div className="panel-header">
+            <div>
+              <h2>{t('settings.audit.title')}</h2>
+              <p>{t('settings.audit.integrity.checked', { count: snapshot.auditIntegrity.checkedCount, status: snapshot.auditIntegrity.status })}</p>
+            </div>
+            <StateBadge label={statusLabel(snapshot.auditIntegrity.status, t)} tone={snapshot.auditIntegrity.status === 'verified' ? 'success' : snapshot.auditIntegrity.status === 'empty' ? 'muted' : 'error'} />
+          </div>
+          <div className="button-row">
+            <input
+              aria-label={t('settings.audit.search')}
+              placeholder={t('settings.audit.search.placeholder')}
+              value={auditQuery}
+              onChange={(event) => setAuditQuery(event.target.value)}
+            />
+            <button type="button" onClick={() => onAction(t('settings.audit.verify'), () => api.verifyAuditIntegrity())}>{t('settings.audit.verify')}</button>
+            <button type="button" onClick={() => onAction(t('settings.audit.exported'), () => api.exportAuditLogs())}>{t('settings.audit.export')}</button>
+          </div>
           <DataTable
-            columns={[t('settings.columns.action'), t('settings.columns.target'), t('settings.columns.details'), t('settings.columns.time')]}
-            rows={snapshot.auditLogs.map((log) => [log.action, `${log.targetType}:${log.targetId ?? '-'}`, log.detailsJson ?? '-', new Date(log.createdAt).toLocaleString()])}
+            columns={[t('settings.columns.action'), t('settings.columns.target'), t('settings.columns.permission'), t('settings.columns.hash'), t('settings.columns.time')]}
+            rows={visibleLogs.map((log) => [
+              log.action,
+              `${log.targetType}:${log.targetId ?? '-'}`,
+              log.permissionKey ?? '-',
+              log.entryHash ? <code key={`${log.id}-hash`}>{log.entryHash.slice(0, 12)}</code> : '-',
+              new Date(log.createdAt).toLocaleString(),
+            ])}
           />
         </section>
       </TabPanel>
