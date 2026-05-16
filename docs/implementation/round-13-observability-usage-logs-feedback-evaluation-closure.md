@@ -2,7 +2,7 @@
 
 Date: 2026-05-16
 
-Status: Completed as implementation and verification; delivery commit pending.
+Status: Completed as implementation and verification; delivery commit `8a94f74892705d39e4107c3c24a0878bb9a36f09`; closeout commit pending.
 
 ## Root-Cause And Chain Review
 
@@ -69,7 +69,7 @@ Passed at the targeted Round 13 boundary. Usage, request logs, gateway logs, Pro
 
 ## Commit
 
-- Delivery commit hash: pending.
+- Delivery commit hash: `8a94f74892705d39e4107c3c24a0878bb9a36f09`.
 - Closeout commit hash: pending.
 - Push result: pending.
 - Remaining issues: None for Round 13. Round 14 owns packaged desktop entry, installer/package artifact, shortcut script/check, crash recovery, and release diagnostics.
