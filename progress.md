@@ -542,3 +542,26 @@
 - Updated the authoritative blueprint Round 14 execution record, `PROJECT_PROGRESS.md`, matrix, `docs/implementation/round-14-desktop-packaging-shortcut-release-closure.md`, `task_plan.md`, `progress.md`, and `findings.md`; commit hash is pending until the Round 14 delivery commit.
 - Committed Round 14 delivery as `936cb659e7932ae134d9666653582abca815813e` and started delivery-hash backfill.
 - Committed Round 14 closeout as `f059b4de966023961b7105a729453caa24f0ec2a` and started closeout-hash backfill.
+
+## 2026-05-16 Full App Round 15 Execution
+
+- Reconfirmed real project root with `git rev-parse --show-toplevel`: `D:/NexaChat`.
+- Rechecked requested skills: `using-superpower` is unavailable and `using-superpowers` is available.
+- Continued the active `/goal` at Round 15 after Round 0-14 implementation and local Round 14 commits.
+- Used parallel lanes:
+  - Lane A: quality gate authority, package release command wiring, and gate-order tests.
+  - Lane B: hardcode, duplicate authority, security, dead-link, and docs freshness scanners.
+  - Lane C: legacy route alias deletion, smoke cleanup hardening, desktop-entry coverage, docs, Git push, and final remote confirmation.
+  - Lane D: read-only final docs/status audit by subagent.
+- Added `src/shared/qualityGates.ts` as the release gate authority.
+- Added `scripts/quality-gates.mjs` with hardcode, duplicate, security, dead-link, docs, all-scan, and release modes.
+- Added package scripts for `scan:hardcode`, `scan:duplicates`, `scan:security`, `scan:dead-links`, `scan:docs`, `scan:quality`, and `verify:release`.
+- Added `tests/quality-gates.test.ts`.
+- Removed milestone-expired legacy route aliases from `src/shared/navigation.ts`, preserving only `/ -> /workspace/overview`.
+- Updated navigation and UI smoke tests so legacy unknown routes fall back through current module defaults instead of old alias chains.
+- Replaced a hardcoded Chinese mapper fallback with an English structured fallback.
+- Reused shared Electron smoke cleanup from `scripts/desktop-entry.mjs` in Electron, package, and installer smoke scripts.
+- Added `docs/implementation/round-15-quality-gates-release-convergence-closure.md`.
+- Updated the authoritative blueprint Round 15 execution record, `PROJECT_PROGRESS.md`, matrix, `task_plan.md`, `progress.md`, and `findings.md`; commit hash is pending until the Round 15 delivery commit.
+- Ran `npm.cmd run verify:release`: passed; covered typecheck, 18 Vitest files / 55 tests, production build, 16 Playwright UI smoke tests, Electron smoke, package release, package smoke, installer smoke, packaged shortcut readback, hardcode scan, duplicate scan, security scan, dead-link scan, docs scan, and `git diff --check`.
+- `git diff --check` passed as part of `verify:release`, with LF/CRLF conversion warnings only.

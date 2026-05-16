@@ -1,6 +1,7 @@
 import { _electron as electron } from 'playwright';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { closeElectronApp } from './desktop-entry.mjs';
 
 const smokeUserDataDir = join(process.cwd(), 'test-results', 'electron-smoke-user-data');
 mkdirSync(smokeUserDataDir, { recursive: true });
@@ -77,5 +78,5 @@ try {
   }
   process.exitCode = 1;
 } finally {
-  await app.close();
+  await closeElectronApp(app);
 }

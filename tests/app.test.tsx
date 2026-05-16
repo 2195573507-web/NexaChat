@@ -135,13 +135,18 @@ describe('IPC authority', () => {
 });
 
 describe('navigation authority', () => {
-  it('keeps route aliases owned, milestone-bound, and resolvable', () => {
-    for (const alias of routeAliasRegistry) {
-      expect(alias.owner).toBeTruthy();
-      expect(alias.deleteAfterMilestone).toBe('round-15-quality-gates');
-      expect(alias.reason.length).toBeGreaterThan(8);
-      expect(resolveNavigation(alias.from).route).toBe(alias.target);
-    }
+  it('removes milestone-bound legacy aliases while preserving root fallback', () => {
+    expect(routeAliasRegistry).toEqual([
+      expect.objectContaining({
+        from: '/',
+        target: '/workspace/overview',
+        owner: 'root',
+        deleteAfterMilestone: 'round-15-quality-gates',
+      }),
+    ]);
+    expect(resolveNavigation('/').route).toBe('/workspace/overview');
+    expect(resolveNavigation('/dashboard/overview').route).toBe('/workspace/overview');
+    expect(resolveNavigation('/settings/request-logs').route).toBe('/settings/preferences');
   });
 
   it('keeps every module tab route unique and every module has a page renderer', () => {

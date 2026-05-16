@@ -187,3 +187,11 @@
 - COM shortcut readback can normalize `IconLocation` with doubled backslashes, so tests must compare normalized paths rather than raw COM string formatting.
 - Installer smoke must use isolated per-process directories; parallel smoke runs against one install directory can create false failures through cleanup/write races.
 - The local PowerShell installer script is smoke-tested but unsigned; Round 15 should treat it as the current installer artifact and separately gate any future signed/NSIS installer work.
+
+## Full App Round 15 Findings
+
+- The durable release boundary is now `npm.cmd run verify:release`, backed by `src/shared/qualityGates.ts` and `scripts/quality-gates.mjs`; future closeout claims should not rely on a manually remembered command list.
+- Docs freshness needs to be a gate, not an afterthought. The scanner now requires the Round 15 closure document, the blueprint execution block, matrix completion, and `PROJECT_PROGRESS.md` Round 15 status before release verification can pass.
+- Legacy route aliases had reached their Round 15 deletion milestone. Keeping them would preserve old route chains and make duplicate-link scans less meaningful, so only the root fallback remains.
+- The unsigned PowerShell installer script is accepted as the current local installer artifact because `npm.cmd run test:installer-smoke` and `npm.cmd run test:desktop-entry` verify it. A future signed/NSIS installer should be added as a new release-hardening task, not silently implied by Round 15.
+- Electron smoke cleanup is part of release quality. Reusing `closeElectronApp()` across smoke scripts reduces false failures from leftover smoke processes and keeps package/installer/shortcut checks independent.

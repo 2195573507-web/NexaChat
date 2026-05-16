@@ -1412,6 +1412,61 @@ These references guide product and engineering decisions. They are not permissio
 25. **Deliverables**: Test system, scanner suite, release checklist, final verification matrix, docs.
 26. **Next Round Input**: Post-release expansion plan or release hardening backlog.
 
+### Round 15 Execution Status
+
+- Status: Completed.
+- Completion date: 2026-05-16.
+- Parallel lanes:
+  - Lane A: quality gate authority, release command wiring, package script exposure, and gate-order test coverage.
+  - Lane B: scanner suite for hardcoded text, duplicate authorities, route aliases, security patterns, dead links, and docs freshness.
+  - Lane C: legacy route alias deletion, smoke cleanup hardening, release docs, desktop-entry verification, and Git closeout.
+- Root-cause analysis: previous rounds had strong individual tests, but release confidence still depended on remembering several commands and manually spotting stale docs, duplicate routes, route leaks, raw CJK fallback text, unsafe script patterns, generated artifact drift, and package/shortcut smoke cleanup races.
+- Upstream/downstream chain review:
+  - `src/shared/qualityGates.ts` -> package scan scripts -> `scripts/quality-gates.mjs` -> `npm.cmd run verify:release`.
+  - `verify:release` -> typecheck -> full unit tests -> production build -> UI smoke -> Electron smoke -> package release -> desktop-entry smoke -> scanners -> docs freshness -> `git diff --check`.
+  - Scanner suite -> source/docs/test files -> hardcode, duplicate authority, security, dead-link, and docs freshness failures.
+  - Desktop smoke helpers -> shared Electron cleanup -> package, installer, shortcut, and launch checks without leftover smoke processes.
+- Major changed files:
+  - `package.json`
+  - `src/shared/qualityGates.ts`
+  - `scripts/quality-gates.mjs`
+  - `scripts/desktop-entry.mjs`
+  - `scripts/electron-smoke.mjs`
+  - `scripts/package-smoke.mjs`
+  - `scripts/installer-smoke.mjs`
+  - `src/shared/navigation.ts`
+  - `src/main/repositories/mappers.ts`
+  - `tests/quality-gates.test.ts`
+  - `tests/app.test.tsx`
+  - `tests/ui-smoke.spec.ts`
+  - `docs/implementation/round-15-quality-gates-release-convergence-closure.md`
+- Added or changed functionality:
+  - Added one quality gate authority for release-critical commands, risks, and protected chains.
+  - Added `scan:hardcode`, `scan:duplicates`, `scan:security`, `scan:dead-links`, `scan:docs`, `scan:quality`, and `verify:release`.
+  - Added hardcode scans for CJK text outside i18n allowlists, visible app-route strings, mojibake, and raw CSS colors outside token declarations.
+  - Added duplicate scans for IPC channels, App API methods, navigation module IDs/routes/aliases, Gateway endpoints/scopes, package scripts, preload bridge parity, and browser mock parity.
+  - Added security scans for raw secret-like values, unsafe renderer/main patterns, and raw shell execution outside script allowlists.
+  - Added dead local Markdown link scanning and docs freshness scanning for blueprint, matrix, project progress, and Round 15 closure records.
+  - Hardened Electron smoke cleanup through shared `closeElectronApp()`.
+- Deleted or replaced old links:
+  - Deleted milestone-expired legacy route aliases for old dashboard, settings, gateway, data, chat, models, knowledge, and tools routes.
+  - Preserved only `/ -> /workspace/overview` as the canonical root entry fallback.
+  - Replaced old alias tests with unknown-route fallback expectations.
+  - Replaced a hardcoded Chinese mapper fallback with an English structured fallback.
+- Test commands and results:
+  - `npm.cmd run verify:release`: Passed; covered typecheck, 18 Vitest files / 55 tests, production build, 16 Playwright UI smoke tests, Electron smoke, package release, package smoke, installer smoke, packaged shortcut readback, hardcode scan, duplicate scan, security scan, dead-link scan, docs scan, and `git diff --check`.
+  - `git diff --check`: Passed as part of `verify:release`, with LF/CRLF conversion warnings only.
+- Desktop shortcut result:
+  - `C:/Users/鑷充翰/Desktop/NexaChat.lnk` exists.
+  - TargetPath: `D:/NexaChat/release/win-unpacked/NexaChat.exe`.
+  - Arguments: empty.
+  - WorkingDirectory: `D:/NexaChat/release/win-unpacked`.
+  - IconLocation resolves to `D:/NexaChat/assets/app-icon.ico,0`.
+  - The shortcut remains the packaged Round 14 entry and is verified by `npm.cmd run test:desktop-entry` inside `npm.cmd run verify:release`.
+- Acceptance result: Passed. Release convergence now has one repeatable command, all configured gates pass, docs freshness is enforced, the packaged desktop entry remains valid, and Round 15 legacy route aliases have been deleted.
+- Commit hash: pending until Round 15 delivery commit.
+- Remaining issues: None for Round 15. Git delivery, push, remote confirmation, and final overall acceptance commit remain.
+
 ## 22. Overall Convergence Acceptance Standards
 
 ### 22.1 Architecture Convergence

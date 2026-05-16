@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   assertExists,
+  closeElectronApp,
   desktopEntry,
   fromRoot,
   getRepoRoot,
@@ -84,5 +85,5 @@ try {
   }
   console.log(`Installer smoke passed for ${installedExe.replace(repoRoot, '.')}`);
 } finally {
-  await app.close();
+  await closeElectronApp(app);
 }

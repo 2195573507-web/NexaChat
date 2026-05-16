@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
   assertExists,
+  closeElectronApp,
   desktopEntry,
   fromRoot,
   getRepoRoot,
@@ -93,5 +94,5 @@ try {
   }
   process.exitCode = 1;
 } finally {
-  await app.close();
+  await closeElectronApp(app);
 }

@@ -1,5 +1,44 @@
 # NexaChat Project Progress
 
+## 2026-05-16 Full App Round 15 Test System, Quality Gates And Release Convergence
+
+Round 15 of `docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md` is completed as implementation and verification; delivery commit is pending.
+
+Parallel execution lanes:
+
+- Lane A: quality gate authority, release command wiring, package script exposure, and gate-order tests.
+- Lane B: hardcode, duplicate authority, security, dead-link, and docs freshness scanners.
+- Lane C: legacy route alias deletion, smoke cleanup hardening, release docs, desktop-entry verification, and Git closeout.
+
+Key changes:
+
+- Added `src/shared/qualityGates.ts` as the release quality gate authority.
+- Added `scripts/quality-gates.mjs` with `hardcode`, `duplicates`, `security`, `dead-links`, `docs`, `all-scans`, and `release` modes.
+- Added `scan:hardcode`, `scan:duplicates`, `scan:security`, `scan:dead-links`, `scan:docs`, `scan:quality`, and `verify:release` package scripts.
+- Added `tests/quality-gates.test.ts`.
+- Removed milestone-expired legacy route aliases from `src/shared/navigation.ts`, leaving only `/ -> /workspace/overview`.
+- Updated navigation and UI smoke tests for root/unknown fallback instead of old alias chains.
+- Replaced a hardcoded Chinese mapper fallback with an English structured fallback.
+- Reused `closeElectronApp()` from `scripts/desktop-entry.mjs` across Electron, package, and installer smoke scripts.
+
+Verification:
+
+- `npm.cmd run verify:release`: passed; covered typecheck, 18 Vitest files / 55 tests, production build, 16 Playwright UI smoke tests, Electron smoke, package release, package smoke, installer smoke, packaged shortcut readback, hardcode scan, duplicate scan, security scan, dead-link scan, docs scan, and `git diff --check`.
+- `git diff --check`: passed as part of `verify:release`, with LF/CRLF conversion warnings only.
+
+Desktop shortcut status:
+
+- `C:\Users\鑷充翰\Desktop\NexaChat.lnk` targets `D:\NexaChat\release\win-unpacked\NexaChat.exe`.
+- Arguments are empty.
+- Working directory is `D:\NexaChat\release\win-unpacked`.
+- IconLocation resolves to `D:\NexaChat\assets\app-icon.ico,0`.
+- The shortcut remains covered by `npm.cmd run test:desktop-entry` inside `npm.cmd run verify:release`.
+
+Git:
+
+- Round 15 delivery commit hash: pending.
+- Push result: pending.
+
 ## 2026-05-16 Full App Round 14 Desktop Experience, Packaging, Shortcut And Release
 
 Round 14 of `docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md` is completed as implementation and verification; delivery commit is `936cb659e7932ae134d9666653582abca815813e`; closeout commit is `f059b4de966023961b7105a729453caa24f0ec2a`; push is pending.

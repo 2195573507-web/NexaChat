@@ -55,6 +55,7 @@ At least three agents were launched concurrently before implementation work cont
 - Full App Round 12 Data Config/import/export/backup/recovery: complete as implementation, verification, closeout, push, and remote confirmation; delivery commit `4554dc4c47ff2dbf62479a786d486a8968dd78c6`; closeout commit `b064dae1a90df8ec62fb6cd3ddfd96f9007dafe9`; remote-confirmation commit `2a14e45598e46fb9697f896a767a3869f0b72433`.
 - Full App Round 13 Observability/usage/logs/feedback/evaluation: complete as implementation, verification, closeout, push, and remote confirmation; delivery commit `8a94f74892705d39e4107c3c24a0878bb9a36f09`; closeout commit `d84b413dc4967b44d88a62f182f6577423691688`; remote-confirmation commit `932ecbcb91b6d3c9c8d27857d89890b4f3b4d9d6`.
 - Full App Round 14 Desktop experience/packaging/shortcut/release: complete as implementation and verification; delivery commit `936cb659e7932ae134d9666653582abca815813e`; closeout commit `f059b4de966023961b7105a729453caa24f0ec2a`; push pending.
+- Full App Round 15 Test system/quality gates/release convergence: complete as implementation and verification; `npm.cmd run verify:release` passed; delivery commit pending.
 - Phase 1: complete.
 - Phase 2: complete.
 - Phase 3: complete.
@@ -64,7 +65,7 @@ At least three agents were launched concurrently before implementation work cont
 - Iteration 01 core flow plan: complete.
 - Iteration 01 UI plan: complete.
 - Iteration 02 secondary navigation and module decomposition plan: complete as implementation and verification.
-- UI shell redesign: complete as implementation; final Git commit and push pending.
+- UI shell redesign: closed by the later full-app navigation, design-system, theme, i18n, and smoke-test rounds; no separate UI-shell pending item remains.
 
 ## Implementation Summary
 

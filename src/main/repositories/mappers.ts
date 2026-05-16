@@ -583,7 +583,7 @@ export function mapImportExportResult(row: Row): ImportExportResult {
       : lowerSummary.includes('conflict')
         ? 1
         : 0,
-    requiresConfirmation: manifestJson ? /"requiresConfirmation"\s*:\s*true/.test(manifestJson) : lowerSummary.includes('确认'),
+    requiresConfirmation: manifestJson ? /"requiresConfirmation"\s*:\s*true/.test(manifestJson) : lowerSummary.includes('confirmation'),
     createdAt: Number(row.created_at),
   };
 }

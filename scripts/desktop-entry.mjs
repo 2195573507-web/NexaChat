@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -81,4 +82,31 @@ export function getPackagedShortcutExpectation() {
     workingDirectory: fromRoot(desktopEntry.relativePaths.winUnpackedDir),
     iconLocation: `${normalizeForCompare(fromRoot(desktopEntry.relativePaths.iconIco))},0`,
   };
+}
+
+function delay(ms) {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
+}
+
+export async function closeElectronApp(app) {
+  const child = typeof app.process === 'function' ? app.process() : null;
+  await app.close().catch(() => undefined);
+
+  if (!child?.pid) {
+    return;
+  }
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      return;
+    }
+    await delay(100);
+  }
+
+  if (process.platform === 'win32') {
+    execFileSync('taskkill', ['/F', '/T', '/PID', String(child.pid)], { stdio: 'ignore' });
+    return;
+  }
+
+  child.kill('SIGKILL');
 }

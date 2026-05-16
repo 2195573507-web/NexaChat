@@ -243,12 +243,12 @@ test('sidebar expansion persists and never exposes route paths', async ({ page }
   await expect(page.locator(`#sidebar-children-${gateway.id}`)).toBeVisible();
 });
 
-test('legacy routes fall back to new canonical routes', async ({ page }) => {
-  await page.goto('/dashboard/overview');
+test('root and unknown legacy routes resolve without keeping old alias chains', async ({ page }) => {
+  await page.goto('/');
   await expectActiveRouteAndPanel(page, navModules.find((module) => module.id === 'workspace')!, navModules.find((module) => module.id === 'workspace')!.tabs[0]);
 
   await page.goto('/settings/request-logs');
-  await expectActiveRouteAndPanel(page, navModules.find((module) => module.id === 'gateway')!, navModules.find((module) => module.id === 'gateway')!.tabs.find((tab) => tab.id === 'logs')!);
+  await expectActiveRouteAndPanel(page, navModules.find((module) => module.id === 'settings')!, navModules.find((module) => module.id === 'settings')!.tabs[0]);
 
   await page.goto('/models/not-real');
   await expectActiveRouteAndPanel(page, navModules.find((module) => module.id === 'models')!, navModules.find((module) => module.id === 'models')!.tabs[0]);
