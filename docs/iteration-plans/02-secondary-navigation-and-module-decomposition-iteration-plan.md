@@ -1,10 +1,23 @@
 # NexaChat Iteration Plan 02: Secondary Navigation And Module Decomposition
 
+## Status / Current Relevance
+
+This is a historical iteration plan for the earlier 8-module route-aware navigation pass. It remains useful for the "one tab, one primary task" rule and focused page decomposition, but it is not the current architecture source of truth.
+
+Current source facts:
+
+- NexaChat is chat-first.
+- The current first-level modules are 7 modules: Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings.
+- `/` currently resolves to `/chat/conversations`.
+- Workspace/Dashboard are not current product entry points.
+
+For current architecture and next phases, use `docs/build-plans/00-modular-refactor-master-plan/architecture-mainline-iteration-plan.md`.
+
 ## Goal
 
 Reduce the crowding inside each NexaChat module by turning the existing second-level tabs into real, route-aware subpages. Each first-level module should keep a focused primary surface, while secondary functions move into their own tab content with clear state, empty/error handling, and honest implementation labels.
 
-This round does not add new first-level modules. It makes the current eight-module structure easier to use and prepares the app for deeper feature work without turning any page into a dense admin dump.
+Historical round goal: this round did not add new first-level modules. It made the then-current eight-module structure easier to use and prepared the app for deeper feature work without turning any page into a dense admin dump.
 
 ## Current Problems Or Target Gaps
 
@@ -31,7 +44,7 @@ This round does not add new first-level modules. It makes the current eight-modu
 
 - Keep navigation config-driven from `src/shared/navigation.ts`.
 - Extend tab metadata only if needed for implementation: `route`, `description`, `badge`, `permission`, `default`, or `emptyState`.
-- Keep the eight first-level modules unchanged:
+- Historical requirement at the time: keep the then-current eight first-level modules unchanged:
   - 工作台
   - 对话
   - 模型

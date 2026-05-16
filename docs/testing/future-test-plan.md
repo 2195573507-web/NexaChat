@@ -1,5 +1,16 @@
 # Future Test Plan
 
+## Status / Current Relevance
+
+Current architecture facts for future tests:
+
+- NexaChat is chat-first.
+- The current first-level modules are 7 modules: Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings.
+- `/` currently resolves to `/chat/conversations`.
+- Workspace/Dashboard are historical contexts, not current first-level modules.
+- Knowledge Base current tests should cover text-like lexical import/retrieval. PDF, Office, OCR, and external vector databases are future tests.
+- Tools/Agent/MCP current tests should cover registration, permissions, dry-run, fixture execution, approvals, steps, and trace events. Arbitrary real MCP execution and Agent sandbox are future tests.
+
 ## Unit Test
 
 - Service logic for conversations, messages, providers, models, router, gateway, import/export, logs, usage, security, settings, and UI preferences.
@@ -25,7 +36,7 @@
 ## Smoke Test
 
 - App launches one main window.
-- Sidebar has no more than 8 modules.
+- Sidebar exposes the 7 current first-level modules.
 - No blank first screen.
 - Settings can open.
 - Logs page can open.
@@ -82,7 +93,7 @@
 
 ## UI Navigation Test
 
-- All 8 modules open.
+- All 7 current first-level modules open.
 - Required second-level tabs visible.
 - Sidebar active state correct.
 - No old project names.
@@ -128,4 +139,3 @@
 - No untracked files.
 - No unstaged modifications.
 - No staged but uncommitted changes.
-

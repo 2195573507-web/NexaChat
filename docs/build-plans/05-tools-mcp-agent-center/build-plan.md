@@ -1,12 +1,27 @@
 # Tools, MCP And Agent Center Build Plan
 
+## Status / Current Relevance
+
+This plan describes the long-term Tools/MCP/Agent direction. It must not be read as a claim that arbitrary MCP execution, autonomous Agent execution, or code sandboxing is already complete.
+
+Current source facts:
+
+- Tools / Agent currently supports MCP server registration, permissions, agent definitions, dry-run preview, fixture tool execution, approval requests, execution steps, and trace events.
+- MCP registration and permission are real control-plane features.
+- Fixture tool execution is the only executable path currently represented.
+- Arbitrary real MCP tool execution, arbitrary code execution, workflow canvas execution, and a release-grade Agent sandbox are future capabilities.
+
+Current reference: `docs/build-plans/00-modular-refactor-master-plan/architecture-mainline-iteration-plan.md`.
+
 ## Final Goal
 
 Design a tools, MCP, and Agent module that can safely extend Chat with built-in tools, custom tools, MCP servers, Agent Studio, Agent Run Center, execution plans, traces, and human confirmation while avoiding premature empty workflow shells.
 
 ## Scope
 
-Includes tool management, built-in tools, custom tools, MCP Server, stdio / SSE / HTTP MCP, tool discovery, MCP permission control, MCP logs, Agent Studio, Agent Run Center, Agent goals, available models/tools/knowledge, execution plans, steps, trace, human approval nodes, workflow reservation, and code sandbox reservation.
+Current implemented scope includes MCP server registration, permission state, Agent definitions, dry-run preview, fixture tool execution, execution runs, steps, trace events, and approval requests.
+
+Roadmap scope includes built-in tools, custom tools, stdio / SSE / HTTP MCP execution, tool discovery, MCP call logs, richer Agent Studio, real Agent Run Center execution, workflow reservation, and code sandbox reservation.
 
 Does not include unrestricted arbitrary code execution, full workflow canvas, or autonomous background agents in v1.
 
@@ -109,4 +124,3 @@ Outputs: tool execution logs, MCP discovery cache, agent run traces, approval de
 - Agent templates.
 - MCP marketplace.
 - Agent evaluation and replay.
-

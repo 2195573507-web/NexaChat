@@ -1,5 +1,23 @@
 # NexaChat Project Progress
 
+## 2026-05-16 Phase 0 Documentation Fact Cleanup
+
+- Confirmed real project root with `git rev-parse --show-toplevel`: `D:/NexaChat`.
+- Used the available `using-superpowers` skill; the singular `using-superpower` path is not installed in this environment.
+- Ran a global tracked-document audit for stale terms: `eight first-level modules`, `8 modules`, `Workspace`, `Dashboard`, `/workspace`, `PDF`, `OCR`, `vector`, `sandbox`, `Agent sandbox`, `MCP executor`, `simple home`, and `NexaStore`.
+- Classified hits into current fact, historical record, and future planning instead of mechanically replacing every occurrence.
+- Current source facts were aligned in active docs: NexaChat is chat-first, the real first-level modules are Chat / Models / Knowledge Base / Tools / Gateway / Data / Settings, and `/` currently resolves to `/chat/conversations`.
+- Clarified that Workspace/Dashboard and older 8-module references are historical context unless a file explicitly marks them as current.
+- Clarified that simple home is a later target, not a completed capability.
+- Clarified that `NexaStore` remains the current centralized aggregate service and service splitting is a target route.
+- Clarified Knowledge Base boundaries: current support is text-like import, parsing, chunking, lexical embedding, retrieval preview, rebuild/delete, and citations; PDF, Office, OCR, and external vector databases remain future capabilities.
+- Clarified Gateway boundaries: `/v1/models`, `/v1/chat/completions`, and `/v1/embeddings` are current; `/v1/responses` is reserved and returns 501.
+- Clarified Tools/Agent/MCP boundaries: current support covers MCP registration, permissions, agent definitions, dry-run preview, fixture tool execution, approval requests, execution steps, and trace events; arbitrary real MCP execution, arbitrary code execution, and release-grade Agent sandbox are future capabilities.
+- Added `Status / Current Relevance` notes to stale build/iteration plans instead of deleting historically valuable plans.
+- This Phase 0 pass modified documentation only. No business source, route code, UI code, database code, tests, or package configuration were changed.
+
+Historical context note: entries below this section may mention Workspace, Dashboard, `/workspace`, or 8 modules because they record earlier implementation rounds. Those entries are retained as history and should not override the current chat-first 7-module source facts above.
+
 ## 2026-05-16 Chat-first UI Rebuild Closure
 
 本轮目标:

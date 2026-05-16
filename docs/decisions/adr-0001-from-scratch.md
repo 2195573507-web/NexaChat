@@ -4,6 +4,8 @@
 
 Accepted
 
+Current relevance note: the original navigation cap was written before the chat-first 7-module mainline. The active source facts are 7 first-level modules and `/ -> /chat/conversations`; the "from scratch" decision and local-first boundaries still apply.
+
 ## Context
 
 NexaChat is a new product, not a continuation of an old app. The project needs clear module boundaries, local-first data ownership, and a UI that does not inherit previous clutter or styling experiments.
@@ -30,7 +32,7 @@ Start from an empty repository and do not move old project code, old `src`, old 
 
 ## How NexaChat Avoids Old Problems
 
-- Navigation is capped at 8 modules.
+- Navigation avoids excessive first-level entries; the current source fact is 7 first-level modules.
 - Completion labels stay honest.
 - Planned features are marked as reserved.
 - Backend service boundaries are defined before code.
@@ -39,4 +41,3 @@ Start from an empty repository and do not move old project code, old `src`, old 
 ## Consequences
 
 The first implementation round may be slower than copying code, but the project starts with cleaner ownership, clearer data model, and fewer hidden compatibility traps.
-

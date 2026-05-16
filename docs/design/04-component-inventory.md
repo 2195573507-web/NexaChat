@@ -1,5 +1,9 @@
 # Component Inventory
 
+## Status / Current Relevance
+
+This design document predates the chat-first 7-module mainline. Keep component guidance only where it matches the current architecture: Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings.
+
 Each component definition includes purpose, module, input data, interaction behavior, states, and acceptance criteria.
 
 ## AppShell
@@ -9,7 +13,7 @@ Each component definition includes purpose, module, input data, interaction beha
 - Input data: navigation groups, current route, workspace, global status.
 - Interaction: route switch, sidebar collapse, command entry.
 - States: loading, ready, offline, error.
-- Acceptance: renders all 8 modules and does not hardcode feature behavior in Sidebar.
+- Acceptance: renders the current 7 modules and does not hardcode feature behavior in Sidebar.
 
 ## Sidebar
 
@@ -18,7 +22,7 @@ Each component definition includes purpose, module, input data, interaction beha
 - Input data: module `label`, `route`, `icon`, `children`, `permission`, `status`.
 - Interaction: select module, collapse/expand.
 - States: active, hover, disabled, badge, status.
-- Acceptance: max 8 modules and clear active state.
+- Acceptance: current 7-module navigation and clear active state.
 
 ## Topbar
 
@@ -307,4 +311,3 @@ Each component definition includes purpose, module, input data, interaction beha
 - Interaction: search, run command.
 - States: reserved, enabled later.
 - Acceptance: planned but not fake-complete.
-

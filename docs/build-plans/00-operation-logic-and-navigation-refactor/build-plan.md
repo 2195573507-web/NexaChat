@@ -1,5 +1,18 @@
 # NexaChat Operation Logic And Navigation Refactor Build Plan
 
+## Status / Current Relevance
+
+This is a historical implementation plan for an older 8-module Workspace/Dashboard navigation refactor. It records what that round intended and verified at the time, but it is no longer the current architecture source of truth.
+
+Current source facts:
+
+- The real first-level modules are 7 modules: Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings.
+- `/` currently resolves to `/chat/conversations`.
+- `/workspace/...` and `/dashboard/...` are not current primary routes.
+- Workspace/Dashboard must not be restored as the main entry point.
+
+Still useful: page-boundary discipline, no fake action buttons, route-source centralization, and capability-boundary language. For current planning, use `docs/build-plans/00-modular-refactor-master-plan/architecture-mainline-iteration-plan.md`.
+
 ## 一、Final Goal
 
 本轮目标是在保持 NexaChat 当前主体功能不变的前提下，把 0.1 版本里已经可运行的 Provider、Model、Chat、Gateway、Knowledge、MCP、Agent dry-run、Data、Settings 能力重新组织成真正可操作、可维护、边界清晰的 0.2 操作架构。

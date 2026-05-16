@@ -1,5 +1,20 @@
 # Workspace And Dashboard Build Plan
 
+## Status / Current Relevance
+
+This is a historical plan for an earlier Workspace/Dashboard entry module. It should not be used as the current architecture fact.
+
+Current source facts:
+
+- NexaChat is chat-first.
+- The current root route `/` resolves to `/chat/conversations`.
+- Workspace and Dashboard are not current first-level modules or the main entry point.
+- The current first-level modules are Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings.
+
+Still useful: some status-summary ideas can inform a future simple home or Chat empty state. They must be reworked through the chat-first mainline and must not restore Workspace/Dashboard-first navigation.
+
+Current reference: `docs/build-plans/00-modular-refactor-master-plan/architecture-mainline-iteration-plan.md`.
+
 ## Final Goal
 
 Create the entry module for NexaChat that gives users a clear overview of workspaces, recent conversations, model health, local gateway state, knowledge status, and fast actions without becoming a generic admin dashboard.
@@ -96,4 +111,3 @@ Outputs: selected workspace, workspace defaults, import/export packages, quick a
 - Workspace templates.
 - Workspace-level cost budgets.
 - Workspace activity timeline.
-

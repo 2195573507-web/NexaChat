@@ -1,25 +1,51 @@
 # NexaChat
 
-NexaChat is a local-first, multi-model AI conversation hub built as a desktop app with Electron, React, TypeScript, Vite, and SQLite.
+NexaChat is a chat-first, local-first, multi-model AI desktop workbench built with Electron, React, TypeScript, Vite, and SQLite.
 
 Desktop app name: NexaChat  
-Current status: Round 0-15 full-app blueprint complete and release-gated.
+Current status: Round 0-15 implementation history exists, but the active architecture line is the chat-first 7-module mainline documented in `docs/build-plans/00-modular-refactor-master-plan/architecture-mainline-iteration-plan.md`.
 
-## What Works Now
+## Current Architecture Facts
+
+- The real first-level modules are 7 modules: Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings.
+- The root route `/` currently resolves to `/chat/conversations`.
+- Workspace and Dashboard are not the current product entry point or first-level module.
+- Simple home is a later product target, not a completed current capability.
+- Ordinary mode should organize work by user tasks. Advanced mode should reveal technical details without creating a second implementation path.
+- Gateway is an independent core module, not an internal-only implementation detail.
+- Agent, Tools, and MCP are experimental capabilities and must not be described as unrestricted execution.
+- `NexaStore` is still the current centralized aggregate service in `src/main/services/store.ts`; service splitting is a target route, not the current source fact.
+
+## Current Real Capabilities
 
 - Electron desktop shell with one main window, packaged Windows launch, installer-script smoke, startup diagnostics, and a verified desktop shortcut.
-- React renderer with eight first-level modules and route-aware second-level pages: Workspace, Chat, Models, Knowledge, Tools and Agent, Local Gateway, Data Config, and Settings/Security.
-- Unified authorities for navigation, IPC, API contracts, i18n, theme tokens, Provider runtime, Gateway runtime, Knowledge/RAG, execution, security, data mobility, observability, desktop entry, and quality gates.
+- React renderer with route-aware pages under the 7 current modules: Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings.
+- Unified authorities for navigation, IPC, API contracts, i18n, theme tokens, Provider runtime, Gateway runtime, Knowledge runtime, execution runtime, security, data mobility, observability, desktop entry, and quality gates.
 - Live Chinese/English switching, dark/light/system theme switching, compact flat desktop-tool styling, and UI smoke coverage for route leakage and horizontal overflow.
-- Main-process SQLite schema and local Store for providers, models, conversations, message chunks, request logs, usage, Gateway keys/logs, knowledge files/chunks/embeddings, execution runs, audit logs, backups, observability records, and UI preferences.
+- Main-process SQLite schema and local Store for providers, models, conversations, message chunks, request logs, usage, Gateway keys/logs, knowledge files/chunks/lexical embeddings, execution runs, audit logs, backups, observability records, and UI preferences.
 - Safe preload IPC bridge with centralized channel authority and permission enforcement; the renderer does not access SQLite or raw secrets directly.
-- Real OpenAI-compatible Provider adapter chain for Provider test, Chat, Gateway chat completions, retry, timeout, cancellation, request logs, usage, and audit surfaces.
-- Local OpenAI-compatible Gateway with `/v1/models`, `/v1/chat/completions`, `/v1/embeddings`, reserved `/v1/responses`, API Key lifecycle, scopes, quota/rate policy, redacted logs, and CORS/options handling.
-- Knowledge import, chunking, lexical embedding fallback, retrieval preview, rebuild/delete, and chat citations for supported text-like content; unsupported PDF/Office/OCR inputs fail honestly until parser dependencies are approved.
-- Tool/Agent/Workflow execution model with safe fixtures, run steps, trace events, approval requests, and a shared Run Center boundary.
-- Security model with local owner session, RBAC/ACL evaluation, IPC and Store enforcement, audit hash-chain integrity, search, and redacted export.
-- Data mobility with redacted export packages, encrypted backup records, restore preflight, conflicts, migration records, and rollback records.
-- Observability with usage, request logs, Gateway logs, Provider health, feedback, evals, privacy settings, and redacted observability export.
+- OpenAI-compatible Provider adapter chain for Provider test, Chat, Gateway chat completions, retry, timeout, cancellation, request logs, usage, and audit surfaces.
+- Local OpenAI-compatible Gateway with `/v1/models`, `/v1/chat/completions`, and `/v1/embeddings`. `/v1/responses` is reserved and returns 501 in this build.
+- Knowledge Base supports text-like file import, parsing, chunking, lexical embedding, retrieval preview, rebuild/delete, and chat citations.
+- Tools/Agent supports MCP server registration, permissions, agent definitions, dry-run preview, fixture tool execution, approval requests, execution steps, and trace events.
+- Data mobility supports redacted export packages, encrypted backup records, restore preflight, conflicts, migration records, and rollback records.
+- Security and observability cover local owner session, RBAC/ACL evaluation, IPC and Store enforcement, audit hash-chain integrity, search, redacted export, usage, request logs, Gateway logs, Provider health, feedback, evals, and privacy settings.
+
+## Planned Capabilities
+
+- Simple home or Chat empty-state entry design that keeps `/` and Chat routing explicit.
+- Provider and Model invocation polish across real upstream configurations, streaming lifecycle, and user-facing recovery.
+- Gateway hardening around compatibility, logs, scope policy, and external integration guidance.
+- Knowledge Base expansion toward richer RAG, stronger embeddings, rerank, and additional parser classes.
+- Tools/Agent/MCP progression from experimental fixture/dry-run flows toward real execution only after permission, sandbox, audit, and protocol hardening are in place.
+
+## Not Implemented Boundaries
+
+- Knowledge Base does not currently support PDF, Office, OCR, or an external vector database as completed capabilities.
+- `/v1/responses` is not complete; it is reserved and should be documented as 501 behavior.
+- Tools/Agent/MCP does not execute arbitrary real MCP tools, arbitrary code, or a release-grade Agent sandbox.
+- Release-grade signed installer security and broad external sandbox guarantees are not current facts.
+- Future service names such as chat service, router service, and security service are extraction targets, while `NexaStore` remains the current aggregate source.
 
 ## Release Gate
 

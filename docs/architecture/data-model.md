@@ -1,5 +1,9 @@
 # Data Model
 
+## Status / Current Relevance
+
+This document includes early table names that predate the chat-first 7-module mainline. `workspace_id` remains an internal local scope field in the data model where present; it does not mean Workspace is a current first-level module or product entry point.
+
 ## SQLite Strategy
 
 SQLite is the source of truth for local NexaChat data. The schema must support local conversations, provider/model source tracing, gateway logs, imports/exports, audit, settings, and future migrations.
@@ -46,7 +50,7 @@ Suggested fields:
 | Field | Type | Purpose |
 |---|---|---|
 | `id` | TEXT PRIMARY KEY | Conversation ID. |
-| `workspace_id` | TEXT | Workspace scope. |
+| `workspace_id` | TEXT | Internal local scope retained for compatibility; not a current Workspace module. |
 | `title` | TEXT NOT NULL | User-visible title. |
 | `assistant_id` | TEXT | Default assistant. |
 | `default_provider_id` | TEXT | Optional default generation provider. |
@@ -240,4 +244,3 @@ Indexes: `idx_request_logs_conversation(conversation_id, created_at)`, `idx_requ
 - Request logs explain generation; they are not the chat history itself.
 - Deleting a Provider must not delete old messages.
 - Deleting a Model must not remove `model_name_snapshot` from old messages.
-

@@ -1,10 +1,14 @@
 # Interaction Flows
 
+## Status / Current Relevance
+
+This document contains early planning flows. Current facts: NexaChat is chat-first, `/` resolves to `/chat/conversations`, Workspace/Dashboard are not current entry points, Knowledge Base currently supports text-like lexical import/retrieval only, and Tools/Agent/MCP remain experimental beyond fixture/dry-run execution.
+
 ## First Launch Flow
 
 - Entry: application start.
 - User actions: view setup state, choose add Provider or start with local scanned model if available.
-- System feedback: one main window, no extra popup, setup checklist in Dashboard.
+- System feedback: one main window, no extra popup, chat-first empty state or later simple home entry.
 - Success state: user reaches chat input with a valid model selected.
 - Failure state: no Provider/model shows actionable empty state.
 - Related data tables: `app_settings`, `ui_preferences`, `providers`, `models`.
@@ -103,8 +107,8 @@
 ## Knowledge File Upload Flow
 
 - Entry: 知识库 / 文件 or chat attachment.
-- User actions: upload PDF/Word/Excel/PPT/Markdown/TXT/CSV/JSON/code file.
-- System feedback: upload, parse, chunk, embed, index progress.
+- User actions: import text-like files such as Markdown, TXT, CSV, JSON, logs, or code-like text. PDF, Office, and OCR are future parser classes.
+- System feedback: import, parse, chunk, lexical embedding, and index progress.
 - Success state: file indexed and available for retrieval.
 - Failure state: parse/index error with retry and logs.
 - Related data tables: `files`, `knowledge_chunks`, `knowledge_bases`, `request_logs`.
@@ -123,9 +127,9 @@
 ## Agent Run Flow
 
 - Entry: 工具与 Agent / Agent or Run Center.
-- User actions: choose agent, goal, model, tools, knowledge, start.
-- System feedback: plan, steps, trace, tool calls, human approval nodes.
-- Success state: run completed with trace and output.
+- User actions: define an agent, preview a dry-run, or start an approved fixture execution.
+- System feedback: dry-run/fixture plan, steps, trace, and approval nodes.
+- Success state: fixture run completed with trace and output.
 - Failure state: failed step shows retry/stop/log actions.
 - Related data tables: `agents`, `request_logs`, `audit_logs`, `usage_records`.
 - Acceptance criteria: destructive actions require confirmation.
@@ -159,4 +163,3 @@
 - Failure state: unavailable font falls back with explanation.
 - Related data tables: `ui_preferences`, `app_settings`.
 - Acceptance criteria: KaiTi option exists but is not default UI font.
-

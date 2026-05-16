@@ -2,6 +2,20 @@
 
 Date: 2026-05-16
 
+## Status / Current Relevance
+
+This is a historical UI iteration note from a broad module-wide typography and operation-logic pass. It remains useful for typography, low-distraction task flow, and honest capability boundaries.
+
+Current source facts:
+
+- NexaChat is now chat-first.
+- The current first-level modules are 7 modules: Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings.
+- `/` currently resolves to `/chat/conversations`.
+- Workspace/Dashboard are not current product entry points.
+- Simple home is a later target, not a completed current capability.
+
+Use `docs/build-plans/00-modular-refactor-master-plan/architecture-mainline-iteration-plan.md` for current architecture decisions.
+
 ## Preconditions
 
 - Real repository root was confirmed with `git rev-parse --show-toplevel`: `D:/NexaChat`.

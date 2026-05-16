@@ -1,8 +1,20 @@
 # UI Navigation Refactor Plan
 
+## Status / Current Relevance
+
+This is a historical UI refactor plan for the earlier 8-module navigation shape. It remains useful for the idea of focused subpages and route-aware module boundaries, but it is not the current architecture fact.
+
+Current source facts:
+
+- NexaChat now follows a chat-first 7-module mainline: Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings.
+- `/` currently resolves to `/chat/conversations`.
+- Workspace/Dashboard are not current first-level modules.
+
+Use `docs/build-plans/00-modular-refactor-master-plan/architecture-mainline-iteration-plan.md` for current planning.
+
 ## Why This Split
 
-The previous renderer already had route-aware second-level tabs, but many first-level modules still carried multiple unrelated work areas in one dense page. This round keeps the eight first-level modules and makes each module behave as a container with a compact secondary navigation row and focused subpages.
+The previous renderer already had route-aware second-level tabs, but many first-level modules still carried multiple unrelated work areas in one dense page. This historical round kept the then-current eight first-level modules and made each module behave as a container with a compact secondary navigation row and focused subpages.
 
 The refactor prioritizes UI information architecture and component boundaries. Existing IPC, mock data, gateway scopes, secret handling, and local persistence paths are reused instead of inventing a second data layer.
 

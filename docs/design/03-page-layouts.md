@@ -1,5 +1,9 @@
 # Page Layouts
 
+## Status / Current Relevance
+
+This design document predates the chat-first 7-module mainline. Keep the compact desktop-tool layout guidance, but apply it to the current modules: Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings. `/` currently opens `/chat/conversations`; Dashboard is historical context, not the current main entry.
+
 ## Main Window Layout
 
 ```text
@@ -13,17 +17,15 @@
 
 ## Left First-Level Navigation
 
-Sidebar shows 8 modules with icon, label, active state, optional badge, and status dot. It should never become a hardcoded feature dump.
+Sidebar shows the current 7 modules with icon, label, active state, optional badge, and status dot. It should never become a hardcoded feature dump.
 
 ## Topbar
 
 Topbar includes current workspace, command/search entry, new chat action, current model shortcut, gateway state, and settings/account entry. It must not contain every module action.
 
-## Dashboard Page
+## Historical Dashboard Page
 
-- Main: overview metrics, setup state, recent conversations, recent models.
-- Right rail: quick actions and recent diagnostics.
-- Empty state: create first workspace or add first Provider.
+Dashboard was an earlier planning surface. Future simple home or Chat empty-state work may reuse a small subset of overview metrics and quick actions, but must not restore Dashboard-first navigation.
 
 ## Chat Page
 
@@ -105,4 +107,3 @@ Topbar includes current workspace, command/search entry, new chat action, curren
 - Tabs: request logs, usage, error diagnosis, eval, key security, audit, UI settings, system settings.
 - UI settings: theme, density, font, KaiTi / 楷体, language, reduced motion.
 - System settings: data path, local gateway port, desktop shortcut requirement.
-

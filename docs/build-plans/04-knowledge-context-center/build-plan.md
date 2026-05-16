@@ -1,12 +1,26 @@
 # Knowledge And Context Center Build Plan
 
+## Status / Current Relevance
+
+This plan mixes long-term Knowledge/RAG ambitions with current product direction. Use it as a roadmap reference, not as a statement of completed capability.
+
+Current source facts:
+
+- Knowledge Base currently supports text-like file import, parsing, chunking, lexical embedding, retrieval preview, rebuild/delete, and citations.
+- Supported current file path is text-like content such as text, Markdown, JSON, CSV, logs, and code-like text.
+- PDF, Office, OCR, external vector databases, provider embeddings, rerank, rich memory, and full RAG evaluation are future capabilities, not completed current features.
+
+Current reference: `docs/build-plans/00-modular-refactor-master-plan/architecture-mainline-iteration-plan.md`.
+
 ## Final Goal
 
 Design a knowledge and context module that can manage files, knowledge bases, RAG, embeddings, rerank, citations, project context, temporary context, memory, summaries, and context compression without blocking the v1 chat core.
 
 ## Scope
 
-Includes PDF, Word, Excel, PPT, Markdown, TXT, CSV, JSON, code files, knowledge bases, RAG, embeddings, rerank, source citations, parse status, project context, temporary context, memory system, conversation summary memory, context compression, and chat integration.
+Current implemented scope includes text-like file records, parsing, chunking, lexical embeddings, retrieval preview, rebuild/delete, source citations, parse/index status, and chat citation integration.
+
+Roadmap scope includes PDF, Word, Excel, PPT, OCR, richer knowledge bases, provider embeddings, rerank, full RAG evaluation, project context, temporary context, memory system, conversation summary memory, context compression, and broader chat integration.
 
 Does not include full enterprise document management, remote collaboration, or automatic cloud sync in v1.
 
@@ -100,4 +114,3 @@ Outputs: chunks, citations, retrieval traces, memory records, summary records.
 - Cross-workspace knowledge templates.
 - Local vector DB comparison.
 - Knowledge evaluation benchmarks.
-

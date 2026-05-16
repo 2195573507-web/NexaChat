@@ -1,5 +1,18 @@
 # NexaChat UI Shell Redesign Build Plan
 
+## Status / Current Relevance
+
+This is a historical UI-shell plan from the Workspace/Dashboard stage. It remains useful for compact desktop-tool styling, no visible route leakage, no horizontal overflow, and no fake action buttons.
+
+Current source facts have changed:
+
+- The current app is chat-first.
+- The current first-level modules are 7 modules: Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings.
+- `/` currently resolves to `/chat/conversations`.
+- Workspace/Dashboard are not current product entry points.
+
+Use `docs/build-plans/00-modular-refactor-master-plan/architecture-mainline-iteration-plan.md` for current architecture decisions.
+
 ## Final Goal
 
 This round turns the current NexaChat desktop shell into a clean, maintainable, product-ready AI conversation hub. The work covers the left sidebar, topbar, workbench home, layout system, visual tokens, route-aware module boundaries, tests, desktop shortcut verification, documentation, commit, and push.

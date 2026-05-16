@@ -1,5 +1,19 @@
 # NexaChat Master Build Plan
 
+## Status / Current Relevance
+
+This is a historical master plan from the original planning stage. It remains useful for product intent, local-first data ownership, Provider/Model/Router/Gateway separation, and long-term module relationships.
+
+Current source facts have changed and must take precedence:
+
+- NexaChat is now a chat-first local-first multi-model AI desktop workbench.
+- The current first-level modules are 7 modules: Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings.
+- `/` currently resolves to `/chat/conversations`.
+- Workspace/Dashboard are historical planning concepts, not the current entry point.
+- Future service splits are roadmap targets; `NexaStore` remains the current aggregate service.
+
+Use `docs/build-plans/00-modular-refactor-master-plan/architecture-mainline-iteration-plan.md` as the active architecture mainline.
+
 ## Final Goal
 
 Build NexaChat from scratch as a local-first, multi-model AI conversation hub. The final product should let users manage Providers, Models, local conversations, knowledge context, tools, MCP, Agent runs, a local gateway, data import/export, logs, evaluation, security, and system settings without mixing module responsibilities.
@@ -27,7 +41,7 @@ Build NexaChat from scratch as a local-first, multi-model AI conversation hub. T
 
 Research is documented in `docs/research/competitive-research.md`. The plan learns specific points from Open WebUI, LibreChat, AnythingLLM, LobeChat, Cherry Studio, Chatbox, Jan, Dify, Flowise, Langflow, n8n, OpenAI Agent Builder / AgentKit, sub2api, CCS / cc-switch, Cursor, Continue, VSCode AI tools, Linear, Raycast, and Notion.
 
-## Full Module Map
+## Historical Full Module Map
 
 1. 工作台: dashboard, workspace, recent conversations, model health, gateway state, quick actions.
 2. 对话: local history, assistant center, Prompt Lab, multi-model comparison, artifacts.
@@ -54,7 +68,7 @@ This master plan covers project positioning, module boundaries, relationships, a
 
 ## Key Features
 
-- 8-module product structure.
+- Historical 8-module product structure, now superseded by the current 7-module chat-first mainline.
 - Local SQLite-first chat history.
 - Provider / Model / Router / Gateway separation.
 - Desktop app strategy.
@@ -165,7 +179,7 @@ The UI must be compact, clean, and long-use friendly. It should learn from cc-sw
 
 ## UI Requirements
 
-- First-level navigation has at most 8 modules: 工作台, 对话, 模型, 知识库, 工具与 Agent, 本地网关, 数据配置, 设置与安全.
+- Current first-level navigation uses 7 modules: Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings. Historical Workspace/Dashboard planning should not be restored as the main entry.
 - Chat uses left conversation list, center messages, right context/parameter rail.
 - Provider and gateway configuration use list/detail pages and inline validation, not chained popups.
 - Empty/loading/error states are actionable and close to the source of the state.
@@ -192,7 +206,7 @@ The UI must be compact, clean, and long-use friendly. It should learn from cc-sw
 
 - All required planning files exist.
 - All module plans define goal, scope, relationships, data, UI, security, tests, risks, and acceptance criteria.
-- The 8-module navigation is explicit.
+- The historical 8-module navigation is documented, and the current 7-module chat-first mainline is explicitly identified as the active architecture.
 - The local SQLite history model is explicit.
 - Provider / Model / Router / Gateway separation is explicit.
 - UI design covers layout, components, interactions, state, theme, font, KaiTi / 楷体, window size, and no-extra-popup policy.

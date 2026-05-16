@@ -1,8 +1,19 @@
-# NexaChat Build Execution Plan
+# NexaChat Active Execution Plan
 
 ## Goal
 
-Build the existing NexaChat plans into a runnable local-first Electron + React + TypeScript desktop app. The app must cover the eight planned modules, persist local data in SQLite, implement a real Provider -> Router -> Gateway -> Chat loop, expose a local OpenAI-compatible gateway, and include verification before completion.
+Keep NexaChat aligned with the current chat-first mainline: a local-first, multi-model AI desktop workbench with 7 real first-level modules, local SQLite persistence, a Provider -> Model -> Gateway -> Chat path, a local OpenAI-compatible Gateway, and honest capability boundaries.
+
+Current architecture facts:
+
+- The real first-level modules are Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings.
+- `/` currently resolves to `/chat/conversations`.
+- Workspace and Dashboard are historical UI/planning contexts, not the current product entry point.
+- Simple home is a later target, not a completed capability.
+- Ordinary mode should follow user tasks; advanced mode should reveal technical details without creating a second implementation path.
+- Gateway is an independent core module.
+- Agent / Tools / MCP are experimental until real execution, protocol hardening, sandboxing, approval, and audit boundaries are complete.
+- `NexaStore` is still the centralized aggregate service. Service splitting is a target route, not the current source fact.
 
 ## Scope Source
 
@@ -21,11 +32,13 @@ Build the existing NexaChat plans into a runnable local-first Electron + React +
 - `docs/architecture/*.md`
 - `docs/testing/acceptance-criteria.md`
 
+Historical context note: the original build plans above describe an earlier 8-module Workspace/Dashboard-first direction. They are retained as history and planning background, but current architecture decisions should follow `docs/build-plans/00-modular-refactor-master-plan/architecture-mainline-iteration-plan.md` and this file.
+
 ## Parallel Agent Requirement
 
 - Agent A: Chat / Provider / Model / Router / Gateway audit.
 - Agent B: Knowledge / Tools / MCP / Agent / Data Config audit.
-- Agent C: UI / Dashboard / Logs / Settings / Acceptance audit.
+- Agent C: UI / historical Dashboard context / Logs / Settings / Acceptance audit.
 
 At least three agents were launched concurrently before implementation work continued.
 
@@ -40,6 +53,7 @@ At least three agents were launched concurrently before implementation work cont
 
 ## Current Status
 
+- Phase 0 documentation fact cleanup: complete on 2026-05-16. This phase modified documentation only and did not change business source, routes, UI, database, tests, or package configuration.
 - Full App Round 0 health check and authority inventory: complete.
 - Full App Round 1 architecture boundary reorganization: complete as implementation, verification, commit, and push.
 - Full App Round 2 navigation and module information architecture: complete as implementation, verification, commit, and push.
@@ -70,7 +84,7 @@ At least three agents were launched concurrently before implementation work cont
 ## Implementation Summary
 
 - Initialized Electron + React + TypeScript + Vite.
-- Implemented shared navigation metadata for exactly eight modules.
+- Implemented shared navigation metadata. Current source facts have since moved to exactly 7 first-level modules: Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings.
 - Implemented SQLite schema and main-process store for core local data.
 - Implemented Provider, Model, Router, Chat, request log, usage, audit, gateway key, Knowledge file, MCP registry, Agent definition, snapshot, diagnostics, and UI preferences actions.
 - Implemented safe preload IPC bridge.
@@ -84,6 +98,23 @@ At least three agents were launched concurrently before implementation work cont
 - Completed Iteration 01 core-flow closure: workspace/default model status, chat route trace, Provider key input and actionable test failures, gateway one-time key display/revoke, knowledge retry/failure states, MCP permission approval, Agent dry-run preview, request/usage/gateway/audit logs, import manifest validation and restore preview.
 - Completed Iteration 01 UI closure: tighter desktop-tool layout, default-model-aware topbar, unified status badges, table long-text handling, earlier right-rail collapse, chat responsive constraints, and 1040 x 680 overflow smoke coverage.
 - Completed Iteration 02 navigation/module decomposition closure: route-aware `/<module>/<tab>` state, controlled second-level tabs, focused tab panels for all eight modules, contextual right rail, shared planned/reserved placeholders, environment-limited parameter template boundary, and all-tab UI smoke coverage.
+
+Historical context note: references above to eight modules, Workspace, Dashboard, or `/workspace` record earlier implementation rounds. They must not be used as current architecture facts. The current root route is `/chat/conversations`, and Workspace/Dashboard are not current first-level modules.
+
+## Current Capability Boundaries
+
+- Knowledge Base currently supports text-like file import, parsing, chunking, lexical embedding, retrieval preview, rebuild/delete, and citations. It does not currently support PDF, Office, OCR, or external vector databases as completed capabilities.
+- Gateway currently exposes `/v1/models`, `/v1/chat/completions`, and `/v1/embeddings`. `/v1/responses` is reserved and returns 501.
+- Tools / Agent / MCP currently support MCP server registration, permissions, agent definitions, dry-run preview, fixture tool execution, approval requests, execution steps, and trace events. They do not provide arbitrary real MCP execution, arbitrary code execution, or a release-grade Agent sandbox.
+- Data, Settings, security, observability, and backup flows are local-first product surfaces; do not overstate signed-installer security or external sandbox guarantees.
+
+## Next Task Direction
+
+1. Phase 1: Chat mainline and simple home design or Chat empty-state implementation.
+2. Phase 2: Provider / Model real invocation chain polish and recovery.
+3. Phase 3: Gateway hardening and external compatibility.
+4. Phase 4: Knowledge Base / RAG expansion beyond the current text-like lexical path.
+5. Phase 5: Tools / Agent / MCP progression from experimental fixture/dry-run flows to real capability after security boundaries are ready.
 
 ## Completion Gates
 
