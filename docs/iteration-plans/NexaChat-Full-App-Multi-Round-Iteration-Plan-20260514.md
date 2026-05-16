@@ -929,7 +929,7 @@ These references guide product and engineering decisions. They are not permissio
   - `git diff --check`: passed with LF/CRLF conversion warnings only.
 - Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` still targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and uses `D:\NexaChat\assets\app-icon.ico,0`.
 - Acceptance result: Passed. Supported text/Markdown content can be imported and indexed, retrieval returns structured citations, chat displays cited context, rebuild/delete keep file and chunk state consistent, and unsupported PDF/Office/OCR/vector behavior is not advertised as implemented.
-- Commit hash: pending until Git commit.
+- Commit hash: `6e48333e81239e404d6a1d27030f9b70a6ef7e96`.
 - Push result: pending until Git push.
 - Remaining issues: None for Round 9. Round 10 owns the unified Agent, MCP, Tool, Workflow execution/run/trace/approval model.
 

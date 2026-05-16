@@ -446,8 +446,8 @@ Desktop shortcut:
 
 Git:
 
-- Round 9 delivery commit hash: pending until commit.
-- Push result: pending until commit and push.
+- Round 9 delivery commit hash: `6e48333e81239e404d6a1d27030f9b70a6ef7e96`.
+- Push result: pending until closeout commit and push.
 
 ## 2026-05-14 UI Shell Redesign
 
