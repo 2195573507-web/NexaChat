@@ -1,8 +1,12 @@
 import type {
   AgentDefinition,
+  ApprovalRequest,
   AuditLog,
   Conversation,
   ConversationExport,
+  ExecutionRun,
+  ExecutionStep,
+  ExecutionTraceEvent,
   GatewayApiKey,
   GatewayLog,
   ImportExportResult,
@@ -19,6 +23,7 @@ import type {
   PromptTemplate,
   Provider,
   RequestLog,
+  ToolDefinition,
   UiPreferences,
   UsageRecord,
   Workspace,
@@ -397,6 +402,94 @@ export function mapAgent(row: Row): AgentDefinition {
     stage: String(row.stage) as AgentDefinition['stage'],
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
+  };
+}
+
+export function mapToolDefinition(row: Row): ToolDefinition {
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    description: String(row.description),
+    kind: String(row.kind) as ToolDefinition['kind'],
+    permissionKey: String(row.permission_key),
+    riskLevel: String(row.risk_level) as ToolDefinition['riskLevel'],
+    requiresApproval: bool(row.requires_approval),
+    enabled: bool(row.enabled),
+    inputSchemaJson: String(row.input_schema_json),
+    outputSchemaJson: String(row.output_schema_json),
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
+  };
+}
+
+export function mapExecutionRun(row: Row): ExecutionRun {
+  return {
+    id: String(row.id),
+    kind: String(row.kind) as ExecutionRun['kind'],
+    status: String(row.status) as ExecutionRun['status'],
+    mode: String(row.mode) as ExecutionRun['mode'],
+    title: String(row.title),
+    agentId: nullableString(row.agent_id),
+    toolId: nullableString(row.tool_id),
+    mcpServerId: nullableString(row.mcp_server_id),
+    workflowId: nullableString(row.workflow_id),
+    inputJson: nullableString(row.input_json),
+    outputJson: nullableString(row.output_json),
+    errorMessage: nullableString(row.error_message),
+    approvalStatus: nullableString(row.approval_status) as ExecutionRun['approvalStatus'],
+    sandboxMode: String(row.sandbox_mode) as ExecutionRun['sandboxMode'],
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
+    completedAt: nullableNumber(row.completed_at),
+  };
+}
+
+export function mapExecutionStep(row: Row): ExecutionStep {
+  return {
+    id: String(row.id),
+    runId: String(row.run_id),
+    parentStepId: nullableString(row.parent_step_id),
+    kind: String(row.kind) as ExecutionStep['kind'],
+    title: String(row.title),
+    status: String(row.status) as ExecutionStep['status'],
+    toolId: nullableString(row.tool_id),
+    mcpServerId: nullableString(row.mcp_server_id),
+    inputJson: nullableString(row.input_json),
+    outputJson: nullableString(row.output_json),
+    errorMessage: nullableString(row.error_message),
+    position: Number(row.position),
+    startedAt: nullableNumber(row.started_at),
+    completedAt: nullableNumber(row.completed_at),
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
+  };
+}
+
+export function mapExecutionTraceEvent(row: Row): ExecutionTraceEvent {
+  return {
+    id: String(row.id),
+    runId: String(row.run_id),
+    stepId: nullableString(row.step_id),
+    eventType: String(row.event_type) as ExecutionTraceEvent['eventType'],
+    message: String(row.message),
+    metadataJson: nullableString(row.metadata_json),
+    createdAt: Number(row.created_at),
+  };
+}
+
+export function mapApprovalRequest(row: Row): ApprovalRequest {
+  return {
+    id: String(row.id),
+    runId: String(row.run_id),
+    stepId: nullableString(row.step_id),
+    status: String(row.status) as ApprovalRequest['status'],
+    requestedAction: String(row.requested_action),
+    riskLevel: String(row.risk_level) as ApprovalRequest['riskLevel'],
+    reason: String(row.reason),
+    decisionReason: nullableString(row.decision_reason),
+    decidedAt: nullableNumber(row.decided_at),
+    createdAt: Number(row.created_at),
+    expiresAt: nullableNumber(row.expires_at),
   };
 }
 

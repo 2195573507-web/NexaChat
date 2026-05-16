@@ -74,6 +74,8 @@ export function registerIpcHandlers(): void {
   );
   handleIpc(IPC_CHANNELS.agentCreate, (name: string, goal: string) => store.createAgent(name, goal));
   handleIpc(IPC_CHANNELS.agentPreviewRun, (agentId: string) => store.previewAgentRun(agentId));
+  handleIpc(IPC_CHANNELS.executionStartRun, (input) => store.startExecutionRun(input));
+  handleIpc(IPC_CHANNELS.executionDecideApproval, (input) => store.decideApproval(input));
   handleIpc(IPC_CHANNELS.dataValidateImportManifest, (manifestText: string) => store.validateImportManifest(manifestText));
   handleIpc(IPC_CHANNELS.dataApplyImportPlan, (resultId: string, options?: ImportPlanApplyOptions) => store.applyImportPlan(resultId, options));
   handleIpc(IPC_CHANNELS.dataRestoreSnapshot, (snapshotId: string, options?: RestoreSnapshotOptions) => store.restoreSnapshot(snapshotId, options));

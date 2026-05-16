@@ -139,6 +139,11 @@ export function statusLabel(status: string, t: Translate): string {
   if (status === 'never') return t('common.never');
   if (status === 'ready') return t('stage.ready');
   if (status === 'completed') return t('common.completed');
+  if (status === 'planned') return t('stage.planned');
+  if (status === 'running') return t('common.running');
+  if (status === 'waiting_approval') return t('tools.execution.step.approval');
+  if (status === 'pending') return t('common.queued');
+  if (status === 'approved') return t('tools.approve');
   if (status === 'started') return t('common.started');
   if (status === 'streaming') return t('common.streaming');
   if (status === 'cancelled') return t('common.cancelled');

@@ -87,6 +87,11 @@ function runAdditiveMigrations(db: DatabaseSync): void {
   addColumnIfMissing(db, 'config_snapshots', 'rollback_snapshot_id', 'TEXT');
   addColumnIfMissing(db, 'config_snapshots', 'source', 'TEXT');
   addColumnIfMissing(db, 'config_snapshots', 'applied_entity_ids_json', 'TEXT');
+  addColumnIfMissing(db, 'tools', 'kind', "TEXT NOT NULL DEFAULT 'fixture'");
+  addColumnIfMissing(db, 'tools', 'permission_key', "TEXT NOT NULL DEFAULT 'tool:read'");
+  addColumnIfMissing(db, 'tools', 'risk_level', "TEXT NOT NULL DEFAULT 'read'");
+  addColumnIfMissing(db, 'tools', 'requires_approval', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfMissing(db, 'tools', 'enabled', 'INTEGER NOT NULL DEFAULT 1');
 }
 
 function addColumnIfMissing(db: DatabaseSync, table: string, column: string, definition: string): void {

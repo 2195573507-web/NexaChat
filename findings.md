@@ -83,6 +83,13 @@
 - Knowledge snapshots must expose only active files and active chunks. Browser mock now filters deleted knowledge files to match Store behavior, which fixed the UI smoke delete regression.
 - Round 10 should consume knowledge through structured files/chunks/citations and should not present full vector RAG, OCR, or Office parsing as executable Agent capabilities.
 
+## Full App Round 10 Findings
+
+- The old Agent dry-run path was stored under `config_snapshots(cleanup-preview)`, which mixed execution preview with import/export/snapshot records and could not support step state, approval, trace, or recovery.
+- `src/shared/executionRuntime.ts` is now the authority for run kinds, statuses, trace event names, fixture tool IDs, and approval normalization.
+- MCP grant is still only permission state. It does not imply external MCP tool execution, which remains blocked until Round 11/permissions and later MCP protocol hardening.
+- Workflow is represented as a run kind and shared UI boundary, not a fake canvas. Building a canvas before execution security would recreate shell debt.
+
 ## Initial Repository State
 
 - Repository root: `D:\NexaChat`.

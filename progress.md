@@ -377,3 +377,31 @@
 - Committed Round 9 delivery as `6e48333e81239e404d6a1d27030f9b70a6ef7e96` and backfilled the hash into the blueprint, matrix, progress, project progress, and closure document.
 - Committed Round 9 closeout as `862caf0574fc8c485e323dba0197953a12a12752`, pushed it to `origin/main`, and confirmed the remote ref at the same hash.
 - Committed Round 9 remote confirmation as `ed7e09ba7227908143fb4d723cbb90403ac70bab`, pushed it to `origin/main`, and confirmed the remote ref at the same hash.
+
+## 2026-05-16 Full App Round 10 Execution
+
+- Reconfirmed real project root with `git rev-parse --show-toplevel`: `D:/NexaChat`.
+- Continued the active `/goal` at Round 10 after Round 0-9 completion.
+- Used parallel lanes:
+  - Lane A: execution runtime authority, schema/migration, Store run/step/trace/approval service.
+  - Lane B: Tools Run Center UI, Agent preview migration, browser mock parity, i18n, and UI smoke behavior.
+  - Lane C: tests, build, Electron smoke, desktop shortcut readback, docs, and Git closeout.
+- Added `src/shared/executionRuntime.ts` for run statuses, step statuses, trace event names, run kinds, fixture tool IDs, and input/approval normalization.
+- Added `ToolDefinition`, `ExecutionRun`, `ExecutionStep`, `ExecutionTraceEvent`, `ApprovalRequest`, `ExecutionStartInput`, and `ApprovalDecisionInput`.
+- Added `tools`, `execution_runs`, `execution_steps`, `execution_trace_events`, and `approval_requests` schema/migration support.
+- Replaced Agent dry-run's production path from `config_snapshots(cleanup-preview)` to `execution_runs`.
+- Added safe read-only status fixture and approval-gated echo fixture.
+- Added `startExecutionRun` and `decideApproval` through shared API, IPC, preload, and main process.
+- Updated Tools Run Center UI to show runs, steps, pending approvals, approve/deny actions, and trace events.
+- Updated browser mock parity for execution runs, trace events, and approval decisions.
+- Added `tests/execution-runtime.test.ts` and extended IPC/app/UI smoke tests.
+- Ran `npm.cmd run typecheck`: passed.
+- Ran `npm.cmd run test -- tests/execution-runtime.test.ts tests/ipc-contract.test.ts tests/i18n-authority.test.ts`: passed, 3 files / 8 tests.
+- Ran `npm.cmd run test:ui-smoke`: passed, 13 Playwright tests.
+- Ran `npm.cmd run test`: passed, 12 files / 37 tests.
+- Ran `npm.cmd run build`: passed.
+- Ran `npm.cmd run verify`: passed.
+- Ran `npm.cmd run test:electron-smoke`: passed.
+- Ran `git diff --check`: passed with LF/CRLF conversion warnings only.
+- Checked `C:\Users\至亲\Desktop\NexaChat.lnk`: target, arguments, working directory, and icon still point to the current local Electron launch entry.
+- Updated the authoritative blueprint Round 10 execution record, `PROJECT_PROGRESS.md`, matrix, `docs/implementation/round-10-execution-model-closure.md`, `task_plan.md`, and `findings.md`; commit hash is pending until Git commit.

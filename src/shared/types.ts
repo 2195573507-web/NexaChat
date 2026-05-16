@@ -572,6 +572,120 @@ export interface AgentDefinition {
   updatedAt: number;
 }
 
+export type ToolKind = 'fixture' | 'mcp' | 'workflow';
+export type ToolRiskLevel = 'read' | 'write' | 'dangerous';
+export type ExecutionRunKind = 'agent' | 'tool' | 'mcp-tool' | 'workflow';
+export type ExecutionRunStatus = 'planned' | 'running' | 'waiting_approval' | 'completed' | 'failed' | 'cancelled';
+export type ExecutionStepStatus = 'pending' | 'running' | 'waiting_approval' | 'completed' | 'failed' | 'cancelled';
+export type ExecutionMode = 'preview' | 'execute';
+export type ExecutionTraceEventType =
+  | 'run_planned'
+  | 'permission_checked'
+  | 'approval_requested'
+  | 'approval_decided'
+  | 'step_started'
+  | 'tool_called'
+  | 'step_completed'
+  | 'step_failed'
+  | 'run_completed'
+  | 'run_failed'
+  | 'run_cancelled';
+export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired';
+
+export interface ToolDefinition {
+  id: string;
+  name: string;
+  description: string;
+  kind: ToolKind;
+  permissionKey: string;
+  riskLevel: ToolRiskLevel;
+  requiresApproval: boolean;
+  enabled: boolean;
+  inputSchemaJson: string;
+  outputSchemaJson: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ExecutionRun {
+  id: string;
+  kind: ExecutionRunKind;
+  status: ExecutionRunStatus;
+  mode: ExecutionMode;
+  title: string;
+  agentId: string | null;
+  toolId: string | null;
+  mcpServerId: string | null;
+  workflowId: string | null;
+  inputJson: string | null;
+  outputJson: string | null;
+  errorMessage: string | null;
+  approvalStatus: ApprovalStatus | null;
+  sandboxMode: 'read-only' | 'fixture-only' | 'blocked';
+  createdAt: number;
+  updatedAt: number;
+  completedAt: number | null;
+}
+
+export interface ExecutionStep {
+  id: string;
+  runId: string;
+  parentStepId: string | null;
+  kind: 'plan' | 'permission' | 'approval' | 'tool' | 'workflow-node' | 'recovery';
+  title: string;
+  status: ExecutionStepStatus;
+  toolId: string | null;
+  mcpServerId: string | null;
+  inputJson: string | null;
+  outputJson: string | null;
+  errorMessage: string | null;
+  position: number;
+  startedAt: number | null;
+  completedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ExecutionTraceEvent {
+  id: string;
+  runId: string;
+  stepId: string | null;
+  eventType: ExecutionTraceEventType;
+  message: string;
+  metadataJson: string | null;
+  createdAt: number;
+}
+
+export interface ApprovalRequest {
+  id: string;
+  runId: string;
+  stepId: string | null;
+  status: ApprovalStatus;
+  requestedAction: string;
+  riskLevel: ToolRiskLevel;
+  reason: string;
+  decisionReason: string | null;
+  decidedAt: number | null;
+  createdAt: number;
+  expiresAt: number | null;
+}
+
+export interface ExecutionStartInput {
+  kind: ExecutionRunKind;
+  mode?: ExecutionMode;
+  agentId?: string;
+  toolId?: string;
+  mcpServerId?: string;
+  workflowId?: string;
+  inputJson?: string;
+}
+
+export interface ApprovalDecisionInput {
+  approvalId: string;
+  decision: 'approved' | 'denied';
+  reason?: string | null;
+}
+
 export interface ImportExportResult {
   id: string;
   action: 'import' | 'export' | 'snapshot' | 'cleanup-preview';
@@ -641,6 +755,11 @@ export interface AppSnapshot {
   knowledgeCitations: KnowledgeCitation[];
   mcpServers: McpServer[];
   agents: AgentDefinition[];
+  tools: ToolDefinition[];
+  executionRuns: ExecutionRun[];
+  executionSteps: ExecutionStep[];
+  executionTraceEvents: ExecutionTraceEvent[];
+  approvalRequests: ApprovalRequest[];
   importExportResults: ImportExportResult[];
   auditLogs: AuditLog[];
   uiPreferences: UiPreferences;

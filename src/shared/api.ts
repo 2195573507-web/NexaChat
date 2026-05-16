@@ -1,5 +1,6 @@
 import type {
   AgentDefinition,
+  ApprovalDecisionInput,
   AppSnapshot,
   ChatResponse,
   CompareModelsInput,
@@ -7,6 +8,8 @@ import type {
   Conversation,
   ConversationExport,
   ExportConversationInput,
+  ExecutionRun,
+  ExecutionStartInput,
   GatewayApiKey,
   GatewayKeyCreated,
   GatewayKeyCreateInput,
@@ -64,7 +67,9 @@ export interface AppApi {
   createMcpServer(name: string, transport: McpServer['transport'], commandOrUrl: string): Promise<McpServer>;
   updateMcpPermission(serverId: string, permissionState: McpServer['permissionState']): Promise<McpServer>;
   createAgent(name: string, goal: string): Promise<AgentDefinition>;
-  previewAgentRun(agentId: string): Promise<ImportExportResult>;
+  previewAgentRun(agentId: string): Promise<ExecutionRun>;
+  startExecutionRun(input: ExecutionStartInput): Promise<ExecutionRun>;
+  decideApproval(input: ApprovalDecisionInput): Promise<ExecutionRun>;
   validateImportManifest(manifestText: string): Promise<ImportExportResult>;
   applyImportPlan(resultId: string, options?: ImportPlanApplyOptions): Promise<ImportExportResult>;
   restoreSnapshot(snapshotId: string, options?: RestoreSnapshotOptions): Promise<ImportExportResult>;
@@ -101,6 +106,8 @@ export const APP_API_METHODS = [
   'updateMcpPermission',
   'createAgent',
   'previewAgentRun',
+  'startExecutionRun',
+  'decideApproval',
   'validateImportManifest',
   'applyImportPlan',
   'restoreSnapshot',

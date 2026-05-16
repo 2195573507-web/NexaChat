@@ -276,6 +276,24 @@ test('knowledge import retrieval rebuild delete and chat citations use one RAG c
   await expect(page.locator('main [data-tab="files"]').getByRole('cell', { name: 'round-09-smoke.md' })).toHaveCount(0);
 });
 
+test('tools run center uses unified execution trace approval chain', async ({ page }) => {
+  const tools = navModules.find((module) => module.id === 'tools')!;
+  await page.goto('/tools/runs');
+  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'tools.execution.runStatusRead')) }).click();
+  await expect(page.locator('main [data-tab="runs"]').getByRole('cell', { name: /Agent|工具|Tool|运行|run/i }).first()).toBeVisible();
+  await expect(page.locator('main [data-tab="runs"]').getByText(translate('zh-CN', 'tools.execution.trace')).first()).toBeVisible();
+
+  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'tools.execution.runEchoApproval')) }).click();
+  await expect(page.locator('main [data-tab="runs"]').getByText(translate('zh-CN', 'tools.execution.approvals')).first()).toBeVisible();
+  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'tools.approve')) }).first().click();
+  await expect(page.locator('main [data-tab="runs"]').getByText(translate('zh-CN', 'tools.execution.trace')).first()).toBeVisible();
+
+  await openFeature(page, tools, tools.tabs.find((tab) => tab.id === 'agents')!);
+  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'tools.dryRun.generate')) }).first().click();
+  await openFeature(page, tools, tools.tabs.find((tab) => tab.id === 'runs')!);
+  await expect(page.locator('main [data-tab="runs"]').getByText(/Agent/).first()).toBeVisible();
+});
+
 test('theme and language preferences can change without breaking the shell', async ({ page }) => {
   await page.goto('/settings/preferences');
 

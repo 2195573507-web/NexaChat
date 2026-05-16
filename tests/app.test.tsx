@@ -114,6 +114,7 @@ describe('IPC authority', () => {
     expect(() => assertIpcPayload(IPC_CHANNELS.knowledgeCreateFile, [{ name: 'name.md', type: 'text/markdown', content: 'hello' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.knowledgeCreateFile, ['name.md', 'text/markdown', 1])).toThrow(/Invalid IPC payload/);
     expect(() => assertIpcPayload(IPC_CHANNELS.knowledgeDeleteFile, [{ fileId: 'file_1' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.executionStartRun, [{ kind: 'tool', toolId: 'nexachat.status.read' }])).not.toThrow();
   });
 });
 

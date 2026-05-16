@@ -1,5 +1,7 @@
 import type {
   AgentDefinition,
+  ApprovalDecisionInput,
+  ApprovalRequest,
   AppSnapshot,
   AuditLog,
   CancelMessageInput,
@@ -9,6 +11,10 @@ import type {
   ContextStrategy,
   Conversation,
   ConversationExport,
+  ExecutionRun,
+  ExecutionStartInput,
+  ExecutionStep,
+  ExecutionTraceEvent,
   ExportConversationInput,
   GatewayApiKey,
   GatewayKeyCreated,
@@ -42,10 +48,12 @@ import type {
   UiPreferences,
   UsageRecord,
   Workspace,
+  ToolDefinition,
 } from '../shared/types';
 import type { AppApi } from '../shared/api';
 import { translate } from '../shared/i18n';
 import { normalizeThemeMode } from '../shared/theme';
+import { EXECUTION_TOOL_IDS, TOOL_FIXTURES, normalizeApprovalDecision, normalizeExecutionStartInput } from '../shared/executionRuntime';
 import {
   KNOWLEDGE_RUNTIME_POLICY,
   chunkKnowledgeText,
@@ -79,6 +87,11 @@ interface MockState {
   knowledgeCitations: KnowledgeCitation[];
   mcpServers: McpServer[];
   agents: AgentDefinition[];
+  tools: ToolDefinition[];
+  executionRuns: ExecutionRun[];
+  executionSteps: ExecutionStep[];
+  executionTraceEvents: ExecutionTraceEvent[];
+  approvalRequests: ApprovalRequest[];
   importExportResults: ImportExportResult[];
   auditLogs: AuditLog[];
   uiPreferences: UiPreferences;
@@ -355,6 +368,11 @@ function createSeedState(): MockState {
         updatedAt: timestamp,
       },
     ],
+    tools: TOOL_FIXTURES.map((tool) => ({ ...tool, createdAt: timestamp, updatedAt: timestamp })),
+    executionRuns: [],
+    executionSteps: [],
+    executionTraceEvents: [],
+    approvalRequests: [],
     importExportResults: [],
     auditLogs: [createAuditLog('mock.init', 'workspace', workspaceId, { runtime: 'browser' })],
     uiPreferences: {
@@ -481,6 +499,11 @@ function buildSnapshot(state: MockState): AppSnapshot {
     knowledgeCitations: activeKnowledgeCitations,
     mcpServers: state.mcpServers,
     agents: state.agents,
+    tools: state.tools,
+    executionRuns: state.executionRuns,
+    executionSteps: state.executionSteps,
+    executionTraceEvents: state.executionTraceEvents,
+    approvalRequests: state.approvalRequests,
     importExportResults: state.importExportResults,
     auditLogs: state.auditLogs,
     uiPreferences: state.uiPreferences,
@@ -562,6 +585,126 @@ function retrieveKnowledge(state: MockState, input: KnowledgeRetrievalInput): Kn
   state.knowledgeRetrievals.unshift(trace);
   state.knowledgeCitations.unshift(...citations);
   return { trace, citations };
+}
+
+function addExecutionTrace(
+  state: MockState,
+  runId: string,
+  stepId: string | null,
+  eventType: ExecutionTraceEvent['eventType'],
+  message: string,
+  metadata?: unknown,
+): void {
+  state.executionTraceEvents.unshift({
+    id: createId('trace'),
+    runId,
+    stepId,
+    eventType,
+    message,
+    metadataJson: metadata ? JSON.stringify(metadata) : null,
+    createdAt: now(),
+  });
+}
+
+function createExecutionRun(state: MockState, input: ExecutionStartInput): ExecutionRun {
+  const normalized = normalizeExecutionStartInput(input);
+  const timestamp = now();
+  const agent = normalized.agentId ? findById(state.agents, normalized.agentId, 'Agent') : null;
+  const tool = findById(state.tools, normalized.toolId ?? EXECUTION_TOOL_IDS.statusRead, 'Tool');
+  const requiresApproval = normalized.mode === 'execute' && tool.requiresApproval;
+  const run: ExecutionRun = {
+    id: createId('run'),
+    kind: normalized.kind,
+    status: requiresApproval ? 'waiting_approval' : 'completed',
+    mode: normalized.mode ?? 'preview',
+    title: agent ? t('tools.execution.title.agent', { agent: agent.name }) : t('tools.execution.title.tool', { tool: tool.name }),
+    agentId: agent?.id ?? null,
+    toolId: tool.id,
+    mcpServerId: normalized.mcpServerId ?? null,
+    workflowId: normalized.workflowId ?? null,
+    inputJson: normalized.inputJson ?? '{}',
+    outputJson: requiresApproval ? null : JSON.stringify({ summary: t('tools.execution.status.summary', { models: state.models.length, knowledge: state.knowledgeFiles.filter((file) => !file.deletedAt).length, gateway: state.gatewayStatus.running ? 'running' : 'stopped' }) }),
+    errorMessage: null,
+    approvalStatus: requiresApproval ? 'pending' : null,
+    sandboxMode: tool.riskLevel === 'read' ? 'read-only' : 'fixture-only',
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    completedAt: requiresApproval ? null : timestamp,
+  };
+  const planStep: ExecutionStep = {
+    id: createId('step'),
+    runId: run.id,
+    parentStepId: null,
+    kind: 'plan',
+    title: agent ? t('tools.agent.dryRun.step.read') : t('tools.execution.step.plan'),
+    status: 'completed',
+    toolId: null,
+    mcpServerId: null,
+    inputJson: null,
+    outputJson: null,
+    errorMessage: null,
+    position: 1,
+    startedAt: timestamp,
+    completedAt: timestamp,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+  const permissionStep: ExecutionStep = {
+    ...planStep,
+    id: createId('step'),
+    kind: 'permission',
+    title: t('tools.execution.step.permission'),
+    toolId: tool.id,
+    position: 2,
+  };
+  state.executionRuns.unshift(run);
+  state.executionSteps.unshift(permissionStep, planStep);
+  addExecutionTrace(state, run.id, null, 'run_planned', run.title, { kind: run.kind, mode: run.mode });
+  addExecutionTrace(state, run.id, permissionStep.id, 'permission_checked', t('tools.execution.trace.permissionChecked'), { toolId: tool.id });
+  if (requiresApproval) {
+    const approvalStep: ExecutionStep = {
+      ...planStep,
+      id: createId('step'),
+      kind: 'approval',
+      title: t('tools.execution.step.approval'),
+      status: 'waiting_approval',
+      toolId: tool.id,
+      position: 3,
+      startedAt: null,
+      completedAt: null,
+    };
+    const approval: ApprovalRequest = {
+      id: createId('approval'),
+      runId: run.id,
+      stepId: approvalStep.id,
+      status: 'pending',
+      requestedAction: tool.name,
+      riskLevel: tool.riskLevel,
+      reason: t('tools.execution.approval.reason', { tool: tool.name }),
+      decisionReason: null,
+      decidedAt: null,
+      createdAt: timestamp,
+      expiresAt: null,
+    };
+    state.executionSteps.unshift(approvalStep);
+    state.approvalRequests.unshift(approval);
+    addExecutionTrace(state, run.id, approvalStep.id, 'approval_requested', t('tools.execution.trace.approvalRequested'), { approvalId: approval.id });
+  } else {
+    const toolStep: ExecutionStep = {
+      ...planStep,
+      id: createId('step'),
+      kind: 'tool',
+      title: tool.name,
+      toolId: tool.id,
+      outputJson: run.outputJson,
+      position: 3,
+    };
+    state.executionSteps.unshift(toolStep);
+    addExecutionTrace(state, run.id, toolStep.id, 'tool_called', t('tools.execution.trace.toolCalled'), { toolId: tool.id });
+    addExecutionTrace(state, run.id, toolStep.id, 'step_completed', t('tools.execution.trace.stepCompleted'), { outputJson: run.outputJson });
+    addExecutionTrace(state, run.id, null, 'run_completed', t('tools.execution.trace.runCompleted'), { runId: run.id });
+  }
+  return run;
 }
 
 export function createMockApi(): AppApi {
@@ -1261,9 +1404,44 @@ export function createMockApi(): AppApi {
 
     async previewAgentRun(agentId: string) {
       const agent = findById(state.agents, agentId, 'Agent');
-      const result = createResult('cleanup-preview', t('tools.agent.dryRun.summary', { agent: agent.name }), true);
-      pushAudit('agent.previewRun', 'agent', agent.id, { resultId: result.id });
-      return clone(result);
+      const run = createExecutionRun(state, { kind: 'agent', mode: 'preview', agentId: agent.id, toolId: EXECUTION_TOOL_IDS.statusRead });
+      pushAudit('agent.previewRun', 'agent', agent.id, { runId: run.id });
+      return clone(run);
+    },
+
+    async startExecutionRun(input: ExecutionStartInput) {
+      const run = createExecutionRun(state, input);
+      pushAudit('execution.startRun', 'executionRun', run.id, { kind: run.kind, mode: run.mode });
+      return clone(run);
+    },
+
+    async decideApproval(input: ApprovalDecisionInput) {
+      const decision = normalizeApprovalDecision(input);
+      const approval = findById(state.approvalRequests, decision.approvalId, 'Approval');
+      const run = findById(state.executionRuns, approval.runId, 'Execution run');
+      const timestamp = now();
+      const decisionReason = decision.reason ?? null;
+      approval.status = decision.decision;
+      approval.decisionReason = decisionReason;
+      approval.decidedAt = timestamp;
+      run.approvalStatus = decision.decision;
+      run.status = decision.decision === 'approved' ? 'completed' : 'cancelled';
+      run.updatedAt = timestamp;
+      run.completedAt = timestamp;
+      run.outputJson = decision.decision === 'approved' ? JSON.stringify({ echo: t('tools.execution.echo.default') }) : null;
+      run.errorMessage = decision.decision === 'denied' ? (decisionReason ?? t('tools.execution.error.denied')) : null;
+      state.executionSteps
+        .filter((step) => step.id === approval.stepId)
+        .forEach((step) => {
+          step.status = decision.decision === 'approved' ? 'completed' : 'cancelled';
+          step.outputJson = JSON.stringify({ decision: decision.decision });
+          step.completedAt = timestamp;
+          step.updatedAt = timestamp;
+        });
+      addExecutionTrace(state, run.id, approval.stepId, 'approval_decided', t('tools.execution.trace.approvalDecided'), decision);
+      addExecutionTrace(state, run.id, null, decision.decision === 'approved' ? 'run_completed' : 'run_cancelled', decision.decision === 'approved' ? t('tools.execution.trace.runCompleted') : t('tools.execution.trace.runCancelled'), { runId: run.id });
+      pushAudit(`execution.approval.${decision.decision}`, 'executionRun', run.id, { approvalId: approval.id });
+      return clone(run);
     },
 
     async validateImportManifest(manifestText: string) {

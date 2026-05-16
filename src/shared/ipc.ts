@@ -1,6 +1,8 @@
 import type {
   CancelMessageInput,
+  ApprovalDecisionInput,
   CompareModelsInput,
+  ExecutionStartInput,
   ExportConversationInput,
   GatewayKeyCreateInput,
   GatewayKeyRotateInput,
@@ -48,6 +50,8 @@ export const IPC_CHANNELS = {
   mcpUpdatePermission: 'mcp:updatePermission',
   agentCreate: 'agent:create',
   agentPreviewRun: 'agent:previewRun',
+  executionStartRun: 'execution:startRun',
+  executionDecideApproval: 'execution:decideApproval',
   dataValidateImportManifest: 'data:validateImportManifest',
   dataApplyImportPlan: 'data:applyImportPlan',
   dataRestoreSnapshot: 'data:restoreSnapshot',
@@ -93,6 +97,8 @@ export type IpcInvokeArgs = {
   [IPC_CHANNELS.mcpUpdatePermission]: [string, McpServer['permissionState']];
   [IPC_CHANNELS.agentCreate]: [string, string];
   [IPC_CHANNELS.agentPreviewRun]: [string];
+  [IPC_CHANNELS.executionStartRun]: [ExecutionStartInput];
+  [IPC_CHANNELS.executionDecideApproval]: [ApprovalDecisionInput];
   [IPC_CHANNELS.dataValidateImportManifest]: [string];
   [IPC_CHANNELS.dataApplyImportPlan]: [string, ImportPlanApplyOptions?];
   [IPC_CHANNELS.dataRestoreSnapshot]: [string, RestoreSnapshotOptions?];
@@ -146,6 +152,8 @@ const ipcPayloadArity: Record<IpcChannel, { min: number; max: number }> = {
   [IPC_CHANNELS.mcpUpdatePermission]: { min: 2, max: 2 },
   [IPC_CHANNELS.agentCreate]: { min: 2, max: 2 },
   [IPC_CHANNELS.agentPreviewRun]: { min: 1, max: 1 },
+  [IPC_CHANNELS.executionStartRun]: { min: 1, max: 1 },
+  [IPC_CHANNELS.executionDecideApproval]: { min: 1, max: 1 },
   [IPC_CHANNELS.dataValidateImportManifest]: { min: 1, max: 1 },
   [IPC_CHANNELS.dataApplyImportPlan]: { min: 1, max: 2 },
   [IPC_CHANNELS.dataRestoreSnapshot]: { min: 1, max: 2 },

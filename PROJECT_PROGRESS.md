@@ -451,6 +451,52 @@ Git:
 - Round 9 remote-confirmation commit hash: `ed7e09ba7227908143fb4d723cbb90403ac70bab`.
 - Push result: delivery, closeout, and remote-confirmation commits pushed; `origin/main` confirmed at `ed7e09ba7227908143fb4d723cbb90403ac70bab`.
 
+## 2026-05-16 Full App Round 10 Agent, MCP, Tools And Workflow
+
+Round 10 of the authoritative full-app blueprint is implemented and verified. It replaces the old Agent dry-run snapshot path with one execution model for Agent preview, safe tool fixtures, future MCP tool calls, and Workflow boundaries.
+
+Parallel execution lanes:
+
+- Lane A: execution runtime authority, schema/migration, Store run/step/trace/approval service.
+- Lane B: Tools Run Center UI, Agent preview migration, browser mock parity, i18n, and UI smoke behavior.
+- Lane C: tests, build, Electron smoke, desktop shortcut readback, docs, and Git closeout.
+
+Key changes:
+
+- Added `src/shared/executionRuntime.ts` for run kinds, statuses, trace event names, fixture tool IDs, and input normalization.
+- Added shared types, mappers, snapshot arrays, API/IPC/preload/main handlers for tools, runs, steps, trace events, approvals, run start, and approval decision.
+- Added schema/migration support for `tools`, `execution_runs`, `execution_steps`, `execution_trace_events`, and `approval_requests`.
+- Migrated Agent preview from `config_snapshots(cleanup-preview)` into `execution_runs`.
+- Added a read-only status fixture and an approval-gated echo fixture. No dangerous system command or external MCP call is executed.
+- Updated Tools Run Center to show runs, steps, pending approvals, approve/deny actions, and trace events.
+- Updated browser mock parity and UI smoke coverage.
+- Added `tests/execution-runtime.test.ts`.
+- Added `docs/implementation/round-10-execution-model-closure.md`.
+
+Verification completed:
+
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test -- tests/execution-runtime.test.ts tests/ipc-contract.test.ts tests/i18n-authority.test.ts`: passed, 3 files / 8 tests.
+- `npm.cmd run test`: passed, 12 files / 37 tests.
+- `npm.cmd run test:ui-smoke`: passed, 13 Playwright tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run verify`: passed, including typecheck, full unit test suite, and build.
+- `npm.cmd run test:electron-smoke`: passed; Electron shell rendered.
+- `git diff --check`: passed with LF/CRLF conversion warnings only.
+
+Desktop shortcut:
+
+- `C:\Users\至亲\Desktop\NexaChat.lnk` exists and still points to `D:\NexaChat\node_modules\electron\dist\electron.exe`.
+- Arguments remain `"D:\NexaChat"`.
+- Working directory remains `D:\NexaChat`.
+- Icon remains `D:\NexaChat\assets\app-icon.ico,0`.
+- No shortcut was modified in Round 10.
+
+Git:
+
+- Round 10 delivery commit hash: pending until commit.
+- Push result: pending until commit and push.
+
 ## 2026-05-14 UI Shell Redesign
 
 This round rebuilt the visible desktop shell, sidebar hierarchy, topbar, workbench home, and visual system so NexaChat reads as a formal compact desktop tool instead of a crowded prototype/debug panel.

@@ -428,6 +428,11 @@ CREATE TABLE IF NOT EXISTS tools (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'fixture',
+  permission_key TEXT NOT NULL DEFAULT 'tool:read',
+  risk_level TEXT NOT NULL DEFAULT 'read',
+  requires_approval INTEGER NOT NULL DEFAULT 0,
+  enabled INTEGER NOT NULL DEFAULT 1,
   input_schema_json TEXT NOT NULL,
   output_schema_json TEXT NOT NULL,
   permission_state TEXT NOT NULL,
@@ -457,6 +462,74 @@ CREATE TABLE IF NOT EXISTS agents (
   stage TEXT NOT NULL,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS execution_runs (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  status TEXT NOT NULL,
+  mode TEXT NOT NULL,
+  title TEXT NOT NULL,
+  agent_id TEXT,
+  tool_id TEXT,
+  mcp_server_id TEXT,
+  workflow_id TEXT,
+  input_json TEXT,
+  output_json TEXT,
+  error_message TEXT,
+  approval_status TEXT,
+  sandbox_mode TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  completed_at INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS execution_steps (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  parent_step_id TEXT,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  status TEXT NOT NULL,
+  tool_id TEXT,
+  mcp_server_id TEXT,
+  input_json TEXT,
+  output_json TEXT,
+  error_message TEXT,
+  position INTEGER NOT NULL,
+  started_at INTEGER,
+  completed_at INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY(run_id) REFERENCES execution_runs(id)
+);
+
+CREATE TABLE IF NOT EXISTS execution_trace_events (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  step_id TEXT,
+  event_type TEXT NOT NULL,
+  message TEXT NOT NULL,
+  metadata_json TEXT,
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY(run_id) REFERENCES execution_runs(id),
+  FOREIGN KEY(step_id) REFERENCES execution_steps(id)
+);
+
+CREATE TABLE IF NOT EXISTS approval_requests (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  step_id TEXT,
+  status TEXT NOT NULL,
+  requested_action TEXT NOT NULL,
+  risk_level TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  decision_reason TEXT,
+  decided_at INTEGER,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER,
+  FOREIGN KEY(run_id) REFERENCES execution_runs(id),
+  FOREIGN KEY(step_id) REFERENCES execution_steps(id)
 );
 
 CREATE TABLE IF NOT EXISTS config_snapshots (

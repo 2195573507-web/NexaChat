@@ -3,10 +3,14 @@ import { safeStorage } from 'electron';
 import type { DatabaseSync } from 'node:sqlite';
 import { getDatabase } from '../database/connection.js';
 import {
+  mapApprovalRequest,
   mapAgent,
   mapAuditLog,
   mapConversation,
   mapConversationExport,
+  mapExecutionRun,
+  mapExecutionStep,
+  mapExecutionTraceEvent,
   mapGatewayKey,
   mapGatewayLog,
   mapImportExportResult,
@@ -22,6 +26,7 @@ import {
   mapPromptTemplate,
   mapProvider,
   mapRequestLog,
+  mapToolDefinition,
   mapUiPreferences,
   mapUsageRecord,
   mapWorkspace,
@@ -65,9 +70,17 @@ import {
   type GatewayErrorCode,
   type GatewayScope,
 } from '../../shared/gatewayRuntime.js';
+import {
+  EXECUTION_TOOL_IDS,
+  TOOL_FIXTURES,
+  normalizeApprovalDecision,
+  normalizeExecutionStartInput,
+} from '../../shared/executionRuntime.js';
 import type {
   AgentDefinition,
   AppSnapshot,
+  ApprovalDecisionInput,
+  ApprovalRequest,
   AuditLog,
   CancelMessageInput,
   ChatResponse,
@@ -76,6 +89,10 @@ import type {
   Conversation,
   ConversationExport,
   DashboardSummary,
+  ExecutionRun,
+  ExecutionStartInput,
+  ExecutionStep,
+  ExecutionTraceEvent,
   ExportConversationInput,
   GatewayApiKey,
   GatewayImportPlan,
@@ -112,6 +129,7 @@ import type {
   RouteDecision,
   SendMessageInput,
   RestoreSnapshotOptions,
+  ToolDefinition,
   UiPreferences,
   UsageRecord,
   Workspace,
@@ -185,6 +203,11 @@ export class NexaStore {
       knowledgeCitations: this.getKnowledgeCitations(),
       mcpServers: this.getMcpServers(),
       agents: this.getAgents(),
+      tools: this.getTools(),
+      executionRuns: this.getExecutionRuns(),
+      executionSteps: this.getExecutionSteps(),
+      executionTraceEvents: this.getExecutionTraceEvents(),
+      approvalRequests: this.getApprovalRequests(),
       importExportResults: this.getImportExportResults(),
       auditLogs: this.getAuditLogs(),
       uiPreferences: this.getUiPreferences(),
@@ -372,6 +395,41 @@ export class NexaStore {
       .prepare('SELECT * FROM agents ORDER BY updated_at DESC')
       .all()
       .map((row) => mapAgent(row as Record<string, unknown>));
+  }
+
+  getTools(): ToolDefinition[] {
+    return this.db
+      .prepare('SELECT * FROM tools ORDER BY name ASC')
+      .all()
+      .map((row) => mapToolDefinition(row as Record<string, unknown>));
+  }
+
+  getExecutionRuns(): ExecutionRun[] {
+    return this.db
+      .prepare('SELECT * FROM execution_runs ORDER BY created_at DESC LIMIT 100')
+      .all()
+      .map((row) => mapExecutionRun(row as Record<string, unknown>));
+  }
+
+  getExecutionSteps(runId?: string): ExecutionStep[] {
+    const rows = runId
+      ? this.db.prepare('SELECT * FROM execution_steps WHERE run_id = ? ORDER BY position ASC, created_at ASC').all(runId)
+      : this.db.prepare('SELECT * FROM execution_steps ORDER BY created_at DESC LIMIT 300').all();
+    return rows.map((row) => mapExecutionStep(row as Record<string, unknown>));
+  }
+
+  getExecutionTraceEvents(runId?: string): ExecutionTraceEvent[] {
+    const rows = runId
+      ? this.db.prepare('SELECT * FROM execution_trace_events WHERE run_id = ? ORDER BY created_at ASC').all(runId)
+      : this.db.prepare('SELECT * FROM execution_trace_events ORDER BY created_at DESC LIMIT 300').all();
+    return rows.map((row) => mapExecutionTraceEvent(row as Record<string, unknown>));
+  }
+
+  getApprovalRequests(): ApprovalRequest[] {
+    return this.db
+      .prepare('SELECT * FROM approval_requests ORDER BY created_at DESC LIMIT 100')
+      .all()
+      .map((row) => mapApprovalRequest(row as Record<string, unknown>));
   }
 
   getImportExportResults(): ImportExportResult[] {
@@ -1362,25 +1420,168 @@ export class NexaStore {
     return this.requireAgent(id);
   }
 
-  previewAgentRun(agentId: string): ImportExportResult {
-    const agent = this.requireAgent(agentId);
-    const timestamp = now();
-    const id = createId('dryrun');
-    const manifest = {
+  previewAgentRun(agentId: string): ExecutionRun {
+    return this.startExecutionRun({
+      kind: 'agent',
+      mode: 'preview',
       agentId,
-      agentName: agent.name,
-      mode: 'dry-run',
-      requiresConfirmation: false,
-      steps: [t('tools.agent.dryRun.step.read'), t('tools.agent.dryRun.step.check'), t('tools.agent.dryRun.step.suggest')],
-    };
+      toolId: EXECUTION_TOOL_IDS.statusRead,
+      inputJson: '{}',
+    });
+  }
+
+  startExecutionRun(input: ExecutionStartInput): ExecutionRun {
+    const normalized = normalizeExecutionStartInput(input);
+    const timestamp = now();
+    const runId = createId('run');
+    const agent = normalized.agentId ? this.requireAgent(normalized.agentId) : null;
+    const tool = normalized.toolId ? this.requireTool(normalized.toolId) : this.requireTool(EXECUTION_TOOL_IDS.statusRead);
+    const requiresApproval = normalized.mode === 'execute' && tool.requiresApproval;
+    const initialStatus: ExecutionRun['status'] = requiresApproval ? 'waiting_approval' : 'completed';
+    const mode = normalized.mode ?? 'preview';
+    const title = agent
+      ? t('tools.execution.title.agent', { agent: agent.name })
+      : normalized.kind === 'workflow'
+        ? t('tools.execution.title.workflow')
+        : t('tools.execution.title.tool', { tool: tool.name });
+    const output = requiresApproval ? null : this.executeFixtureTool(tool.id, normalized.inputJson ?? '{}');
+
     this.db
       .prepare(
-        `INSERT INTO config_snapshots (id, action, status, summary, redacted, manifest_json, created_at)
-         VALUES (?, 'cleanup-preview', 'ready', ?, 1, ?, ?)`,
+        `INSERT INTO execution_runs (id, kind, status, mode, title, agent_id, tool_id, mcp_server_id, workflow_id, input_json, output_json, error_message, approval_status, sandbox_mode, created_at, updated_at, completed_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
       )
-      .run(id, t('tools.agent.dryRun.summary', { agent: agent.name }), JSON.stringify(manifest), timestamp);
-    this.audit('agent.dry_run.previewed', 'agent', agentId, manifest);
-    return this.requireImportExportResult(id);
+      .run(
+        runId,
+        normalized.kind,
+        initialStatus,
+        mode,
+        title,
+        agent?.id ?? null,
+        tool.id,
+        normalized.mcpServerId ?? null,
+        normalized.workflowId ?? null,
+        normalized.inputJson ?? '{}',
+        output,
+        requiresApproval ? 'pending' : null,
+        tool.riskLevel === 'read' ? 'read-only' : 'fixture-only',
+        timestamp,
+        timestamp,
+        requiresApproval ? null : timestamp,
+      );
+
+    this.createExecutionStep({
+      runId,
+      kind: 'plan',
+      title: agent ? t('tools.agent.dryRun.step.read') : t('tools.execution.step.plan'),
+      status: 'completed',
+      position: 1,
+      timestamp,
+    });
+    this.addTrace(runId, null, 'run_planned', title, { kind: normalized.kind, mode });
+    this.createExecutionStep({
+      runId,
+      kind: 'permission',
+      title: t('tools.execution.step.permission'),
+      status: 'completed',
+      toolId: tool.id,
+      position: 2,
+      timestamp,
+    });
+    this.addTrace(runId, null, 'permission_checked', t('tools.execution.trace.permissionChecked'), {
+      permissionKey: tool.permissionKey,
+      riskLevel: tool.riskLevel,
+      requiresApproval,
+    });
+
+    if (requiresApproval) {
+      const stepId = this.createExecutionStep({
+        runId,
+        kind: 'approval',
+        title: t('tools.execution.step.approval'),
+        status: 'waiting_approval',
+        toolId: tool.id,
+        position: 3,
+        timestamp,
+      });
+      const approvalId = createId('approval');
+      this.db
+        .prepare(
+          `INSERT INTO approval_requests (id, run_id, step_id, status, requested_action, risk_level, reason, decision_reason, decided_at, created_at, expires_at)
+           VALUES (?, ?, ?, 'pending', ?, ?, ?, NULL, NULL, ?, NULL)`,
+        )
+        .run(approvalId, runId, stepId, tool.name, tool.riskLevel, t('tools.execution.approval.reason', { tool: tool.name }), timestamp);
+      this.addTrace(runId, stepId, 'approval_requested', t('tools.execution.trace.approvalRequested'), { approvalId, toolId: tool.id });
+    } else {
+      const stepId = this.createExecutionStep({
+        runId,
+        kind: 'tool',
+        title: tool.name,
+        status: 'completed',
+        toolId: tool.id,
+        outputJson: output,
+        position: 3,
+        timestamp,
+      });
+      this.addTrace(runId, stepId, 'tool_called', t('tools.execution.trace.toolCalled'), { toolId: tool.id });
+      this.addTrace(runId, stepId, 'step_completed', t('tools.execution.trace.stepCompleted'), { outputJson: output });
+      this.addTrace(runId, null, 'run_completed', t('tools.execution.trace.runCompleted'), { runId });
+    }
+
+    this.audit('execution.run.started', 'execution_run', runId, { kind: normalized.kind, mode, toolId: tool.id });
+    return this.requireExecutionRun(runId);
+  }
+
+  decideApproval(input: ApprovalDecisionInput): ExecutionRun {
+    const normalized = normalizeApprovalDecision(input);
+    const approval = this.requireApprovalRequest(normalized.approvalId);
+    const timestamp = now();
+    if (approval.status !== 'pending') {
+      return this.requireExecutionRun(approval.runId);
+    }
+    const run = this.requireExecutionRun(approval.runId);
+    const tool = run.toolId ? this.requireTool(run.toolId) : this.requireTool(EXECUTION_TOOL_IDS.statusRead);
+    const approved = normalized.decision === 'approved';
+    const decisionReason = normalized.reason ?? null;
+    this.db
+      .prepare('UPDATE approval_requests SET status = ?, decision_reason = ?, decided_at = ? WHERE id = ?')
+      .run(normalized.decision, decisionReason, timestamp, approval.id);
+    if (approval.stepId) {
+      this.db
+        .prepare('UPDATE execution_steps SET status = ?, output_json = ?, error_message = ?, completed_at = ?, updated_at = ? WHERE id = ?')
+        .run(approved ? 'completed' : 'cancelled', JSON.stringify({ decision: normalized.decision }), approved ? null : decisionReason, timestamp, timestamp, approval.stepId);
+    }
+    this.addTrace(run.id, approval.stepId, 'approval_decided', t('tools.execution.trace.approvalDecided'), normalized);
+
+    if (!approved) {
+      this.db
+        .prepare('UPDATE execution_runs SET status = ?, approval_status = ?, error_message = ?, updated_at = ?, completed_at = ? WHERE id = ?')
+        .run('cancelled', 'denied', decisionReason ?? t('tools.execution.error.denied'), timestamp, timestamp, run.id);
+      this.addTrace(run.id, null, 'run_cancelled', t('tools.execution.trace.runCancelled'), { approvalId: approval.id });
+      this.audit('execution.approval.denied', 'execution_run', run.id, { approvalId: approval.id, reason: normalized.reason });
+      return this.requireExecutionRun(run.id);
+    }
+
+    const output = this.executeFixtureTool(tool.id, run.inputJson ?? '{}');
+    const toolStepId = this.createExecutionStep({
+      runId: run.id,
+      kind: 'tool',
+      title: tool.name,
+      status: 'completed',
+      toolId: tool.id,
+      inputJson: run.inputJson,
+      outputJson: output,
+      position: this.getExecutionSteps(run.id).length + 1,
+      timestamp,
+    });
+    this.db
+      .prepare('UPDATE execution_runs SET status = ?, output_json = ?, approval_status = ?, updated_at = ?, completed_at = ? WHERE id = ?')
+      .run('completed', output, 'approved', timestamp, timestamp, run.id);
+    this.addTrace(run.id, toolStepId, 'tool_called', t('tools.execution.trace.toolCalled'), { toolId: tool.id });
+    this.addTrace(run.id, toolStepId, 'step_completed', t('tools.execution.trace.stepCompleted'), { outputJson: output });
+    this.addTrace(run.id, null, 'run_completed', t('tools.execution.trace.runCompleted'), { runId: run.id });
+    this.audit('execution.approval.approved', 'execution_run', run.id, { approvalId: approval.id, toolId: tool.id });
+    return this.requireExecutionRun(run.id);
   }
 
   validateImportManifest(manifestText: string): ImportExportResult {
@@ -1584,6 +1785,7 @@ export class NexaStore {
     if (agentCount === 0) {
       this.createAgent(t('tools.agent.seedConfigName'), t('tools.agent.seedConfigGoal'));
     }
+    this.seedExecutionTools(timestamp);
 
     const promptCount = Number((this.db.prepare('SELECT COUNT(*) AS count FROM prompt_templates').get() as { count: number }).count);
     if (promptCount === 0) {
@@ -1614,6 +1816,31 @@ export class NexaStore {
     const keyCount = Number((this.db.prepare('SELECT COUNT(*) AS count FROM gateway_api_keys').get() as { count: number }).count);
     if (keyCount === 0) {
       this.createGatewayKey('Local app integration');
+    }
+  }
+
+  private seedExecutionTools(timestamp: number): void {
+    for (const tool of TOOL_FIXTURES) {
+      this.db
+        .prepare(
+          `INSERT INTO tools (id, name, description, kind, permission_key, risk_level, requires_approval, enabled, input_schema_json, output_schema_json, permission_state, audit_mode, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'granted', 'trace', ?, ?)
+           ON CONFLICT(id) DO UPDATE SET name = excluded.name, description = excluded.description, kind = excluded.kind, permission_key = excluded.permission_key, risk_level = excluded.risk_level, requires_approval = excluded.requires_approval, enabled = excluded.enabled, input_schema_json = excluded.input_schema_json, output_schema_json = excluded.output_schema_json, updated_at = excluded.updated_at`,
+        )
+        .run(
+          tool.id,
+          tool.name,
+          tool.description,
+          tool.kind,
+          tool.permissionKey,
+          tool.riskLevel,
+          tool.requiresApproval ? 1 : 0,
+          tool.enabled ? 1 : 0,
+          tool.inputSchemaJson,
+          tool.outputSchemaJson,
+          timestamp,
+          timestamp,
+        );
     }
   }
 
@@ -2350,6 +2577,94 @@ export class NexaStore {
     return mapAgent(row as Record<string, unknown>);
   }
 
+  private requireTool(id: string): ToolDefinition {
+    const row = this.db.prepare('SELECT * FROM tools WHERE id = ? AND enabled = 1').get(id);
+    if (!row) throw new Error(`Tool not found or disabled: ${id}`);
+    return mapToolDefinition(row as Record<string, unknown>);
+  }
+
+  private requireExecutionRun(id: string): ExecutionRun {
+    const row = this.db.prepare('SELECT * FROM execution_runs WHERE id = ?').get(id);
+    if (!row) throw new Error(`Execution run not found: ${id}`);
+    return mapExecutionRun(row as Record<string, unknown>);
+  }
+
+  private requireApprovalRequest(id: string): ApprovalRequest {
+    const row = this.db.prepare('SELECT * FROM approval_requests WHERE id = ?').get(id);
+    if (!row) throw new Error(`Approval request not found: ${id}`);
+    return mapApprovalRequest(row as Record<string, unknown>);
+  }
+
+  private createExecutionStep(input: {
+    runId: string;
+    kind: ExecutionStep['kind'];
+    title: string;
+    status: ExecutionStep['status'];
+    position: number;
+    timestamp: number;
+    toolId?: string | null;
+    mcpServerId?: string | null;
+    inputJson?: string | null;
+    outputJson?: string | null;
+    errorMessage?: string | null;
+  }): string {
+    const id = createId('step');
+    const completed = ['completed', 'failed', 'cancelled'].includes(input.status) ? input.timestamp : null;
+    const started = ['running', 'completed', 'failed', 'cancelled'].includes(input.status) ? input.timestamp : null;
+    this.db
+      .prepare(
+        `INSERT INTO execution_steps (id, run_id, parent_step_id, kind, title, status, tool_id, mcp_server_id, input_json, output_json, error_message, position, started_at, completed_at, created_at, updated_at)
+         VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        input.runId,
+        input.kind,
+        input.title,
+        input.status,
+        input.toolId ?? null,
+        input.mcpServerId ?? null,
+        input.inputJson ?? null,
+        input.outputJson ?? null,
+        input.errorMessage ?? null,
+        input.position,
+        started,
+        completed,
+        input.timestamp,
+        input.timestamp,
+      );
+    return id;
+  }
+
+  private addTrace(
+    runId: string,
+    stepId: string | null,
+    eventType: ExecutionTraceEvent['eventType'],
+    message: string,
+    metadata?: unknown,
+  ): void {
+    this.db
+      .prepare(
+        `INSERT INTO execution_trace_events (id, run_id, step_id, event_type, message, metadata_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(createId('trace'), runId, stepId, eventType, message, metadata ? JSON.stringify(redactSensitive(metadata)) : null, now());
+  }
+
+  private executeFixtureTool(toolId: string, inputJson: string): string {
+    if (toolId === EXECUTION_TOOL_IDS.echo) {
+      const parsed = safeJsonParse(inputJson);
+      return JSON.stringify({ echo: typeof parsed.message === 'string' ? parsed.message : t('tools.execution.echo.default') });
+    }
+    return JSON.stringify({
+      summary: t('tools.execution.status.summary', {
+        models: this.getModels().length,
+        knowledge: this.getKnowledgeFiles().length,
+        gateway: this.getGatewayStatus().running ? 'running' : 'stopped',
+      }),
+    });
+  }
+
   private requireImportExportResult(id: string): ImportExportResult {
     const row = this.db.prepare('SELECT * FROM config_snapshots WHERE id = ?').get(id);
     if (!row) throw new Error(`Import/export result not found: ${id}`);
@@ -2394,6 +2709,15 @@ function inferTitle(currentTitle: string, content: string): string {
   }
   const cleaned = content.replace(/\s+/g, ' ').trim();
   return cleaned.slice(0, 28) || currentTitle;
+}
+
+function safeJsonParse(value: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
 }
 
 export const store = new NexaStore();

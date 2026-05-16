@@ -962,6 +962,66 @@ These references guide product and engineering decisions. They are not permissio
 25. **Deliverables**: Unified execution model, MCP/tool/agent/workflow UI, tests, docs.
 26. **Next Round Input**: Execution model ready for stronger security, users, permissions, and audit.
 
+### Round 10 Execution Status
+
+- Status: Completed.
+- Completion date: 2026-05-16.
+- Parallel execution:
+  - Lane A: execution runtime authority, schema/migration, Store run/step/trace/approval service.
+  - Lane B: Tools Run Center UI, Agent preview migration, browser mock parity, i18n, and UI smoke behavior.
+  - Lane C: tests, build, Electron smoke, desktop shortcut readback, docs, and Git closeout.
+- Main changed files:
+  - `src/shared/executionRuntime.ts`
+  - `src/shared/types.ts`
+  - `src/shared/api.ts`
+  - `src/shared/ipc.ts`
+  - `src/shared/i18n.ts`
+  - `src/main/database/schema.ts`
+  - `src/main/database/connection.ts`
+  - `src/main/repositories/mappers.ts`
+  - `src/main/services/store.ts`
+  - `src/main/ipc.ts`
+  - `src/preload/index.ts`
+  - `src/renderer/modules/ToolsPage.tsx`
+  - `src/renderer/modules/shared.tsx`
+  - `src/renderer/mockApi.ts`
+  - `tests/execution-runtime.test.ts`
+  - `tests/ipc-contract.test.ts`
+  - `tests/app.test.tsx`
+  - `tests/ui-smoke.spec.ts`
+  - `docs/implementation/round-10-execution-model-closure.md`
+  - `docs/implementation/full-app-round-execution-matrix.md`
+  - `PROJECT_PROGRESS.md`
+  - `task_plan.md`
+  - `progress.md`
+  - `findings.md`
+- Added/modified functionality:
+  - Added one execution model for Agent preview, safe tool fixtures, future MCP tool calls, and Workflow boundaries.
+  - Added `execution_runs`, `execution_steps`, `execution_trace_events`, and `approval_requests`.
+  - Added safe read-only status fixture and approval-gated echo fixture.
+  - Added `startExecutionRun` and `decideApproval` through shared API, IPC, preload, and main process.
+  - Updated Tools Run Center to display runs, steps, approvals, and trace events with approve/deny actions.
+  - Updated browser mock parity for all execution APIs.
+- Deleted old links:
+  - Replaced `previewAgentRun -> config_snapshots(cleanup-preview)` as the production Agent dry-run path.
+  - Kept `config_snapshots` for import/export/snapshot records only.
+  - Replaced the Run Center planned placeholder with the real shared execution model view.
+  - Kept Workflow as execution-kind boundary without a fake canvas.
+- Test commands and results:
+  - `npm.cmd run typecheck`: passed.
+  - `npm.cmd run test -- tests/execution-runtime.test.ts tests/ipc-contract.test.ts tests/i18n-authority.test.ts`: passed, 3 files / 8 tests.
+  - `npm.cmd run test`: passed, 12 files / 37 tests.
+  - `npm.cmd run test:ui-smoke`: passed, 13 Playwright tests.
+  - `npm.cmd run build`: passed.
+  - `npm.cmd run verify`: passed, including typecheck, full unit test suite, and build.
+  - `npm.cmd run test:electron-smoke`: passed; Electron shell rendered.
+  - `git diff --check`: passed with LF/CRLF conversion warnings only.
+- Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` still targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and uses `D:\NexaChat\assets\app-icon.ico,0`.
+- Acceptance result: Passed. Agent preview, safe tool fixtures, trace events, approval requests, approval decisions, and completion/cancel states now share one execution model. MCP and Workflow are connected as boundaries without unsafe execution or fake canvas behavior.
+- Commit hash: pending until Git commit.
+- Push result: pending until Git push.
+- Remaining issues: None for Round 10. Round 11 owns stronger identity, RBAC/ACL, main-process permission enforcement, and audit hash-chain hardening.
+
 ## 17. Round 11: Security, Users, Permissions And Audit
 
 1. **Round Name**: Security, Users, Permissions And Audit.
