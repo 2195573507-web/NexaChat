@@ -541,3 +541,4 @@
 - Checked `C:\Users\至亲\Desktop\NexaChat.lnk`: target is `D:\NexaChat\release\win-unpacked\NexaChat.exe`, arguments are empty, working directory is `D:\NexaChat\release\win-unpacked`, and icon resolves to `D:\NexaChat\assets\app-icon.ico,0`.
 - Updated the authoritative blueprint Round 14 execution record, `PROJECT_PROGRESS.md`, matrix, `docs/implementation/round-14-desktop-packaging-shortcut-release-closure.md`, `task_plan.md`, `progress.md`, and `findings.md`; commit hash is pending until the Round 14 delivery commit.
 - Committed Round 14 delivery as `936cb659e7932ae134d9666653582abca815813e` and started delivery-hash backfill.
+- Committed Round 14 closeout as `f059b4de966023961b7105a729453caa24f0ec2a` and started closeout-hash backfill.

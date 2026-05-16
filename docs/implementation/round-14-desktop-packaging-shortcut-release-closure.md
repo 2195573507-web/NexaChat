@@ -2,7 +2,7 @@
 
 Date: 2026-05-16
 
-Status: Completed as implementation and verification; delivery commit `936cb659e7932ae134d9666653582abca815813e`; closeout commit pending.
+Status: Completed as implementation and verification; delivery commit `936cb659e7932ae134d9666653582abca815813e`; closeout commit `f059b4de966023961b7105a729453caa24f0ec2a`.
 
 ## Root-Cause And Chain Review
 
@@ -74,6 +74,6 @@ Passed. The packaged app launches, the desktop shortcut points to the packaged e
 ## Commit
 
 - Delivery commit hash: `936cb659e7932ae134d9666653582abca815813e`.
-- Closeout commit hash: pending.
+- Closeout commit hash: `f059b4de966023961b7105a729453caa24f0ec2a`.
 - Push result: pending.
 - Remaining issues: None for Round 14. Round 15 owns final quality gates, scanners, release checklist, and full convergence audit.
