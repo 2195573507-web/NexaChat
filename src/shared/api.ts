@@ -14,7 +14,12 @@ import type {
   GatewayKeyUpdateInput,
   GatewayStatus,
   ImportExportResult,
+  KnowledgeDeleteInput,
   KnowledgeFile,
+  KnowledgeImportInput,
+  KnowledgeRebuildInput,
+  KnowledgeRetrievalInput,
+  KnowledgeRetrievalResult,
   McpServer,
   Model,
   ModelInput,
@@ -51,8 +56,11 @@ export interface AppApi {
   revokeGatewayKey(gatewayKeyId: string): Promise<GatewayApiKey>;
   toggleGateway(enabled: boolean): Promise<GatewayStatus>;
   saveUiPreferences(preferences: UiPreferences): Promise<UiPreferences>;
-  createKnowledgeFile(name: string, type: string, size: number): Promise<KnowledgeFile>;
-  retryKnowledgeFile(fileId: string): Promise<KnowledgeFile>;
+  createKnowledgeFile(input: KnowledgeImportInput): Promise<KnowledgeFile>;
+  retryKnowledgeFile(input: KnowledgeRebuildInput): Promise<KnowledgeFile>;
+  rebuildKnowledgeFile(input: KnowledgeRebuildInput): Promise<KnowledgeFile>;
+  deleteKnowledgeFile(input: KnowledgeDeleteInput): Promise<KnowledgeFile>;
+  previewKnowledgeRetrieval(input: KnowledgeRetrievalInput): Promise<KnowledgeRetrievalResult>;
   createMcpServer(name: string, transport: McpServer['transport'], commandOrUrl: string): Promise<McpServer>;
   updateMcpPermission(serverId: string, permissionState: McpServer['permissionState']): Promise<McpServer>;
   createAgent(name: string, goal: string): Promise<AgentDefinition>;
@@ -86,6 +94,9 @@ export const APP_API_METHODS = [
   'saveUiPreferences',
   'createKnowledgeFile',
   'retryKnowledgeFile',
+  'rebuildKnowledgeFile',
+  'deleteKnowledgeFile',
+  'previewKnowledgeRetrieval',
   'createMcpServer',
   'updateMcpPermission',
   'createAgent',

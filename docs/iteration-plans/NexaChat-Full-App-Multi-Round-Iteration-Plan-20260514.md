@@ -869,6 +869,70 @@ These references guide product and engineering decisions. They are not permissio
 25. **Deliverables**: Knowledge pipeline, RAG integration, UI, tests, docs.
 26. **Next Round Input**: Knowledge and retrieval ready for Agent, MCP, Tool, and Workflow.
 
+### Round 9 Execution Status
+
+- Status: Completed.
+- Completion date: 2026-05-16.
+- Parallel execution:
+  - Lane A: schema, migrations, Store knowledge pipeline, parser/chunk/embedding/retrieval/citation contracts.
+  - Lane B: Knowledge UI, Chat citation display, browser mock parity, i18n, and UI smoke behavior.
+  - Lane C: tests, build, Electron smoke, desktop shortcut readback, docs, and Git closeout.
+  - Lane D: read-only Round 10 Agent/MCP/Tool/Workflow execution-model risk review.
+- Main changed files:
+  - `src/shared/knowledgeRuntime.ts`
+  - `src/shared/types.ts`
+  - `src/shared/api.ts`
+  - `src/shared/ipc.ts`
+  - `src/shared/i18n.ts`
+  - `src/main/database/schema.ts`
+  - `src/main/database/connection.ts`
+  - `src/main/repositories/mappers.ts`
+  - `src/main/services/store.ts`
+  - `src/main/services/localGateway.ts`
+  - `src/main/ipc.ts`
+  - `src/preload/index.ts`
+  - `src/renderer/modules/KnowledgePage.tsx`
+  - `src/renderer/modules/ChatPage.tsx`
+  - `src/renderer/mockApi.ts`
+  - `src/renderer/styles.css`
+  - `tests/knowledge-runtime.test.ts`
+  - `tests/ipc-contract.test.ts`
+  - `tests/app.test.tsx`
+  - `tests/ui-smoke.spec.ts`
+  - `docs/implementation/round-09-knowledge-rag-closure.md`
+  - `docs/implementation/full-app-round-execution-matrix.md`
+  - `PROJECT_PROGRESS.md`
+  - `task_plan.md`
+  - `progress.md`
+  - `findings.md`
+- Added/modified functionality:
+  - Added the shared knowledge runtime authority for parser policy, import normalization, chunking, stable hashes, lexical embedding, and scoring.
+  - Added structured file/chunk/embedding/retrieval/citation contracts and additive migrations.
+  - Implemented text/Markdown/JSON/CSV/code-like content import with real chunks from supplied content, honest unsupported-file failure, retrieval trace and citation persistence, chat context injection, rebuild, delete tombstones, and active snapshot filtering.
+  - Updated `/v1/embeddings` to use the same lexical embedding authority.
+  - Added Knowledge UI import, index health, chunk status, retrieval preview, citation, rebuild, and delete controls.
+  - Added Chat citation rendering for assistant messages.
+  - Updated browser mock parity for all new knowledge AppApi methods.
+- Deleted old links:
+  - Replaced placeholder knowledge chunk generation with parser-normalized content chunking.
+  - Removed the latest-chunk citation shortcut from the production chat citation path.
+  - Replaced file-count-only snapshots with structured active files, chunks, retrieval traces, and citations.
+  - Replaced UI-only retry/fallback behavior with typed retry/rebuild/delete/retrieval actions.
+- Test commands and results:
+  - `npm.cmd run typecheck`: passed through build and verify.
+  - `npm.cmd run test -- tests/knowledge-runtime.test.ts tests/ipc-contract.test.ts tests/i18n-authority.test.ts`: passed, 3 files / 8 tests.
+  - `npm.cmd run test`: passed, 11 files / 35 tests.
+  - `npm.cmd run test:ui-smoke`: passed, 12 Playwright tests.
+  - `npm.cmd run build`: passed.
+  - `npm.cmd run verify`: passed, including typecheck, full unit test suite, and build.
+  - `npm.cmd run test:electron-smoke`: passed; Electron shell rendered.
+  - `git diff --check`: passed with LF/CRLF conversion warnings only.
+- Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` still targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and uses `D:\NexaChat\assets\app-icon.ico,0`.
+- Acceptance result: Passed. Supported text/Markdown content can be imported and indexed, retrieval returns structured citations, chat displays cited context, rebuild/delete keep file and chunk state consistent, and unsupported PDF/Office/OCR/vector behavior is not advertised as implemented.
+- Commit hash: pending until Git commit.
+- Push result: pending until Git push.
+- Remaining issues: None for Round 9. Round 10 owns the unified Agent, MCP, Tool, Workflow execution/run/trace/approval model.
+
 ## 16. Round 10: Agent, MCP, Tools And Workflow
 
 1. **Round Name**: Agent, MCP, Tools And Workflow.

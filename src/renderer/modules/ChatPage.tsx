@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Archive, Copy, Download, Plus, RefreshCcw, RotateCcw, Send, Split, Star, XCircle } from 'lucide-react';
-import type { ContextStrategy } from '../../shared/types';
+import type { ContextStrategy, KnowledgeCitation } from '../../shared/types';
 import { EmptyState } from '../components/EmptyState';
 import { useI18n } from '../i18n';
 import type { TabPageProps } from './shared';
@@ -133,6 +133,7 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
               ) : (
                 messages.map((message) => {
                   const chunks = snapshot.messageChunks.filter((chunk) => chunk.messageId === message.id);
+                  const citations = snapshot.knowledgeCitations.filter((citation) => citation.messageId === message.id);
                   const parentUser = message.parentMessageId ? messages.find((candidate) => candidate.id === message.parentMessageId) : null;
                   return (
                     <article className={`message-bubble role-${message.role} status-${message.status}`} key={message.id}>
@@ -148,6 +149,7 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
                       {message.metadataJson ? <small>{formatMessageMetadata(message.metadataJson, t)}</small> : null}
                       {message.contextMessageIdsJson ? <small>{t('chat.message.contextIds', { count: parseJsonArrayCount(message.contextMessageIdsJson) })}</small> : null}
                       {chunks.length > 0 ? <small>{t('chat.message.chunks', { count: chunks.length })}</small> : null}
+                      <CitationList citations={citations} />
                       <div className="message-actions" aria-label={t('chat.message.actions.aria')}>
                         <button type="button" onClick={() => copyText(message.content)}>
                           <Copy size={14} /> {t('chat.message.copy')}
@@ -256,7 +258,7 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
               <div><dt>{t('chat.session.messages')}</dt><dd>{messages.length}</dd></div>
               <div><dt>{t('chat.session.model')}</dt><dd>{snapshot.models.find((model) => model.id === modelId)?.displayName ?? defaultModel?.displayName ?? t('common.notConfigured')}</dd></div>
               <div><dt>{t('chat.context.knowledgeFiles')}</dt><dd>{snapshot.knowledgeFiles.length}</dd></div>
-              <div><dt>{t('chat.session.citationHints')}</dt><dd>{t('chat.session.citationCopy')}</dd></div>
+              <div><dt>{t('chat.session.citationHints')}</dt><dd>{t('chat.session.citationCopy', { count: snapshot.knowledgeCitations.length })}</dd></div>
             </dl>
           </div>
         </section>
@@ -309,6 +311,24 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
         </div>
       </section>
     </TabPanel>
+  );
+}
+
+function CitationList({ citations }: { citations: KnowledgeCitation[] }) {
+  const { t } = useI18n();
+  if (citations.length === 0) {
+    return null;
+  }
+  return (
+    <div className="citation-list" aria-label={t('chat.citations.aria')}>
+      <strong>{t('chat.citations.title', { count: citations.length })}</strong>
+      {citations.map((citation) => (
+        <div className="citation-item" key={citation.id}>
+          <span>{t('chat.citations.source', { file: citation.fileName, score: citation.score.toFixed(2) })}</span>
+          <small>{citation.snippet}</small>
+        </div>
+      ))}
+    </div>
   );
 }
 

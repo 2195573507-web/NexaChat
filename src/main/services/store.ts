@@ -10,7 +10,10 @@ import {
   mapGatewayKey,
   mapGatewayLog,
   mapImportExportResult,
+  mapKnowledgeChunk,
+  mapKnowledgeCitation,
   mapKnowledgeFile,
+  mapKnowledgeRetrievalTrace,
   mapMcpServer,
   mapMessage,
   mapMessageAttachment,
@@ -39,6 +42,15 @@ import {
   isAllowedAttachmentMimeType,
   isConversationExportFormat,
 } from '../../shared/conversationRuntime.js';
+import {
+  KNOWLEDGE_RUNTIME_POLICY,
+  chunkKnowledgeText,
+  lexicalEmbedding,
+  normalizeKnowledgeImport,
+  scoreKnowledgeChunks,
+  stableKnowledgeHash,
+  type KnowledgeScoredChunkInput,
+} from '../../shared/knowledgeRuntime.js';
 import {
   GATEWAY_BIND_HOST,
   GATEWAY_DEFAULT_KEY_POLICY,
@@ -75,7 +87,15 @@ import type {
   GatewayStatus,
   ImportPlanApplyOptions,
   ImportExportResult,
+  KnowledgeChunk,
+  KnowledgeCitation,
+  KnowledgeDeleteInput,
   KnowledgeFile,
+  KnowledgeImportInput,
+  KnowledgeRebuildInput,
+  KnowledgeRetrievalInput,
+  KnowledgeRetrievalResult,
+  KnowledgeRetrievalTrace,
   McpServer,
   Message,
   MessageAttachment,
@@ -160,6 +180,9 @@ export class NexaStore {
       usageRecords: this.getUsageRecords(),
       gatewayKeys: this.getGatewayKeys(),
       knowledgeFiles: this.getKnowledgeFiles(),
+      knowledgeChunks: this.getKnowledgeChunks(),
+      knowledgeRetrievals: this.getKnowledgeRetrievalTraces(),
+      knowledgeCitations: this.getKnowledgeCitations(),
       mcpServers: this.getMcpServers(),
       agents: this.getAgents(),
       importExportResults: this.getImportExportResults(),
@@ -307,9 +330,34 @@ export class NexaStore {
 
   getKnowledgeFiles(): KnowledgeFile[] {
     return this.db
-      .prepare('SELECT * FROM files ORDER BY updated_at DESC')
+      .prepare('SELECT * FROM files WHERE deleted_at IS NULL ORDER BY updated_at DESC')
       .all()
       .map((row) => mapKnowledgeFile(row as Record<string, unknown>));
+  }
+
+  getKnowledgeChunks(fileId?: string): KnowledgeChunk[] {
+    const sql = fileId
+      ? 'SELECT * FROM knowledge_chunks WHERE file_id = ? AND status != ? ORDER BY position ASC'
+      : 'SELECT * FROM knowledge_chunks WHERE status != ? ORDER BY created_at DESC, position ASC LIMIT 500';
+    const rows = fileId
+      ? this.db.prepare(sql).all(fileId, 'deleted')
+      : this.db.prepare(sql).all('deleted');
+    return rows.map((row) => mapKnowledgeChunk(row as Record<string, unknown>));
+  }
+
+  getKnowledgeRetrievalTraces(): KnowledgeRetrievalTrace[] {
+    return this.db
+      .prepare('SELECT * FROM knowledge_retrieval_traces ORDER BY created_at DESC LIMIT 100')
+      .all()
+      .map((row) => mapKnowledgeRetrievalTrace(row as Record<string, unknown>));
+  }
+
+  getKnowledgeCitations(messageId?: string): KnowledgeCitation[] {
+    const sql = messageId
+      ? 'SELECT * FROM message_citations WHERE message_id = ? ORDER BY score DESC, created_at ASC'
+      : 'SELECT * FROM message_citations ORDER BY created_at DESC LIMIT 200';
+    const rows = messageId ? this.db.prepare(sql).all(messageId) : this.db.prepare(sql).all();
+    return rows.map((row) => mapKnowledgeCitation(row as Record<string, unknown>));
   }
 
   getMcpServers(): McpServer[] {
@@ -668,7 +716,14 @@ export class NexaStore {
     const trimmedContent = input.content.trim();
     const inputTokens = estimateTokens(trimmedContent);
     const modelForContext = this.requireModel(routeDecision.modelId);
-    const context = this.buildConversationContext(conversation.id, contextStrategy, trimmedContent, modelForContext.contextWindow);
+    const retrieval = this.retrieveKnowledge(trimmedContent, { persistCitations: false });
+    const context = this.buildConversationContext(
+      conversation.id,
+      contextStrategy,
+      trimmedContent,
+      modelForContext.contextWindow,
+      retrieval.citations,
+    );
     const attachmentSummary = this.validateMessageAttachments(input.attachments ?? []);
     const userMetadata = {
       routeReason: routeDecision.reason,
@@ -723,6 +778,8 @@ export class NexaStore {
           routeReason: routeDecision.reason,
           contextMessageIds: context.contextMessageIds,
           contextTrimReason: context.trimReason,
+          knowledgeRetrievalId: retrieval.trace.id,
+          knowledgeCitationCount: retrieval.citations.length,
           attachments: attachmentSummary.summary,
           action: input.metadata?.action ?? 'send',
         }),
@@ -754,6 +811,8 @@ export class NexaStore {
           routeReason: routeDecision.reason,
           contextMessageIds: context.contextMessageIds,
           contextTrimReason: context.trimReason,
+          knowledgeRetrievalId: retrieval.trace.id,
+          knowledgeCitationCount: retrieval.citations.length,
           action: input.metadata?.action ?? 'send',
         }), requestLogId);
       const result = await invokeOpenAiCompatibleChat(providerInput);
@@ -764,7 +823,8 @@ export class NexaStore {
         contextStrategy,
         contextMessageIds: context.contextMessageIds,
         contextTrimReason: context.trimReason,
-        citations: this.getLightweightCitations(trimmedContent),
+        retrievalId: retrieval.trace.id,
+        citations: retrieval.citations,
         adapter: adapterName,
         streamed: result.streamed,
         retryCount: result.retryCount,
@@ -807,6 +867,7 @@ export class NexaStore {
         chunks: result.chunks.length > 0 ? result.chunks : [assistantContent],
         status: 'completed',
       });
+      this.attachKnowledgeCitations(retrieval.citations, assistantMessageId, requestLogId);
 
       this.db
         .prepare(
@@ -1147,55 +1208,122 @@ export class NexaStore {
     return this.getUiPreferences();
   }
 
-  createKnowledgeFile(name: string, type: string, size: number): KnowledgeFile {
+  createKnowledgeFile(input: KnowledgeImportInput): KnowledgeFile {
     const timestamp = now();
     const id = createId('file');
-    const textLike = /text|markdown|json|csv|code|txt|md/i.test(`${name} ${type}`);
-    const status = textLike ? 'indexed' : 'failed';
-    const chunkCount = textLike ? 3 : 0;
-    const errorMessage = textLike ? null : t('knowledge.errors.unsupportedParser');
+    const normalized = normalizeKnowledgeImport(input);
+    const metadata = {
+      parserType: normalized.parserType,
+      originalSize: input.size ?? normalized.size,
+      importMode: 'inline-text',
+      maxImportBytes: KNOWLEDGE_RUNTIME_POLICY.maxImportBytes,
+    };
+    const chunks = normalized.supported ? chunkKnowledgeText(normalized.content) : [];
+    const tokenCount = chunks.reduce((sum, chunk) => sum + chunk.tokenCount, 0);
+    const errorMessage = normalized.errorKey ? t(normalized.errorKey as Parameters<typeof t>[0]) : null;
+    const parseStatus = normalized.supported ? 'indexed' : 'failed';
+    const indexStatus = normalized.supported ? 'indexed' : 'failed';
+    const embeddingStatus = normalized.supported ? 'embedded' : 'failed';
     this.db
       .prepare(
-        `INSERT INTO files (id, name, type, size, parse_status, chunk_count, error_message, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO files (id, workspace_id, knowledge_base_id, name, type, size, parse_status, index_status, embedding_status, parser_type, chunk_count, token_count, content_hash, storage_ref, metadata_json, error_message, parse_started_at, parse_completed_at, deleted_at, created_at, updated_at)
+         VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
       )
-      .run(id, name.trim(), type.trim() || 'text/plain', size, status, chunkCount, errorMessage, timestamp, timestamp);
-    if (textLike) {
-      for (let index = 0; index < chunkCount; index += 1) {
-        this.db
-          .prepare(
-            'INSERT INTO knowledge_chunks (id, file_id, knowledge_base_id, content, citation, position, created_at) VALUES (?, ?, NULL, ?, ?, ?, ?)',
-          )
-          .run(
-            createId('chunk'),
-            id,
-            t('knowledge.chunkContent', { name, index: index + 1 }),
-            `${name}#chunk-${index + 1}`,
-            index,
-            timestamp,
-          );
-      }
+      .run(
+        id,
+        DEFAULT_WORKSPACE_ID,
+        normalized.name,
+        normalized.type,
+        normalized.size,
+        parseStatus,
+        indexStatus,
+        embeddingStatus,
+        normalized.parserType,
+        chunks.length,
+        tokenCount,
+        normalized.contentHash,
+        null,
+        JSON.stringify(metadata),
+        errorMessage,
+        timestamp,
+        timestamp,
+        timestamp,
+        timestamp,
+      );
+    if (normalized.supported) {
+      this.indexKnowledgeChunks(id, normalized.name, chunks, timestamp);
     }
-    this.audit('knowledge.file.created', 'file', id, { name, status, errorMessage });
+    this.audit('knowledge.file.created', 'file', id, {
+      name: normalized.name,
+      parseStatus,
+      indexStatus,
+      embeddingStatus,
+      chunkCount: chunks.length,
+      errorMessage,
+    });
     return this.requireKnowledgeFile(id);
   }
 
-  retryKnowledgeFile(fileId: string): KnowledgeFile {
-    const file = this.requireKnowledgeFile(fileId);
+  retryKnowledgeFile(input: KnowledgeRebuildInput): KnowledgeFile {
+    return this.rebuildKnowledgeFile(input);
+  }
+
+  rebuildKnowledgeFile(input: KnowledgeRebuildInput): KnowledgeFile {
+    const file = this.requireKnowledgeFile(input.fileId);
     const timestamp = now();
-    const textLike = /text|markdown|json|csv|code|txt|md/i.test(`${file.name} ${file.type}`);
-    if (!textLike) {
-      this.db
-        .prepare('UPDATE files SET parse_status = ?, error_message = ?, updated_at = ? WHERE id = ?')
-        .run('failed', t('knowledge.errors.retryRejected'), timestamp, fileId);
-      this.audit('knowledge.file.retry.failed', 'file', fileId, { reason: 'unsupported file type' });
-      return this.requireKnowledgeFile(fileId);
+    if (file.deletedAt) {
+      throw new Error(t('knowledge.errors.deletedFile'));
     }
+    const existingChunks = this.getKnowledgeChunks(file.id);
+    if (existingChunks.length === 0 && file.parseStatus === 'failed') {
+      this.db
+        .prepare('UPDATE files SET parse_status = ?, index_status = ?, embedding_status = ?, error_message = ?, updated_at = ? WHERE id = ?')
+        .run('failed', 'failed', 'failed', t('knowledge.errors.rebuildNoSource'), timestamp, file.id);
+      this.audit('knowledge.file.rebuild.failed', 'file', file.id, { reason: 'no indexed source chunks' });
+      return this.requireKnowledgeFile(file.id);
+    }
+    const sourceText = existingChunks.map((chunk) => chunk.content).join('\n\n');
+    const chunks = chunkKnowledgeText(sourceText);
+    this.db.prepare('UPDATE knowledge_chunks SET status = ?, updated_at = ? WHERE file_id = ?').run('deleted', timestamp, file.id);
     this.db
-      .prepare('UPDATE files SET parse_status = ?, chunk_count = ?, error_message = NULL, updated_at = ? WHERE id = ?')
-      .run('indexed', Math.max(file.chunkCount, 3), timestamp, fileId);
-    this.audit('knowledge.file.retry.completed', 'file', fileId, { chunkCount: Math.max(file.chunkCount, 3) });
-    return this.requireKnowledgeFile(fileId);
+      .prepare(
+        `UPDATE files
+         SET parse_status = 'indexed', index_status = 'indexed', embedding_status = 'embedded', chunk_count = ?, token_count = ?, error_message = NULL, parse_started_at = ?, parse_completed_at = ?, updated_at = ?
+         WHERE id = ?`,
+      )
+      .run(chunks.length, chunks.reduce((sum, chunk) => sum + chunk.tokenCount, 0), timestamp, timestamp, timestamp, file.id);
+    this.indexKnowledgeChunks(file.id, file.name, chunks, timestamp);
+    this.audit('knowledge.file.rebuilt', 'file', file.id, { chunkCount: chunks.length });
+    return this.requireKnowledgeFile(file.id);
+  }
+
+  deleteKnowledgeFile(input: KnowledgeDeleteInput): KnowledgeFile {
+    const file = this.requireKnowledgeFile(input.fileId);
+    const timestamp = now();
+    this.db
+      .prepare(
+        `INSERT INTO knowledge_deletion_tombstones (id, file_id, file_name, chunk_count, reason, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(createId('tombstone'), file.id, file.name, file.chunkCount, 'user-delete', timestamp);
+    this.db.prepare('UPDATE knowledge_chunks SET status = ?, updated_at = ? WHERE file_id = ?').run('deleted', timestamp, file.id);
+    this.db
+      .prepare(
+        `UPDATE files
+         SET parse_status = 'stale', index_status = 'deleted', embedding_status = 'deleted', chunk_count = 0, deleted_at = ?, updated_at = ?
+         WHERE id = ?`,
+      )
+      .run(timestamp, timestamp, file.id);
+    this.audit('knowledge.file.deleted', 'file', file.id, { name: file.name, chunkCount: file.chunkCount });
+    return this.requireKnowledgeFile(file.id, { includeDeleted: true });
+  }
+
+  previewKnowledgeRetrieval(input: KnowledgeRetrievalInput): KnowledgeRetrievalResult {
+    return this.retrieveKnowledge(input.query, {
+      topK: input.topK,
+      strategy: input.strategy,
+      persistCitations: false,
+    });
   }
 
   createMcpServer(name: string, transport: McpServer['transport'], commandOrUrl: string): McpServer {
@@ -1440,7 +1568,11 @@ export class NexaStore {
 
     const fileCount = Number((this.db.prepare('SELECT COUNT(*) AS count FROM files').get() as { count: number }).count);
     if (fileCount === 0) {
-      this.createKnowledgeFile('NexaChat getting-started.md', 'text/markdown', 2048);
+      this.createKnowledgeFile({
+        name: 'NexaChat getting-started.md',
+        type: 'text/markdown',
+        content: t('knowledge.seed.gettingStartedContent'),
+      });
     }
 
     const mcpCount = Number((this.db.prepare('SELECT COUNT(*) AS count FROM mcp_servers').get() as { count: number }).count);
@@ -1537,14 +1669,80 @@ export class NexaStore {
     };
   }
 
-  private getLightweightCitations(content: string): Array<{ fileId: string; citation: string; snippet: string }> {
-    const firstChunk = this.db
-      .prepare('SELECT knowledge_chunks.file_id, knowledge_chunks.citation, knowledge_chunks.content FROM knowledge_chunks ORDER BY created_at DESC LIMIT 1')
-      .get() as { file_id: string; citation: string; content: string } | undefined;
-    if (!firstChunk || content.length < 2) {
-      return [];
-    }
-    return [{ fileId: firstChunk.file_id, citation: firstChunk.citation, snippet: firstChunk.content.slice(0, 120) }];
+  private retrieveKnowledge(
+    query: string,
+    options: {
+      topK?: number;
+      strategy?: KnowledgeRetrievalInput['strategy'];
+      persistCitations?: boolean;
+    } = {},
+  ): KnowledgeRetrievalResult {
+    const strategy = options.strategy ?? 'lexical';
+    const topK = Math.min(Math.max(1, Math.floor(options.topK ?? KNOWLEDGE_RUNTIME_POLICY.defaultTopK)), KNOWLEDGE_RUNTIME_POLICY.maxTopK);
+    const timestamp = now();
+    const candidates = this.db
+      .prepare(
+        `SELECT
+           knowledge_chunks.id,
+           knowledge_chunks.file_id,
+           knowledge_chunks.content,
+           knowledge_chunks.citation,
+           knowledge_chunks.position,
+           files.name AS file_name,
+           knowledge_embeddings.vector_json
+         FROM knowledge_chunks
+         JOIN files ON files.id = knowledge_chunks.file_id
+         LEFT JOIN knowledge_embeddings ON knowledge_embeddings.chunk_id = knowledge_chunks.id AND knowledge_embeddings.status = 'embedded'
+         WHERE knowledge_chunks.status = 'indexed'
+           AND files.deleted_at IS NULL
+           AND files.index_status = 'indexed'
+         ORDER BY knowledge_chunks.created_at DESC`,
+      )
+      .all() as Array<{
+        id: string;
+        file_id: string;
+        content: string;
+        citation: string;
+        position: number;
+        file_name: string;
+        vector_json: string | null;
+      }>;
+    const scoredInput: KnowledgeScoredChunkInput[] = candidates.map((chunk) => ({
+      id: chunk.id,
+      fileId: chunk.file_id,
+      fileName: chunk.file_name,
+      content: chunk.content,
+      citation: chunk.citation,
+      position: Number(chunk.position),
+      strategy,
+      vector: chunk.vector_json ? JSON.parse(chunk.vector_json) as number[] : lexicalEmbedding(chunk.content),
+    }));
+    const scored = scoreKnowledgeChunks(query, scoredInput, topK);
+    const retrievalId = createId('retrieval');
+    const fallbackReason = strategy === 'lexical' ? 'lexical_embedding' : null;
+    this.db
+      .prepare(
+        `INSERT INTO knowledge_retrieval_traces (id, query, strategy, top_k, selected_chunk_ids_json, result_count, fallback_reason, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(retrievalId, query.trim(), strategy, topK, JSON.stringify(scored.map((chunk) => chunk.id)), scored.length, fallbackReason, timestamp);
+    const citations = scored.map((chunk) => this.buildKnowledgeCitation({
+      retrievalId,
+      chunkId: chunk.id,
+      fileId: chunk.fileId,
+      fileName: chunk.fileName,
+      citation: chunk.citation,
+      snippet: chunk.content.slice(0, 220),
+      score: chunk.score,
+      strategy,
+      fallbackReason,
+      timestamp,
+      persist: options.persistCitations ?? false,
+    }));
+    return {
+      trace: this.requireKnowledgeRetrievalTrace(retrievalId),
+      citations,
+    };
   }
 
   private buildConversationContext(
@@ -1552,6 +1750,7 @@ export class NexaStore {
     strategy: SendMessageInput['contextStrategy'],
     content: string,
     modelContextWindow: number,
+    citations: KnowledgeCitation[] = [],
   ): { providerMessages: ChatMessageInput[]; contextMessageIds: string[]; trimReason: string } {
     const normalizedStrategy = strategy ?? 'recent_n';
     const limits = CONTEXT_STRATEGY_LIMITS[normalizedStrategy];
@@ -1579,8 +1778,20 @@ export class NexaStore {
     }
 
     const ordered = selected.reverse();
+    const knowledgeContext = citations.length > 0
+      ? [
+          t('knowledge.context.providerHeader'),
+          ...citations.map((citation, index) => t('knowledge.context.providerCitation', {
+            index: index + 1,
+            file: citation.fileName,
+            citation: citation.citation,
+            snippet: citation.snippet,
+          })),
+        ].join('\n')
+      : null;
     const providerMessages: ChatMessageInput[] = [
       ...(prompt ? [{ role: 'system' as const, content: prompt.content }] : []),
+      ...(knowledgeContext ? [{ role: 'system' as const, content: knowledgeContext }] : []),
       ...ordered.map((message): ChatMessageInput => ({
         role: message.role === 'error' ? 'assistant' : message.role,
         content: message.content,
@@ -1685,6 +1896,130 @@ export class NexaStore {
           timestamp + index,
         );
     });
+  }
+
+  private indexKnowledgeChunks(
+    fileId: string,
+    fileName: string,
+    chunks: ReturnType<typeof chunkKnowledgeText>,
+    timestamp: number,
+  ): void {
+    chunks.forEach((chunk, index) => {
+      const chunkId = createId('kchunk');
+      const embeddingId = createId('kembed');
+      const vector = lexicalEmbedding(chunk.content);
+      const citation = `${fileName}#chunk-${index + 1}`;
+      this.db
+        .prepare(
+          `INSERT INTO knowledge_chunks (id, file_id, knowledge_base_id, content, citation, position, token_count, content_hash, source_start, source_end, page_number, section_title, status, embedding_id, metadata_json, created_at, updated_at)
+           VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'indexed', ?, ?, ?, ?)`,
+        )
+        .run(
+          chunkId,
+          fileId,
+          chunk.content,
+          citation,
+          chunk.position,
+          chunk.tokenCount,
+          chunk.contentHash,
+          chunk.sourceStart,
+          chunk.sourceEnd,
+          embeddingId,
+          JSON.stringify({ strategy: 'lexical', indexDirectory: KNOWLEDGE_RUNTIME_POLICY.indexDirectory }),
+          timestamp + index,
+          timestamp + index,
+        );
+      this.db
+        .prepare(
+          `INSERT INTO knowledge_embeddings (id, chunk_id, provider_id, model_id, model_name_snapshot, strategy, dimension, vector_json, vector_hash, status, created_at)
+           VALUES (?, ?, NULL, NULL, ?, 'lexical', ?, ?, ?, 'embedded', ?)`,
+        )
+        .run(
+          embeddingId,
+          chunkId,
+          KNOWLEDGE_RUNTIME_POLICY.embeddingModel,
+          vector.length,
+          JSON.stringify(vector),
+          stableKnowledgeHash(JSON.stringify(vector)),
+          timestamp + index,
+        );
+    });
+  }
+
+  private buildKnowledgeCitation(input: {
+    retrievalId: string | null;
+    chunkId: string;
+    fileId: string;
+    fileName: string;
+    citation: string;
+    snippet: string;
+    score: number;
+    strategy: KnowledgeCitation['strategy'];
+    fallbackReason: string | null;
+    timestamp: number;
+    persist: boolean;
+  }): KnowledgeCitation {
+    const id = createId('citation');
+    if (input.persist) {
+      this.db
+        .prepare(
+          `INSERT INTO message_citations (id, retrieval_id, message_id, request_log_id, file_id, chunk_id, file_name, citation, snippet, score, strategy, fallback_reason, created_at)
+           VALUES (?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          id,
+          input.retrievalId,
+          input.fileId,
+          input.chunkId,
+          input.fileName,
+          input.citation,
+          input.snippet,
+          input.score,
+          input.strategy,
+          input.fallbackReason,
+          input.timestamp,
+        );
+    }
+    return {
+      id,
+      retrievalId: input.retrievalId,
+      messageId: null,
+      requestLogId: null,
+      fileId: input.fileId,
+      chunkId: input.chunkId,
+      fileName: input.fileName,
+      citation: input.citation,
+      snippet: input.snippet,
+      score: input.score,
+      strategy: input.strategy,
+      fallbackReason: input.fallbackReason,
+      createdAt: input.timestamp,
+    };
+  }
+
+  private attachKnowledgeCitations(citations: KnowledgeCitation[], messageId: string, requestLogId: string): void {
+    for (const citation of citations) {
+      this.db
+        .prepare(
+          `INSERT INTO message_citations (id, retrieval_id, message_id, request_log_id, file_id, chunk_id, file_name, citation, snippet, score, strategy, fallback_reason, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          createId('citation'),
+          citation.retrievalId,
+          messageId,
+          requestLogId,
+          citation.fileId,
+          citation.chunkId,
+          citation.fileName,
+          citation.citation,
+          citation.snippet,
+          citation.score,
+          citation.strategy,
+          citation.fallbackReason,
+          now(),
+        );
+    }
   }
 
   private buildConversationMarkdownExport(
@@ -1989,10 +2324,18 @@ export class NexaStore {
     return mapGatewayKey(row as Record<string, unknown>);
   }
 
-  private requireKnowledgeFile(id: string): KnowledgeFile {
-    const row = this.db.prepare('SELECT * FROM files WHERE id = ?').get(id);
+  private requireKnowledgeFile(id: string, options: { includeDeleted?: boolean } = {}): KnowledgeFile {
+    const row = options.includeDeleted
+      ? this.db.prepare('SELECT * FROM files WHERE id = ?').get(id)
+      : this.db.prepare('SELECT * FROM files WHERE id = ? AND deleted_at IS NULL').get(id);
     if (!row) throw new Error(`Knowledge file not found: ${id}`);
     return mapKnowledgeFile(row as Record<string, unknown>);
+  }
+
+  private requireKnowledgeRetrievalTrace(id: string): KnowledgeRetrievalTrace {
+    const row = this.db.prepare('SELECT * FROM knowledge_retrieval_traces WHERE id = ?').get(id);
+    if (!row) throw new Error(`Knowledge retrieval not found: ${id}`);
+    return mapKnowledgeRetrievalTrace(row as Record<string, unknown>);
   }
 
   private requireMcpServer(id: string): McpServer {

@@ -401,6 +401,54 @@ Git:
 - Round 8 closeout commit hash: `68720bfebe9cc74c047e5097176d012d3d04dda9`.
 - Push result: delivery and closeout commits pushed; `origin/main` confirmed at `68720bfebe9cc74c047e5097176d012d3d04dda9`.
 
+## 2026-05-16 Full App Round 9 Knowledge Base, RAG And File Processing
+
+Round 9 of the authoritative full-app blueprint is implemented and verified. It replaces the previous placeholder knowledge path with one typed chain for import, parser-normalized chunks, lexical embedding, retrieval traces, structured citations, chat citation display, rebuild, and delete.
+
+Parallel execution lanes:
+
+- Lane A: schema, migrations, Store knowledge pipeline, parser/chunk/embedding/retrieval/citation contracts.
+- Lane B: Knowledge UI, Chat citation display, browser mock parity, i18n, and UI smoke behavior.
+- Lane C: tests, build, Electron smoke, desktop shortcut readback, docs, and Git closeout.
+- Lane D: read-only Round 10 Agent/MCP/Tool/Workflow execution-model risk review.
+
+Key changes:
+
+- Added `src/shared/knowledgeRuntime.ts` as the authority for parser policy, import normalization, chunking, stable hashes, lexical embedding, and scoring.
+- Extended shared types/API/IPC/preload/main handlers for object-based knowledge import, retry, rebuild, delete, and retrieval preview.
+- Added additive DB migrations and mappers for knowledge file status fields, chunks, embeddings, retrieval traces, citations, and deletion tombstones.
+- Updated Store so supported text/Markdown/JSON/CSV/code-like content produces real chunks from supplied content, unsupported content fails honestly, retrieval writes traces/citations, chat injects retrieval context, rebuild refreshes chunks, and delete filters tombstoned files from active snapshots.
+- Updated `/v1/embeddings` to reuse the shared lexical embedding authority.
+- Reworked Knowledge UI with import content, index health, chunk status, retrieval preview, citations, rebuild, and delete controls.
+- Updated Chat UI to render structured citations under assistant messages.
+- Updated browser mock parity and active-file filtering so UI smoke exercises the same AppApi surface.
+- Added `tests/knowledge-runtime.test.ts` and extended IPC, app, i18n, and UI smoke coverage.
+- Added `docs/implementation/round-09-knowledge-rag-closure.md`.
+
+Verification completed:
+
+- `npm.cmd run typecheck`: passed through build and verify.
+- `npm.cmd run test -- tests/knowledge-runtime.test.ts tests/ipc-contract.test.ts tests/i18n-authority.test.ts`: passed, 3 files / 8 tests.
+- `npm.cmd run test`: passed, 11 files / 35 tests.
+- `npm.cmd run test:ui-smoke`: passed, 12 Playwright tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run verify`: passed, including typecheck, full unit test suite, and build.
+- `npm.cmd run test:electron-smoke`: passed; Electron shell rendered.
+- `git diff --check`: passed with LF/CRLF conversion warnings only.
+
+Desktop shortcut:
+
+- `C:\Users\至亲\Desktop\NexaChat.lnk` exists and still points to `D:\NexaChat\node_modules\electron\dist\electron.exe`.
+- Arguments remain `"D:\NexaChat"`.
+- Working directory remains `D:\NexaChat`.
+- Icon remains `D:\NexaChat\assets\app-icon.ico,0`.
+- No shortcut was modified in Round 9.
+
+Git:
+
+- Round 9 delivery commit hash: pending until commit.
+- Push result: pending until commit and push.
+
 ## 2026-05-14 UI Shell Redesign
 
 This round rebuilt the visible desktop shell, sidebar hierarchy, topbar, workbench home, and visual system so NexaChat reads as a formal compact desktop tool instead of a crowded prototype/debug panel.

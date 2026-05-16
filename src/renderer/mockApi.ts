@@ -16,7 +16,15 @@ import type {
   GatewayStatus,
   HealthStatus,
   ImportExportResult,
+  KnowledgeChunk,
+  KnowledgeCitation,
+  KnowledgeDeleteInput,
   KnowledgeFile,
+  KnowledgeImportInput,
+  KnowledgeRebuildInput,
+  KnowledgeRetrievalInput,
+  KnowledgeRetrievalResult,
+  KnowledgeRetrievalTrace,
   McpServer,
   Message,
   MessageAttachment,
@@ -38,6 +46,15 @@ import type {
 import type { AppApi } from '../shared/api';
 import { translate } from '../shared/i18n';
 import { normalizeThemeMode } from '../shared/theme';
+import {
+  KNOWLEDGE_RUNTIME_POLICY,
+  chunkKnowledgeText,
+  lexicalEmbedding,
+  normalizeKnowledgeImport,
+  scoreKnowledgeChunks,
+  stableKnowledgeHash,
+  type KnowledgeScoredChunkInput,
+} from '../shared/knowledgeRuntime';
 
 const t = (key: Parameters<typeof translate>[1], params?: Parameters<typeof translate>[2]) => translate('zh-CN', key, params);
 
@@ -57,6 +74,9 @@ interface MockState {
   gatewayStatus: GatewayStatus;
   gatewayKeys: GatewayApiKey[];
   knowledgeFiles: KnowledgeFile[];
+  knowledgeChunks: KnowledgeChunk[];
+  knowledgeRetrievals: KnowledgeRetrievalTrace[];
+  knowledgeCitations: KnowledgeCitation[];
   mcpServers: McpServer[];
   agents: AgentDefinition[];
   importExportResults: ImportExportResult[];
@@ -110,6 +130,8 @@ function createSeedState(): MockState {
   const modelId = 'model_local_mock';
   const conversationId = 'conversation_welcome';
   const assistantMessageId = 'message_welcome_assistant';
+  const knowledgeFileId = 'knowledge_browser_mock';
+  const knowledgeChunkId = 'knowledge_chunk_browser_mock_1';
 
   const workspace: Workspace = {
     id: workspaceId,
@@ -266,17 +288,48 @@ function createSeedState(): MockState {
     ],
     knowledgeFiles: [
       {
-        id: 'knowledge_browser_mock',
+        id: knowledgeFileId,
         name: 'getting-started.md',
         type: 'text/markdown',
         size: 2048,
         parseStatus: 'indexed',
-        chunkCount: 8,
+        indexStatus: 'indexed',
+        embeddingStatus: 'embedded',
+        parserType: 'markdown',
+        chunkCount: 1,
+        tokenCount: 26,
+        contentHash: 'kh_browser_seed',
+        storageRef: null,
+        metadataJson: JSON.stringify({ runtime: 'browser-mock' }),
         errorMessage: null,
+        deletedAt: null,
         createdAt: timestamp,
         updatedAt: timestamp,
       },
     ],
+    knowledgeChunks: [
+      {
+        id: knowledgeChunkId,
+        fileId: knowledgeFileId,
+        knowledgeBaseId: null,
+        content: t('knowledge.import.sampleContent'),
+        citation: 'getting-started.md#chunk-1',
+        position: 0,
+        tokenCount: 26,
+        contentHash: 'kh_browser_chunk_seed',
+        sourceStart: 0,
+        sourceEnd: t('knowledge.import.sampleContent').length,
+        pageNumber: null,
+        sectionTitle: null,
+        status: 'indexed',
+        embeddingId: 'knowledge_embedding_browser_mock_1',
+        metadataJson: JSON.stringify({ strategy: 'lexical' }),
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+    ],
+    knowledgeRetrievals: [],
+    knowledgeCitations: [],
     mcpServers: [
       {
         id: 'mcp_browser_mock',
@@ -368,6 +421,10 @@ function buildAssistantContent(content: string, routeDecision: RouteDecision): s
 }
 
 function buildSnapshot(state: MockState): AppSnapshot {
+  const activeKnowledgeFiles = state.knowledgeFiles.filter((file) => !file.deletedAt);
+  const activeKnowledgeFileIds = new Set(activeKnowledgeFiles.map((file) => file.id));
+  const activeKnowledgeChunks = state.knowledgeChunks.filter((chunk) => chunk.status !== 'deleted' && activeKnowledgeFileIds.has(chunk.fileId));
+  const activeKnowledgeCitations = state.knowledgeCitations.filter((citation) => activeKnowledgeFileIds.has(citation.fileId));
   const dayStart = new Date();
   dayStart.setHours(0, 0, 0, 0);
   const usageToday = state.usageRecords
@@ -418,13 +475,93 @@ function buildSnapshot(state: MockState): AppSnapshot {
     gatewayLogs: state.gatewayLogs,
     usageRecords: state.usageRecords,
     gatewayKeys: state.gatewayKeys,
-    knowledgeFiles: state.knowledgeFiles,
+    knowledgeFiles: activeKnowledgeFiles,
+    knowledgeChunks: activeKnowledgeChunks,
+    knowledgeRetrievals: state.knowledgeRetrievals,
+    knowledgeCitations: activeKnowledgeCitations,
     mcpServers: state.mcpServers,
     agents: state.agents,
     importExportResults: state.importExportResults,
     auditLogs: state.auditLogs,
     uiPreferences: state.uiPreferences,
   };
+}
+
+function indexKnowledgeChunks(state: MockState, file: KnowledgeFile, content: string, timestamp: number): void {
+  const chunks = chunkKnowledgeText(content);
+  for (const chunk of chunks) {
+    const chunkId = createId('knowledge_chunk');
+    state.knowledgeChunks.push({
+      id: chunkId,
+      fileId: file.id,
+      knowledgeBaseId: null,
+      content: chunk.content,
+      citation: `${file.name}#chunk-${chunk.position + 1}`,
+      position: chunk.position,
+      tokenCount: chunk.tokenCount,
+      contentHash: chunk.contentHash,
+      sourceStart: chunk.sourceStart,
+      sourceEnd: chunk.sourceEnd,
+      pageNumber: null,
+      sectionTitle: null,
+      status: 'indexed',
+      embeddingId: createId('knowledge_embedding'),
+      metadataJson: JSON.stringify({ strategy: 'lexical', indexDirectory: KNOWLEDGE_RUNTIME_POLICY.indexDirectory }),
+      createdAt: timestamp + chunk.position,
+      updatedAt: timestamp + chunk.position,
+    });
+  }
+}
+
+function retrieveKnowledge(state: MockState, input: KnowledgeRetrievalInput): KnowledgeRetrievalResult {
+  const timestamp = now();
+  const strategy = input.strategy ?? 'lexical';
+  const topK = input.topK ?? KNOWLEDGE_RUNTIME_POLICY.defaultTopK;
+  const candidates: KnowledgeScoredChunkInput[] = state.knowledgeChunks
+    .filter((chunk) => chunk.status === 'indexed')
+    .filter((chunk) => state.knowledgeFiles.some((file) => file.id === chunk.fileId && file.indexStatus === 'indexed' && !file.deletedAt))
+    .map((chunk) => {
+      const file = findById(state.knowledgeFiles, chunk.fileId, 'Knowledge file');
+      return {
+        id: chunk.id,
+        fileId: chunk.fileId,
+        fileName: file.name,
+        content: chunk.content,
+        citation: chunk.citation,
+        position: chunk.position,
+        strategy,
+        vector: lexicalEmbedding(chunk.content),
+      };
+    });
+  const scored = scoreKnowledgeChunks(input.query, candidates, topK);
+  const trace: KnowledgeRetrievalTrace = {
+    id: createId('knowledge_retrieval'),
+    query: input.query.trim(),
+    strategy,
+    topK,
+    selectedChunkIdsJson: JSON.stringify(scored.map((chunk) => chunk.id)),
+    resultCount: scored.length,
+    fallbackReason: 'lexical_embedding',
+    createdAt: timestamp,
+  };
+  const citations: KnowledgeCitation[] = scored.map((chunk) => ({
+    id: createId('knowledge_citation'),
+    retrievalId: trace.id,
+    messageId: null,
+    requestLogId: null,
+    fileId: chunk.fileId,
+    chunkId: chunk.id,
+    fileName: chunk.fileName,
+    citation: chunk.citation,
+    snippet: chunk.content.slice(0, 220),
+    score: chunk.score,
+    strategy,
+    fallbackReason: trace.fallbackReason,
+    createdAt: timestamp,
+  }));
+  state.knowledgeRetrievals.unshift(trace);
+  state.knowledgeCitations.unshift(...citations);
+  return { trace, citations };
 }
 
 export function createMockApi(): AppApi {
@@ -624,6 +761,7 @@ export function createMockApi(): AppApi {
         metadataJson: JSON.stringify({ source: 'browser-mock' }),
       });
 
+      const retrieval = retrieveKnowledge(state, { query: input.content, topK: KNOWLEDGE_RUNTIME_POLICY.defaultTopK, strategy: 'lexical' });
       const assistantMessage = createMessage({
         conversationId: storedConversation.id,
         workspaceId: state.workspace.id,
@@ -647,7 +785,7 @@ export function createMockApi(): AppApi {
         summaryId: null,
         artifactIdsJson: null,
         errorCode: null,
-        metadataJson: JSON.stringify({ source: 'browser-mock' }),
+        metadataJson: JSON.stringify({ source: 'browser-mock', retrievalId: retrieval.trace.id, citations: retrieval.citations }),
       });
 
       const requestLog: RequestLog = {
@@ -700,6 +838,13 @@ export function createMockApi(): AppApi {
 
       state.messages.push(userMessage, assistantMessage);
       state.messageChunks.push(...chunks);
+      const attachedCitations = retrieval.citations.map((citation) => ({
+        ...citation,
+        id: createId('knowledge_citation'),
+        messageId: assistantMessage.id,
+        requestLogId,
+      }));
+      state.knowledgeCitations.unshift(...attachedCitations);
       state.requestLogs.unshift(requestLog);
       state.usageRecords.unshift(usageRecord);
 
@@ -973,42 +1118,98 @@ export function createMockApi(): AppApi {
       return clone(state.uiPreferences);
     },
 
-    async createKnowledgeFile(name: string, type: string, size: number) {
+    async createKnowledgeFile(input: KnowledgeImportInput) {
       const timestamp = now();
-      const textLike = /text|markdown|json|csv|code|txt|md/i.test(`${name} ${type}`);
+      const normalized = normalizeKnowledgeImport(input);
+      const chunks = normalized.supported ? chunkKnowledgeText(normalized.content) : [];
       const file: KnowledgeFile = {
         id: createId('knowledge'),
-        name: name.trim() || 'untitled.txt',
-        type: type.trim() || 'text/plain',
-        size: Math.max(0, Math.floor(size)),
-        parseStatus: textLike ? 'indexed' : 'failed',
-        chunkCount: textLike ? Math.max(1, Math.ceil(Math.max(0, size) / 1024)) : 0,
-        errorMessage: textLike ? null : t('knowledge.errors.unsupportedFallback'),
+        name: normalized.name,
+        type: normalized.type,
+        size: normalized.size,
+        parseStatus: normalized.supported ? 'indexed' : 'failed',
+        indexStatus: normalized.supported ? 'indexed' : 'failed',
+        embeddingStatus: normalized.supported ? 'embedded' : 'failed',
+        parserType: normalized.parserType,
+        chunkCount: chunks.length,
+        tokenCount: chunks.reduce((sum, chunk) => sum + chunk.tokenCount, 0),
+        contentHash: normalized.contentHash,
+        storageRef: null,
+        metadataJson: JSON.stringify({ runtime: 'browser-mock', maxImportBytes: KNOWLEDGE_RUNTIME_POLICY.maxImportBytes }),
+        errorMessage: normalized.errorKey ? t(normalized.errorKey as Parameters<typeof t>[0]) : null,
+        deletedAt: null,
         createdAt: timestamp,
         updatedAt: timestamp,
       };
 
       state.knowledgeFiles.unshift(file);
+      if (normalized.supported) {
+        indexKnowledgeChunks(state, file, normalized.content, timestamp);
+      }
       pushAudit('knowledge.createFile', 'knowledgeFile', file.id, { type: file.type, size: file.size });
       return clone(file);
     },
 
-    async retryKnowledgeFile(fileId: string) {
-      const file = findById(state.knowledgeFiles, fileId, 'Knowledge file');
+    async retryKnowledgeFile(input: KnowledgeRebuildInput) {
+      return api.rebuildKnowledgeFile(input);
+    },
+
+    async rebuildKnowledgeFile(input: KnowledgeRebuildInput) {
+      const file = findById(state.knowledgeFiles, input.fileId, 'Knowledge file');
       const timestamp = now();
-      const textLike = /text|markdown|json|csv|code|txt|md/i.test(`${file.name} ${file.type}`);
-      if (textLike) {
-        file.parseStatus = 'indexed';
-        file.chunkCount = Math.max(file.chunkCount, 1);
-        file.errorMessage = null;
-        pushAudit('knowledge.retry.completed', 'knowledgeFile', file.id);
-      } else {
+      const sourceChunks = state.knowledgeChunks.filter((chunk) => chunk.fileId === file.id && chunk.status === 'indexed');
+      if (sourceChunks.length === 0) {
         file.parseStatus = 'failed';
-        file.errorMessage = t('knowledge.errors.retryRejected');
-        pushAudit('knowledge.retry.failed', 'knowledgeFile', file.id);
+        file.indexStatus = 'failed';
+        file.embeddingStatus = 'failed';
+        file.errorMessage = t('knowledge.errors.rebuildNoSource');
+        file.updatedAt = timestamp;
+        pushAudit('knowledge.rebuild.failed', 'knowledgeFile', file.id);
+        return clone(file);
       }
+      state.knowledgeChunks
+        .filter((chunk) => chunk.fileId === file.id)
+        .forEach((chunk) => {
+          chunk.status = 'deleted';
+          chunk.updatedAt = timestamp;
+        });
+      const content = sourceChunks.map((chunk) => chunk.content).join('\n\n');
+      indexKnowledgeChunks(state, file, content, timestamp);
+      const activeChunks = state.knowledgeChunks.filter((chunk) => chunk.fileId === file.id && chunk.status === 'indexed');
+      file.parseStatus = 'indexed';
+      file.indexStatus = 'indexed';
+      file.embeddingStatus = 'embedded';
+      file.chunkCount = activeChunks.length;
+      file.tokenCount = activeChunks.reduce((sum, chunk) => sum + chunk.tokenCount, 0);
+      file.errorMessage = null;
       file.updatedAt = timestamp;
+      pushAudit('knowledge.rebuild.completed', 'knowledgeFile', file.id);
       return clone(file);
+    },
+
+    async deleteKnowledgeFile(input: KnowledgeDeleteInput) {
+      const file = findById(state.knowledgeFiles, input.fileId, 'Knowledge file');
+      const timestamp = now();
+      state.knowledgeChunks
+        .filter((chunk) => chunk.fileId === file.id)
+        .forEach((chunk) => {
+          chunk.status = 'deleted';
+          chunk.updatedAt = timestamp;
+        });
+      file.parseStatus = 'stale';
+      file.indexStatus = 'deleted';
+      file.embeddingStatus = 'deleted';
+      file.chunkCount = 0;
+      file.deletedAt = timestamp;
+      file.updatedAt = timestamp;
+      pushAudit('knowledge.deleteFile', 'knowledgeFile', file.id);
+      return clone(file);
+    },
+
+    async previewKnowledgeRetrieval(input: KnowledgeRetrievalInput) {
+      const result = retrieveKnowledge(state, input);
+      pushAudit('knowledge.retrieve', 'knowledgeRetrieval', result.trace.id, { resultCount: result.citations.length });
+      return clone(result);
     },
 
     async createMcpServer(name: string, transport: McpServer['transport'], commandOrUrl: string) {

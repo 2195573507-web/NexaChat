@@ -11,6 +11,7 @@ import {
   type GatewayErrorCode,
   type GatewayScope,
 } from '../../shared/gatewayRuntime.js';
+import { KNOWLEDGE_RUNTIME_POLICY, lexicalEmbedding } from '../../shared/knowledgeRuntime.js';
 
 let server: Server | null = null;
 
@@ -194,13 +195,14 @@ async function handleEmbeddings(request: IncomingMessage, response: ServerRespon
       index,
       embedding: lexicalEmbedding(String(value)),
     })),
-    model: body.model ?? 'nexachat-lexical-embedding',
+    model: body.model ?? KNOWLEDGE_RUNTIME_POLICY.embeddingModel,
     usage: {
       prompt_tokens: input.join(' ').length,
       total_tokens: input.join(' ').length,
     },
     nexachat: {
-      note: 'First build lexical fallback for endpoint compatibility; real embedding providers are reserved.',
+      strategy: 'lexical',
+      indexDirectory: KNOWLEDGE_RUNTIME_POLICY.indexDirectory,
     },
   });
   recordGatewayEvent(request, GATEWAY_ENDPOINT.embeddings, 200, startedAt, auth.key, auth.scope, null);
@@ -279,15 +281,6 @@ function headersToObject(request: IncomingMessage): Record<string, string> {
     headers[key] = Array.isArray(value) ? value.join(', ') : String(value ?? '');
   }
   return headers;
-}
-
-function lexicalEmbedding(value: string): number[] {
-  const buckets = new Array<number>(12).fill(0);
-  for (let index = 0; index < value.length; index += 1) {
-    buckets[index % buckets.length] += value.charCodeAt(index) / 255;
-  }
-  const magnitude = Math.sqrt(buckets.reduce((sum, item) => sum + item * item, 0)) || 1;
-  return buckets.map((item) => Number((item / magnitude).toFixed(6)));
 }
 
 class GatewayRequestError extends Error {

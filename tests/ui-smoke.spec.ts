@@ -249,6 +249,33 @@ test('data import rejects invalid manifests and records the failure visibly', as
   await expect(page.getByText(/rejected|refused|invalid|Import/i)).toBeVisible();
 });
 
+test('knowledge import retrieval rebuild delete and chat citations use one RAG chain', async ({ page }) => {
+  const knowledge = navModules.find((module) => module.id === 'knowledge')!;
+  await page.goto('/knowledge/files');
+  await page.getByLabel(translate('zh-CN', 'knowledge.import.name')).fill('round-09-smoke.md');
+  await page.getByLabel(translate('zh-CN', 'knowledge.import.content')).fill('Round 9 smoke verifies retrieval citations, rebuild, and delete in one knowledge pipeline.');
+  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'knowledge.import.create')) }).click();
+  await expect(page.locator('main [data-tab="files"]').getByRole('cell', { name: 'round-09-smoke.md' })).toBeVisible();
+  await expect(page.locator('main [data-tab="files"]').getByText(translate('zh-CN', 'common.indexed')).first()).toBeVisible();
+
+  await openFeature(page, knowledge, knowledge.tabs.find((tab) => tab.id === 'retrieval')!);
+  await page.getByLabel(translate('zh-CN', 'knowledge.retrieval.query')).fill('retrieval citations smoke');
+  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'knowledge.retrieval.run')) }).click();
+  await expect(page.locator('main [data-tab="retrieval"]').getByRole('cell', { name: 'round-09-smoke.md', exact: true })).toBeVisible();
+
+  const chat = navModules.find((module) => module.id === 'chat')!;
+  await openFeature(page, chat, chat.tabs.find((tab) => tab.id === 'playground')!);
+  await page.getByPlaceholder(translate('zh-CN', 'chat.composer.placeholder')).fill('How does retrieval citations smoke work?');
+  await page.getByRole('button', { name: translate('zh-CN', 'chat.send') }).click();
+  await expect(page.getByLabel(translate('zh-CN', 'chat.citations.aria')).first()).toBeVisible();
+
+  await openFeature(page, knowledge, knowledge.tabs.find((tab) => tab.id === 'files')!);
+  await page.locator('tr', { hasText: 'round-09-smoke.md' }).getByRole('button', { name: new RegExp(translate('zh-CN', 'knowledge.rebuild')) }).click();
+  await expect(page.locator('main [data-tab="files"]').getByRole('cell', { name: 'round-09-smoke.md' })).toBeVisible();
+  await page.locator('tr', { hasText: 'round-09-smoke.md' }).getByRole('button', { name: new RegExp(translate('zh-CN', 'knowledge.delete')) }).click();
+  await expect(page.locator('main [data-tab="files"]').getByRole('cell', { name: 'round-09-smoke.md' })).toHaveCount(0);
+});
+
 test('theme and language preferences can change without breaking the shell', async ({ page }) => {
   await page.goto('/settings/preferences');
 

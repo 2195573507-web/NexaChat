@@ -76,6 +76,13 @@
 - Import from sub2api/CCS-style manifests should not silently import plaintext secrets. Round 8 applies Provider/Model metadata only, records stripped Gateway key templates, creates a rollback snapshot, and can disable imported metadata during rollback.
 - `/v1/embeddings` remains an explicit lexical compatibility fallback and `/v1/responses` remains reserved. Round 9 owns real embedding/RAG integration.
 
+## Full App Round 9 Findings
+
+- The root knowledge gap was not just missing UI controls. The production chain still generated placeholder chunks and attached latest-chunk citation hints, so retrieval, chat context, citations, rebuild, and delete could diverge.
+- `src/shared/knowledgeRuntime.ts` is now the authority for parser policy, chunking, lexical embedding, stable hashes, and scoring. PDF, Office, and OCR remain staged because no parser dependency was approved in this round.
+- Knowledge snapshots must expose only active files and active chunks. Browser mock now filters deleted knowledge files to match Store behavior, which fixed the UI smoke delete regression.
+- Round 10 should consume knowledge through structured files/chunks/citations and should not present full vector RAG, OCR, or Office parsing as executable Agent capabilities.
+
 ## Initial Repository State
 
 - Repository root: `D:\NexaChat`.

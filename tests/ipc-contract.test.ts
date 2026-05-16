@@ -19,8 +19,9 @@ describe('IPC contract authority', () => {
     expect(() => assertIpcPayload(IPC_CHANNELS.appGetSnapshot, [])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.appGetSnapshot, ['extra'])).toThrow(/Invalid IPC payload/);
     expect(() => assertIpcPayload(IPC_CHANNELS.chatSendMessage, [])).toThrow(/Invalid IPC payload/);
-    expect(() => assertIpcPayload(IPC_CHANNELS.knowledgeCreateFile, ['note.md', 'text/markdown', 1024])).not.toThrow();
-    expect(() => assertIpcPayload(IPC_CHANNELS.knowledgeCreateFile, ['note.md'])).toThrow(/Invalid IPC payload/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.knowledgeCreateFile, [{ name: 'note.md', type: 'text/markdown', content: 'hello' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.knowledgeCreateFile, ['note.md', 'text/markdown', 1024])).toThrow(/Invalid IPC payload/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.knowledgePreviewRetrieval, [{ query: 'hello' }])).not.toThrow();
   });
 
   it('prevents raw IPC string registration and invocation from returning', () => {
@@ -33,4 +34,3 @@ describe('IPC contract authority', () => {
     expect(preload).toContain('IPC_CHANNELS.');
   });
 });
-

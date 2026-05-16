@@ -343,3 +343,34 @@
 - Updated the authoritative blueprint Round 8 execution record, `PROJECT_PROGRESS.md`, matrix, and `docs/implementation/round-08-gateway-api-key-closure.md`; commit hash is pending until Git commit.
 - Committed Round 8 delivery as `bc5aaf67b245ce4ac1ff21c810eed06cd5cb8fe9` and backfilled the hash into the blueprint, matrix, progress, and closure document.
 - Committed Round 8 closeout as `68720bfebe9cc74c047e5097176d012d3d04dda9`, pushed it to `origin/main`, and confirmed the remote ref at the same hash.
+
+## 2026-05-16 Full App Round 9 Execution
+
+- Reconfirmed real project root with `git rev-parse --show-toplevel`: `D:/NexaChat`.
+- Continued the active `/goal` at Round 9 after Round 0-8 completion.
+- Used parallel lanes:
+  - Lane A: schema, migrations, Store knowledge pipeline, parser/chunk/embedding/retrieval/citation contracts.
+  - Lane B: Knowledge UI, Chat citation display, browser mock parity, i18n, and UI smoke behavior.
+  - Lane C: tests, build, Electron smoke, desktop shortcut readback, docs, and Git closeout.
+  - Lane D: read-only Round 10 execution-model risk review.
+- Added `src/shared/knowledgeRuntime.ts` for parser policy, import normalization, chunking, stable hashes, lexical embedding, and scoring.
+- Added knowledge chunks, embeddings, retrieval traces, citations, and deletion tombstone schema/migration coverage.
+- Extended shared API/IPC/preload/main handlers with object-based knowledge import, retry, rebuild, delete, and retrieval preview.
+- Updated Store so supported text/Markdown/JSON/CSV/code-like content imports generate real chunks from supplied content; unsupported imports fail honestly.
+- Replaced the latest-chunk citation shortcut with retrieval traces and structured citations linked to chat messages.
+- Updated `/v1/embeddings` to reuse the shared lexical embedding authority.
+- Reworked Knowledge UI with import content, index health, chunk status, retrieval preview, citation results, rebuild, and delete controls.
+- Updated Chat UI to show structured citations on assistant messages.
+- Updated browser mock parity and fixed active snapshot filtering so deleted knowledge files no longer appear after delete.
+- Added `tests/knowledge-runtime.test.ts` and extended IPC/app/i18n/UI smoke tests.
+- Ran `npm.cmd run typecheck`: passed.
+- Ran `npm.cmd run test -- tests/knowledge-runtime.test.ts tests/ipc-contract.test.ts tests/i18n-authority.test.ts`: passed, 3 files / 8 tests.
+- First `npm.cmd run test:ui-smoke` failure after Round 9 surfaced a real mock parity bug: deleted knowledge files were tombstoned but still exposed in the browser mock snapshot. Fixed `buildSnapshot()` to filter active knowledge files/chunks/citations like production Store.
+- Reran `npm.cmd run test:ui-smoke`: passed, 12 Playwright tests.
+- Ran `npm.cmd run test`: passed, 11 files / 35 tests.
+- Ran `npm.cmd run build`: passed.
+- Ran `npm.cmd run verify`: passed.
+- Ran `npm.cmd run test:electron-smoke`: passed.
+- Ran `git diff --check`: passed with LF/CRLF conversion warnings only.
+- Checked `C:\Users\至亲\Desktop\NexaChat.lnk`: target, arguments, working directory, and icon still point to the current local Electron launch entry.
+- Updated the authoritative blueprint Round 9 execution record, `PROJECT_PROGRESS.md`, matrix, `docs/implementation/round-09-knowledge-rag-closure.md`, `task_plan.md`, and `findings.md`; commit hash is pending until Git commit.

@@ -5,6 +5,10 @@ import type {
   GatewayKeyCreateInput,
   GatewayKeyRotateInput,
   GatewayKeyUpdateInput,
+  KnowledgeDeleteInput,
+  KnowledgeImportInput,
+  KnowledgeRebuildInput,
+  KnowledgeRetrievalInput,
   McpServer,
   ModelInput,
   ProviderInput,
@@ -37,6 +41,9 @@ export const IPC_CHANNELS = {
   settingsSaveUiPreferences: 'settings:saveUiPreferences',
   knowledgeCreateFile: 'knowledge:createFile',
   knowledgeRetryFile: 'knowledge:retryFile',
+  knowledgeRebuildFile: 'knowledge:rebuildFile',
+  knowledgeDeleteFile: 'knowledge:deleteFile',
+  knowledgePreviewRetrieval: 'knowledge:previewRetrieval',
   mcpCreateServer: 'mcp:createServer',
   mcpUpdatePermission: 'mcp:updatePermission',
   agentCreate: 'agent:create',
@@ -77,8 +84,11 @@ export type IpcInvokeArgs = {
   [IPC_CHANNELS.gatewayRevokeKey]: [string];
   [IPC_CHANNELS.gatewayToggle]: [boolean];
   [IPC_CHANNELS.settingsSaveUiPreferences]: [UiPreferences];
-  [IPC_CHANNELS.knowledgeCreateFile]: [string, string, number];
-  [IPC_CHANNELS.knowledgeRetryFile]: [string];
+  [IPC_CHANNELS.knowledgeCreateFile]: [KnowledgeImportInput];
+  [IPC_CHANNELS.knowledgeRetryFile]: [KnowledgeRebuildInput];
+  [IPC_CHANNELS.knowledgeRebuildFile]: [KnowledgeRebuildInput];
+  [IPC_CHANNELS.knowledgeDeleteFile]: [KnowledgeDeleteInput];
+  [IPC_CHANNELS.knowledgePreviewRetrieval]: [KnowledgeRetrievalInput];
   [IPC_CHANNELS.mcpCreateServer]: [string, McpServer['transport'], string];
   [IPC_CHANNELS.mcpUpdatePermission]: [string, McpServer['permissionState']];
   [IPC_CHANNELS.agentCreate]: [string, string];
@@ -127,8 +137,11 @@ const ipcPayloadArity: Record<IpcChannel, { min: number; max: number }> = {
   [IPC_CHANNELS.gatewayRevokeKey]: { min: 1, max: 1 },
   [IPC_CHANNELS.gatewayToggle]: { min: 1, max: 1 },
   [IPC_CHANNELS.settingsSaveUiPreferences]: { min: 1, max: 1 },
-  [IPC_CHANNELS.knowledgeCreateFile]: { min: 3, max: 3 },
+  [IPC_CHANNELS.knowledgeCreateFile]: { min: 1, max: 1 },
   [IPC_CHANNELS.knowledgeRetryFile]: { min: 1, max: 1 },
+  [IPC_CHANNELS.knowledgeRebuildFile]: { min: 1, max: 1 },
+  [IPC_CHANNELS.knowledgeDeleteFile]: { min: 1, max: 1 },
+  [IPC_CHANNELS.knowledgePreviewRetrieval]: { min: 1, max: 1 },
   [IPC_CHANNELS.mcpCreateServer]: { min: 3, max: 3 },
   [IPC_CHANNELS.mcpUpdatePermission]: { min: 2, max: 2 },
   [IPC_CHANNELS.agentCreate]: { min: 2, max: 2 },

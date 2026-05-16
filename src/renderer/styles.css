@@ -1216,9 +1216,45 @@ th {
   font: 13px/1.45 var(--font-mono);
 }
 
+.knowledge-import-input {
+  min-height: 132px;
+}
+
 .cell-actions {
   display: grid;
   gap: 6px;
+}
+
+.citation-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  background: var(--color-surface-muted);
+}
+
+.citation-list strong,
+.citation-item span {
+  font-size: 12px;
+  color: var(--color-text);
+}
+
+.citation-item {
+  display: grid;
+  gap: 3px;
+  border-top: 1px solid var(--color-border);
+  padding-top: 6px;
+}
+
+.citation-item:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.citation-item small {
+  color: var(--color-text-muted);
 }
 
 .diagnosis-grid {

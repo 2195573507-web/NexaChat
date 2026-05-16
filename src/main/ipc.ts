@@ -10,6 +10,10 @@ import type {
   GatewayKeyRotateInput,
   GatewayKeyUpdateInput,
   ImportPlanApplyOptions,
+  KnowledgeDeleteInput,
+  KnowledgeImportInput,
+  KnowledgeRebuildInput,
+  KnowledgeRetrievalInput,
   McpServer,
   ModelInput,
   ProviderInput,
@@ -57,10 +61,11 @@ export function registerIpcHandlers(): void {
     return store.getGatewayStatus();
   });
   handleIpc(IPC_CHANNELS.settingsSaveUiPreferences, (preferences: UiPreferences) => store.saveUiPreferences(preferences));
-  handleIpc(IPC_CHANNELS.knowledgeCreateFile, (name: string, type: string, size: number) =>
-    store.createKnowledgeFile(name, type, size),
-  );
-  handleIpc(IPC_CHANNELS.knowledgeRetryFile, (fileId: string) => store.retryKnowledgeFile(fileId));
+  handleIpc(IPC_CHANNELS.knowledgeCreateFile, (input: KnowledgeImportInput) => store.createKnowledgeFile(input));
+  handleIpc(IPC_CHANNELS.knowledgeRetryFile, (input: KnowledgeRebuildInput) => store.retryKnowledgeFile(input));
+  handleIpc(IPC_CHANNELS.knowledgeRebuildFile, (input: KnowledgeRebuildInput) => store.rebuildKnowledgeFile(input));
+  handleIpc(IPC_CHANNELS.knowledgeDeleteFile, (input: KnowledgeDeleteInput) => store.deleteKnowledgeFile(input));
+  handleIpc(IPC_CHANNELS.knowledgePreviewRetrieval, (input: KnowledgeRetrievalInput) => store.previewKnowledgeRetrieval(input));
   handleIpc(IPC_CHANNELS.mcpCreateServer, (name: string, transport, commandOrUrl: string) =>
     store.createMcpServer(name, transport, commandOrUrl),
   );

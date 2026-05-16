@@ -127,6 +127,8 @@ export function statusLabel(status: string, t: Translate): string {
   if (status === 'queued') return t('common.queued');
   if (status === 'parsing') return t('common.parsing');
   if (status === 'indexed') return t('common.indexed');
+  if (status === 'indexing') return t('common.indexing');
+  if (status === 'embedded') return t('common.embedded');
   if (status === 'failed') return t('common.failed');
   if (status === 'stale') return t('common.stale');
   if (status === 'discovered') return t('common.discovered');
@@ -181,11 +183,12 @@ export function getDefaultModel(snapshot: AppSnapshot) {
 
 export function formatMessageMetadata(metadataJson: string, t: Translate): string {
   try {
-    const metadata = JSON.parse(metadataJson) as { routeReason?: string; fallbackUsed?: boolean; contextStrategy?: string; citations?: unknown[] };
+    const metadata = JSON.parse(metadataJson) as { routeReason?: string; fallbackUsed?: boolean; contextStrategy?: string; citations?: unknown[]; retrievalId?: string };
     return [
       metadata.routeReason ? t('shared.metadata.route', { reason: metadata.routeReason }) : t('shared.metadata.localTrace'),
       metadata.fallbackUsed ? t('shared.metadata.fallback') : null,
       metadata.contextStrategy ? t('shared.metadata.context', { strategy: metadata.contextStrategy }) : null,
+      metadata.retrievalId ? t('shared.metadata.retrieval', { id: metadata.retrievalId }) : null,
       Array.isArray(metadata.citations) ? t('shared.metadata.citations', { count: metadata.citations.length }) : null,
     ]
       .filter(Boolean)

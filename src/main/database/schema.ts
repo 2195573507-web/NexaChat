@@ -300,14 +300,28 @@ CREATE TABLE IF NOT EXISTS knowledge_bases (
 
 CREATE TABLE IF NOT EXISTS files (
   id TEXT PRIMARY KEY,
+  workspace_id TEXT,
+  knowledge_base_id TEXT,
   name TEXT NOT NULL,
   type TEXT NOT NULL,
   size INTEGER NOT NULL,
   parse_status TEXT NOT NULL,
+  index_status TEXT NOT NULL DEFAULT 'queued',
+  embedding_status TEXT NOT NULL DEFAULT 'queued',
+  parser_type TEXT NOT NULL DEFAULT 'unsupported',
   chunk_count INTEGER NOT NULL DEFAULT 0,
+  token_count INTEGER NOT NULL DEFAULT 0,
+  content_hash TEXT,
+  storage_ref TEXT,
+  metadata_json TEXT,
   error_message TEXT,
+  parse_started_at INTEGER,
+  parse_completed_at INTEGER,
+  deleted_at INTEGER,
   created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY(workspace_id) REFERENCES workspaces(id),
+  FOREIGN KEY(knowledge_base_id) REFERENCES knowledge_bases(id)
 );
 
 CREATE TABLE IF NOT EXISTS knowledge_chunks (
@@ -317,9 +331,88 @@ CREATE TABLE IF NOT EXISTS knowledge_chunks (
   content TEXT NOT NULL,
   citation TEXT NOT NULL,
   position INTEGER NOT NULL,
+  token_count INTEGER NOT NULL DEFAULT 0,
+  content_hash TEXT,
+  source_start INTEGER,
+  source_end INTEGER,
+  page_number INTEGER,
+  section_title TEXT,
+  status TEXT NOT NULL DEFAULT 'indexed',
+  embedding_id TEXT,
+  metadata_json TEXT,
   created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
   FOREIGN KEY(file_id) REFERENCES files(id),
   FOREIGN KEY(knowledge_base_id) REFERENCES knowledge_bases(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_files_workspace_status ON files(workspace_id, parse_status, index_status);
+CREATE INDEX IF NOT EXISTS idx_files_deleted ON files(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_file_position ON knowledge_chunks(file_id, position);
+CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_status ON knowledge_chunks(status, file_id);
+
+CREATE TABLE IF NOT EXISTS knowledge_embeddings (
+  id TEXT PRIMARY KEY,
+  chunk_id TEXT NOT NULL,
+  provider_id TEXT,
+  model_id TEXT,
+  model_name_snapshot TEXT NOT NULL,
+  strategy TEXT NOT NULL,
+  dimension INTEGER NOT NULL,
+  vector_json TEXT NOT NULL,
+  vector_hash TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY(chunk_id) REFERENCES knowledge_chunks(id),
+  FOREIGN KEY(provider_id) REFERENCES providers(id),
+  FOREIGN KEY(model_id) REFERENCES models(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_knowledge_embeddings_chunk ON knowledge_embeddings(chunk_id);
+CREATE INDEX IF NOT EXISTS idx_knowledge_embeddings_status ON knowledge_embeddings(status, strategy);
+
+CREATE TABLE IF NOT EXISTS knowledge_retrieval_traces (
+  id TEXT PRIMARY KEY,
+  query TEXT NOT NULL,
+  strategy TEXT NOT NULL,
+  top_k INTEGER NOT NULL,
+  selected_chunk_ids_json TEXT NOT NULL,
+  result_count INTEGER NOT NULL,
+  fallback_reason TEXT,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS message_citations (
+  id TEXT PRIMARY KEY,
+  retrieval_id TEXT,
+  message_id TEXT,
+  request_log_id TEXT,
+  file_id TEXT NOT NULL,
+  chunk_id TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  citation TEXT NOT NULL,
+  snippet TEXT NOT NULL,
+  score REAL NOT NULL,
+  strategy TEXT NOT NULL,
+  fallback_reason TEXT,
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY(retrieval_id) REFERENCES knowledge_retrieval_traces(id),
+  FOREIGN KEY(message_id) REFERENCES messages(id),
+  FOREIGN KEY(request_log_id) REFERENCES request_logs(id),
+  FOREIGN KEY(file_id) REFERENCES files(id),
+  FOREIGN KEY(chunk_id) REFERENCES knowledge_chunks(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_message_citations_message ON message_citations(message_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_message_citations_retrieval ON message_citations(retrieval_id);
+
+CREATE TABLE IF NOT EXISTS knowledge_deletion_tombstones (
+  id TEXT PRIMARY KEY,
+  file_id TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  chunk_count INTEGER NOT NULL,
+  reason TEXT NOT NULL,
+  created_at INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS memories (

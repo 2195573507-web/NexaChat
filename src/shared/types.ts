@@ -1,6 +1,14 @@
 import type { ThemeMode } from './theme.js';
 import type { GatewayErrorCode, GatewayImportSource, GatewayKeyState, GatewayScope } from './gatewayRuntime.js';
 import type {
+  KnowledgeChunkStatus,
+  KnowledgeEmbeddingStatus,
+  KnowledgeIndexStatus,
+  KnowledgeParseStatus,
+  KnowledgeParserType,
+  KnowledgeRetrievalStrategy,
+} from './knowledgeRuntime.js';
+import type {
   ConversationExportFormat,
   ConversationStatus,
   MessageChunkStatus,
@@ -60,6 +68,8 @@ export type ModuleId =
   | 'gateway'
   | 'data'
   | 'settings';
+
+export type TranslationParams = Record<string, string | number | boolean | null | undefined>;
 
 export interface Workspace {
   id: string;
@@ -437,11 +447,106 @@ export interface KnowledgeFile {
   name: string;
   type: string;
   size: number;
-  parseStatus: 'queued' | 'parsing' | 'indexed' | 'failed' | 'stale';
+  parseStatus: KnowledgeParseStatus;
+  indexStatus: KnowledgeIndexStatus;
+  embeddingStatus: KnowledgeEmbeddingStatus;
+  parserType: KnowledgeParserType;
   chunkCount: number;
+  tokenCount: number;
+  contentHash: string | null;
+  storageRef: string | null;
+  metadataJson: string | null;
   errorMessage: string | null;
+  deletedAt: number | null;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface KnowledgeChunk {
+  id: string;
+  fileId: string;
+  knowledgeBaseId: string | null;
+  content: string;
+  citation: string;
+  position: number;
+  tokenCount: number;
+  contentHash: string | null;
+  sourceStart: number | null;
+  sourceEnd: number | null;
+  pageNumber: number | null;
+  sectionTitle: string | null;
+  status: KnowledgeChunkStatus;
+  embeddingId: string | null;
+  metadataJson: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface KnowledgeEmbedding {
+  id: string;
+  chunkId: string;
+  providerId: string | null;
+  modelId: string | null;
+  modelNameSnapshot: string;
+  strategy: KnowledgeRetrievalStrategy;
+  dimension: number;
+  vectorJson: string;
+  vectorHash: string;
+  status: KnowledgeEmbeddingStatus;
+  createdAt: number;
+}
+
+export interface KnowledgeRetrievalTrace {
+  id: string;
+  query: string;
+  strategy: KnowledgeRetrievalStrategy;
+  topK: number;
+  selectedChunkIdsJson: string;
+  resultCount: number;
+  fallbackReason: string | null;
+  createdAt: number;
+}
+
+export interface KnowledgeCitation {
+  id: string;
+  retrievalId: string | null;
+  messageId: string | null;
+  requestLogId: string | null;
+  fileId: string;
+  chunkId: string;
+  fileName: string;
+  citation: string;
+  snippet: string;
+  score: number;
+  strategy: KnowledgeRetrievalStrategy;
+  fallbackReason: string | null;
+  createdAt: number;
+}
+
+export interface KnowledgeImportInput {
+  name: string;
+  type?: string;
+  size?: number;
+  content: string;
+}
+
+export interface KnowledgeRebuildInput {
+  fileId: string;
+}
+
+export interface KnowledgeDeleteInput {
+  fileId: string;
+}
+
+export interface KnowledgeRetrievalInput {
+  query: string;
+  topK?: number;
+  strategy?: KnowledgeRetrievalStrategy;
+}
+
+export interface KnowledgeRetrievalResult {
+  trace: KnowledgeRetrievalTrace;
+  citations: KnowledgeCitation[];
 }
 
 export interface McpServer {
@@ -531,6 +636,9 @@ export interface AppSnapshot {
   usageRecords: UsageRecord[];
   gatewayKeys: GatewayApiKey[];
   knowledgeFiles: KnowledgeFile[];
+  knowledgeChunks: KnowledgeChunk[];
+  knowledgeRetrievals: KnowledgeRetrievalTrace[];
+  knowledgeCitations: KnowledgeCitation[];
   mcpServers: McpServer[];
   agents: AgentDefinition[];
   importExportResults: ImportExportResult[];

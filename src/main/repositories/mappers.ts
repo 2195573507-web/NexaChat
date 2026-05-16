@@ -6,7 +6,11 @@ import type {
   GatewayApiKey,
   GatewayLog,
   ImportExportResult,
+  KnowledgeChunk,
+  KnowledgeCitation,
+  KnowledgeEmbedding,
   KnowledgeFile,
+  KnowledgeRetrievalTrace,
   McpServer,
   Message,
   MessageAttachment,
@@ -285,10 +289,87 @@ export function mapKnowledgeFile(row: Row): KnowledgeFile {
     type: String(row.type),
     size: Number(row.size),
     parseStatus: String(row.parse_status) as KnowledgeFile['parseStatus'],
+    indexStatus: String(row.index_status ?? 'queued') as KnowledgeFile['indexStatus'],
+    embeddingStatus: String(row.embedding_status ?? 'queued') as KnowledgeFile['embeddingStatus'],
+    parserType: String(row.parser_type ?? 'unsupported') as KnowledgeFile['parserType'],
     chunkCount: Number(row.chunk_count),
+    tokenCount: Number(row.token_count ?? 0),
+    contentHash: nullableString(row.content_hash),
+    storageRef: nullableString(row.storage_ref),
+    metadataJson: nullableString(row.metadata_json),
     errorMessage: nullableString(row.error_message),
+    deletedAt: nullableNumber(row.deleted_at),
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
+  };
+}
+
+export function mapKnowledgeChunk(row: Row): KnowledgeChunk {
+  return {
+    id: String(row.id),
+    fileId: String(row.file_id),
+    knowledgeBaseId: nullableString(row.knowledge_base_id),
+    content: String(row.content),
+    citation: String(row.citation),
+    position: Number(row.position),
+    tokenCount: Number(row.token_count ?? 0),
+    contentHash: nullableString(row.content_hash),
+    sourceStart: nullableNumber(row.source_start),
+    sourceEnd: nullableNumber(row.source_end),
+    pageNumber: nullableNumber(row.page_number),
+    sectionTitle: nullableString(row.section_title),
+    status: String(row.status ?? 'indexed') as KnowledgeChunk['status'],
+    embeddingId: nullableString(row.embedding_id),
+    metadataJson: nullableString(row.metadata_json),
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at ?? row.created_at),
+  };
+}
+
+export function mapKnowledgeEmbedding(row: Row): KnowledgeEmbedding {
+  return {
+    id: String(row.id),
+    chunkId: String(row.chunk_id),
+    providerId: nullableString(row.provider_id),
+    modelId: nullableString(row.model_id),
+    modelNameSnapshot: String(row.model_name_snapshot),
+    strategy: String(row.strategy) as KnowledgeEmbedding['strategy'],
+    dimension: Number(row.dimension),
+    vectorJson: String(row.vector_json),
+    vectorHash: String(row.vector_hash),
+    status: String(row.status) as KnowledgeEmbedding['status'],
+    createdAt: Number(row.created_at),
+  };
+}
+
+export function mapKnowledgeRetrievalTrace(row: Row): KnowledgeRetrievalTrace {
+  return {
+    id: String(row.id),
+    query: String(row.query),
+    strategy: String(row.strategy) as KnowledgeRetrievalTrace['strategy'],
+    topK: Number(row.top_k),
+    selectedChunkIdsJson: String(row.selected_chunk_ids_json),
+    resultCount: Number(row.result_count),
+    fallbackReason: nullableString(row.fallback_reason),
+    createdAt: Number(row.created_at),
+  };
+}
+
+export function mapKnowledgeCitation(row: Row): KnowledgeCitation {
+  return {
+    id: String(row.id),
+    retrievalId: nullableString(row.retrieval_id),
+    messageId: nullableString(row.message_id),
+    requestLogId: nullableString(row.request_log_id),
+    fileId: String(row.file_id),
+    chunkId: String(row.chunk_id),
+    fileName: String(row.file_name),
+    citation: String(row.citation),
+    snippet: String(row.snippet),
+    score: Number(row.score),
+    strategy: String(row.strategy) as KnowledgeCitation['strategy'],
+    fallbackReason: nullableString(row.fallback_reason),
+    createdAt: Number(row.created_at),
   };
 }
 
