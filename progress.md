@@ -474,3 +474,4 @@
 - Checked `C:\Users\至亲\Desktop\NexaChat.lnk`: target, arguments, working directory, and icon still point to the current local Electron launch entry.
 - Updated the authoritative blueprint Round 12 execution record, `PROJECT_PROGRESS.md`, matrix, `docs/implementation/round-12-data-config-import-export-backup-recovery-closure.md`, `task_plan.md`, `progress.md`, and `findings.md`; commit hash is pending until Git commit.
 - Committed Round 12 delivery as `4554dc4c47ff2dbf62479a786d486a8968dd78c6` and started delivery-hash backfill.
+- Committed Round 12 closeout as `b064dae1a90df8ec62fb6cd3ddfd96f9007dafe9` and started closeout-hash backfill.
