@@ -1485,4 +1485,6 @@ Next recommended execution:
 
 Commit and push:
 
-- Pending until final verification succeeds.
+- Delivery commit hash: `cb4a81f1debadeb7a966ea7844e56ea6805ec14a`.
+- Push result: `git push origin main` succeeded; `git rev-parse HEAD`, `git rev-parse origin/main`, and `git ls-remote origin refs/heads/main` all confirmed `cb4a81f1debadeb7a966ea7844e56ea6805ec14a`.
+- This progress closeout record is committed after the delivery confirmation; final closeout commit and remote hash are reported in the final run report.
