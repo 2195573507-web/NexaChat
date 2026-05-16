@@ -597,7 +597,7 @@ Desktop shortcut:
 
 Git:
 
-- Round 12 delivery commit hash: pending.
+- Round 12 delivery commit hash: `4554dc4c47ff2dbf62479a786d486a8968dd78c6`.
 - Round 12 closeout commit hash: pending.
 - Push result: pending.
 

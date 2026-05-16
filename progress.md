@@ -473,3 +473,4 @@
 - Ran `git diff --check`: passed after fixing a trailing-whitespace issue; remaining output was LF/CRLF conversion warnings only.
 - Checked `C:\Users\至亲\Desktop\NexaChat.lnk`: target, arguments, working directory, and icon still point to the current local Electron launch entry.
 - Updated the authoritative blueprint Round 12 execution record, `PROJECT_PROGRESS.md`, matrix, `docs/implementation/round-12-data-config-import-export-backup-recovery-closure.md`, `task_plan.md`, `progress.md`, and `findings.md`; commit hash is pending until Git commit.
+- Committed Round 12 delivery as `4554dc4c47ff2dbf62479a786d486a8968dd78c6` and started delivery-hash backfill.

@@ -2,7 +2,7 @@
 
 Date: 2026-05-16
 
-Status: Completed as implementation and verification; delivery commit hash pending.
+Status: Completed as implementation and verification; delivery commit `4554dc4c47ff2dbf62479a786d486a8968dd78c6`; closeout hash pending.
 
 ## Root-Cause And Chain Review
 
@@ -68,7 +68,7 @@ Passed at the targeted Round 12 boundary. Export/import and encrypted backup now
 
 ## Commit
 
-- Delivery commit hash: pending.
+- Delivery commit hash: `4554dc4c47ff2dbf62479a786d486a8968dd78c6`.
 - Closeout commit hash: pending.
 - Push result: pending.
 - Remaining issues: None for Round 12. Round 13 owns observability aggregation, provider health history, feedback, evaluation, trace dashboard, privacy settings, and retention.
