@@ -1216,6 +1216,80 @@ These references guide product and engineering decisions. They are not permissio
 25. **Deliverables**: Observability services, dashboards, eval/feedback, tests, docs.
 26. **Next Round Input**: Production-quality insight for desktop packaging and release.
 
+### Round 13 Execution Status
+
+- Status: Completed.
+- Completion date: 2026-05-16.
+- Parallel lanes:
+  - Lane A: `observabilityRuntime`, schema/migration, Store aggregation, feedback, eval, provider health, privacy export.
+  - Lane B: IPC/API/preload/security permission mapping, browser mock parity, Gateway usage UI, Settings feedback/evals/privacy UI.
+  - Lane C: runtime/store/IPC/i18n/app/UI smoke tests, desktop shortcut readback, docs, Git closeout.
+- Root-cause analysis: request logs, usage records, gateway logs, audit logs, execution traces, and knowledge retrieval traces already existed, but there was no unified local observability authority. Feedback, eval results, provider health history, privacy settings, and redacted observability export were missing, and old Settings aliases still routed feedback/evals/usage to unrelated surfaces.
+- Upstream/downstream chain review:
+  - Chat/provider/gateway/eval execution -> request logs, usage records, gateway logs, provider health records.
+  - Execution/knowledge/audit chains -> existing trace/retrieval/audit records reused by the observability snapshot.
+  - Store query/export -> `observabilityRuntime` aggregation and redaction -> Gateway usage, Settings feedback/evals/privacy, browser mock, tests, docs.
+- Major changed files:
+  - `src/shared/observabilityRuntime.ts`
+  - `src/shared/types.ts`
+  - `src/main/database/schema.ts`
+  - `src/main/database/connection.ts`
+  - `src/main/repositories/mappers.ts`
+  - `src/main/services/store.ts`
+  - `src/shared/ipc.ts`
+  - `src/shared/api.ts`
+  - `src/preload/index.ts`
+  - `src/main/ipc.ts`
+  - `src/shared/securityRuntime.ts`
+  - `src/shared/navigation.ts`
+  - `src/shared/i18n.ts`
+  - `src/renderer/mockApi.ts`
+  - `src/renderer/modules/GatewayPage.tsx`
+  - `src/renderer/modules/SettingsPage.tsx`
+  - `src/renderer/modules/DashboardPage.tsx`
+  - `src/renderer/styles.css`
+  - `tests/observability-runtime.test.ts`
+  - `tests/observability-store.test.ts`
+  - `tests/ipc-contract.test.ts`
+  - `tests/app.test.tsx`
+  - `tests/ui-smoke.spec.ts`
+- Added or changed functionality:
+  - Added centralized observability metric/log/feedback/eval/privacy/redaction authority.
+  - Added provider health history, feedback items, eval sets, and eval results tables and migrations.
+  - Added Store observability query, feedback create, real Provider-backed evaluation run, privacy save, and redacted export.
+  - Added observability IPC/API/preload handlers and security permissions.
+  - Added browser mock parity for observability operations used by UI smoke.
+  - Added Gateway `usage` page for usage, success rate, provider health, latency, errors, and eval/feedback summary.
+  - Added Settings `feedback`, `evals`, and `observability` pages.
+  - Updated old aliases so `/settings/usage` routes to `/gateway/usage`, and feedback/evals route to first-class Settings pages.
+  - Removed hardcoded dashboard `in / out` token wording in favor of i18n-backed token breakdown.
+- Deleted or replaced old links:
+  - Replaced `/settings/evals -> /models/router` with `/settings/evals`.
+  - Replaced `/settings/feedback -> /settings/audit` with `/settings/feedback`.
+  - Replaced `/settings/usage -> /gateway/logs` with `/gateway/usage`.
+  - Did not create a duplicate top-level Observability module or duplicate log tables; existing logs remain authoritative inputs.
+- Test commands and results:
+  - `npm.cmd run typecheck`: Passed.
+  - `npm.cmd run test -- tests/observability-runtime.test.ts tests/observability-store.test.ts tests/ipc-contract.test.ts tests/app.test.tsx tests/i18n-authority.test.ts`: Passed, 5 files / 15 tests.
+  - `npm.cmd run test:ui-smoke`: Passed, 16 Playwright tests.
+  - `npm.cmd run test`: Passed, 16 files / 50 tests.
+  - First `npm.cmd run build`: Failed because `tests/observability-runtime.test.ts` used an invalid trace event fixture and stale retrieval trace field. Fixed the test fixture.
+  - Rerun `npm.cmd run build`: Passed.
+  - `npm.cmd run verify`: Passed, including typecheck, full unit test suite, and build.
+  - `npm.cmd run test:electron-smoke`: Passed, Electron shell rendered.
+  - `git diff --check`: Passed with LF/CRLF conversion warnings only.
+  - `lint`: no lint script exists in `package.json`.
+- Desktop shortcut result:
+  - `C:/Users/至亲/Desktop/NexaChat.lnk` exists.
+  - TargetPath: `D:/NexaChat/node_modules/electron/dist/electron.exe`.
+  - Arguments: `"D:/NexaChat"`.
+  - WorkingDirectory: `D:/NexaChat`.
+  - IconLocation: `D:/NexaChat/assets/app-icon.ico,0`.
+  - No shortcut was modified.
+- Acceptance result: Passed. Usage, logs, provider health history, error statistics, feedback, evals, traces, privacy settings, and redacted local export now share one local observability chain and are visible from focused Gateway/Settings/Tools surfaces.
+- Commit hash: pending Round 13 delivery commit.
+- Remaining issues: None for Round 13. Round 14 owns packaged desktop entry, installer/package artifact, shortcut script/check, crash recovery, and release diagnostics.
+
 ## 20. Round 14: Desktop Experience, Packaging, Shortcut And Release
 
 1. **Round Name**: Desktop Experience, Packaging, Shortcut And Release.

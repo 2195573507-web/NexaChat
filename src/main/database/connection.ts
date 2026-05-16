@@ -88,6 +88,54 @@ function runAdditiveMigrations(db: DatabaseSync): void {
   addColumnIfMissing(db, 'config_snapshots', 'source', 'TEXT');
   addColumnIfMissing(db, 'config_snapshots', 'applied_entity_ids_json', 'TEXT');
   db.exec(`
+    CREATE TABLE IF NOT EXISTS provider_health_records (
+      id TEXT PRIMARY KEY,
+      provider_id TEXT NOT NULL,
+      model_id TEXT,
+      status TEXT NOT NULL,
+      latency_ms INTEGER,
+      source TEXT NOT NULL,
+      error_code TEXT,
+      error_message TEXT,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_provider_health_provider ON provider_health_records(provider_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_provider_health_status ON provider_health_records(status, created_at);
+    CREATE TABLE IF NOT EXISTS feedback_items (
+      id TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      message_id TEXT,
+      request_log_id TEXT,
+      notes TEXT,
+      metadata_json TEXT,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_feedback_request ON feedback_items(request_log_id, created_at);
+    CREATE TABLE IF NOT EXISTS eval_sets (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      prompt TEXT NOT NULL,
+      expected_keywords_json TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS eval_results (
+      id TEXT PRIMARY KEY,
+      eval_set_id TEXT NOT NULL,
+      provider_id TEXT,
+      model_id TEXT,
+      request_log_id TEXT,
+      status TEXT NOT NULL,
+      score REAL,
+      latency_ms INTEGER,
+      output_preview TEXT,
+      error_code TEXT,
+      error_message TEXT,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_eval_results_set ON eval_results(eval_set_id, created_at);
     CREATE TABLE IF NOT EXISTS data_mobility_jobs (
       id TEXT PRIMARY KEY,
       operation_kind TEXT NOT NULL,

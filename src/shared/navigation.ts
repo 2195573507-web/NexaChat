@@ -200,6 +200,10 @@ export const navModules: NavModule[] = [
         icon: 'scroll-text',
       },
       {
+        id: 'usage',
+        icon: 'activity',
+      },
+      {
         id: 'docs',
         icon: 'brackets',
       },
@@ -255,6 +259,21 @@ export const navModules: NavModule[] = [
         id: 'audit',
         icon: 'scroll-text',
         permission: 'audit:read',
+      },
+      {
+        id: 'feedback',
+        icon: 'message-square-text',
+        permission: 'observability:write',
+      },
+      {
+        id: 'evals',
+        icon: 'activity',
+        permission: 'observability:write',
+      },
+      {
+        id: 'observability',
+        icon: 'shield-check',
+        permission: 'observability:read',
       },
       {
         id: 'about',
@@ -319,10 +338,10 @@ export const routeAliasRegistry: RouteAliasEntry[] = [
   alias('/data/import-export', '/data/import', 'data', 'Import/export maps to the Round 12 data mobility import/export workbench.'),
   alias('/data/snapshots', '/data/backup', 'data', 'Legacy snapshots route now maps to encrypted backup and snapshot history.'),
   alias('/settings/request-logs', '/gateway/logs', 'gateway', 'Request logs moved to gateway logs.'),
-  alias('/settings/usage', '/gateway/logs', 'gateway', 'Usage is currently visible with request logs.'),
-  alias('/settings/evals', '/models/router', 'models', 'Evals are planned and model-related until Round 13.'),
+  alias('/settings/usage', '/gateway/usage', 'gateway', 'Usage moved to gateway observability usage.'),
+  alias('/settings/evals', '/settings/evals', 'settings', 'Evals are now owned by settings observability.'),
   alias('/settings/diagnostics', '/data/diagnostics', 'data', 'Diagnostics moved to data module.'),
-  alias('/settings/feedback', '/settings/audit', 'settings', 'Feedback remains planned and maps to audit context.'),
+  alias('/settings/feedback', '/settings/feedback', 'settings', 'Feedback is now owned by settings observability.'),
   alias('/settings/users', '/settings/security', 'settings', 'Users/RBAC remain planned under security.'),
   alias('/settings/permissions', '/settings/security', 'settings', 'Permissions remain planned under security.'),
   alias('/settings/keys', '/settings/security', 'settings', 'Key security belongs to settings security.'),

@@ -33,6 +33,12 @@ describe('IPC contract authority', () => {
     expect(() => assertIpcPayload(IPC_CHANNELS.dataCreateEncryptedBackup, [{ passphrase: 'round-12-passphrase' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.dataCreateRestorePreflight, [{ backupId: 'backup_1', passphrase: 'round-12-passphrase' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.dataApplyRollback, [{ rollbackId: 'rollback_1', confirmationPhrase: 'ROLLBACK DATA' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.observabilityQuery, [])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.observabilityQuery, [{ status: 'completed' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.observabilityCreateFeedback, [{ label: 'bug', notes: 'local only' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.observabilityRunEval, [{ evalSetId: 'eval_round13_basic' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.observabilitySavePrivacy, [{ includePromptSnippets: false }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.observabilityExport, [])).not.toThrow();
   });
 
   it('prevents raw IPC string registration and invocation from returning', () => {

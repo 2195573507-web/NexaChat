@@ -11,9 +11,12 @@ import {
   mapDataBackupRecord,
   mapDataConflictRecord,
   mapDataMobilityJob,
+  mapEvalResult,
+  mapEvalSet,
   mapExecutionRun,
   mapExecutionStep,
   mapExecutionTraceEvent,
+  mapFeedbackItem,
   mapGatewayKey,
   mapGatewayLog,
   mapImportExportResult,
@@ -28,6 +31,7 @@ import {
   mapModel,
   mapPromptTemplate,
   mapProvider,
+  mapProviderHealthRecord,
   mapRequestLog,
   mapMigrationRun,
   mapRollbackRecord,
@@ -108,6 +112,17 @@ import {
   type DataConflictInput,
   type NormalizedDataManifest,
 } from '../../shared/dataRuntime.js';
+import {
+  DEFAULT_OBSERVABILITY_PRIVACY_SETTINGS,
+  OBSERVABILITY_FEEDBACK_LABELS,
+  buildObservabilitySummary,
+  buildRedactedObservabilityExport,
+  filterObservabilityRequestLogs,
+  normalizeObservabilityPrivacySettings,
+  normalizeObservabilityQuery,
+  type ObservabilityPrivacySettings,
+  type ObservabilityQueryInput,
+} from '../../shared/observabilityRuntime.js';
 import type {
   AgentDefinition,
   AppSnapshot,
@@ -130,6 +145,11 @@ import type {
   DataMobilityJob,
   DataRestorePreflightInput,
   DataRollbackInput,
+  EvalResult,
+  EvalRunInput,
+  EvalSet,
+  FeedbackCreateInput,
+  FeedbackItem,
   ExecutionRun,
   ExecutionStartInput,
   ExecutionStep,
@@ -161,8 +181,11 @@ import type {
   MessageChunk,
   Model,
   ModelInput,
+  ObservabilityExportResult,
+  ObservabilitySnapshot,
   PromptTemplate,
   Provider,
+  ProviderHealthRecord,
   ProviderInput,
   RegenerateMessageInput,
   RequestLog,
@@ -193,6 +216,7 @@ import {
 const DEFAULT_WORKSPACE_ID = 'ws_default';
 const DEFAULT_PREFS_ID = 'ui_default';
 const GATEWAY_ENABLED_SETTING_KEY = 'gateway.enabled';
+const OBSERVABILITY_PRIVACY_SETTING_KEY = 'observability.privacy';
 const DEFAULT_SECURITY_USER_ID = 'user_local_admin';
 const DEFAULT_SECURITY_SESSION_ID = 'session_local_admin';
 const t = (key: Parameters<typeof translate>[1], params?: Parameters<typeof translate>[2]) => translate('zh-CN', key, params);
@@ -253,6 +277,11 @@ export class NexaStore {
       requestLogs: this.getRequestLogs(),
       gatewayLogs: this.getGatewayLogs(),
       usageRecords: this.getUsageRecords(),
+      providerHealthRecords: this.getProviderHealthRecords(),
+      feedbackItems: this.getFeedbackItems(),
+      evalSets: this.getEvalSets(),
+      evalResults: this.getEvalResults(),
+      observability: this.queryObservability(),
       gatewayKeys: this.getGatewayKeys(),
       knowledgeFiles: this.getKnowledgeFiles(),
       knowledgeChunks: this.getKnowledgeChunks(),
@@ -382,6 +411,271 @@ export class NexaStore {
       .prepare('SELECT * FROM usage_records ORDER BY created_at DESC LIMIT 200')
       .all()
       .map((row) => mapUsageRecord(row as Record<string, unknown>));
+  }
+
+  getProviderHealthRecords(): ProviderHealthRecord[] {
+    return this.db
+      .prepare('SELECT * FROM provider_health_records ORDER BY created_at DESC LIMIT 200')
+      .all()
+      .map((row) => mapProviderHealthRecord(row as Record<string, unknown>));
+  }
+
+  getFeedbackItems(): FeedbackItem[] {
+    return this.db
+      .prepare('SELECT * FROM feedback_items ORDER BY created_at DESC LIMIT 200')
+      .all()
+      .map((row) => mapFeedbackItem(row as Record<string, unknown>));
+  }
+
+  getEvalSets(): EvalSet[] {
+    return this.db
+      .prepare('SELECT * FROM eval_sets ORDER BY updated_at DESC')
+      .all()
+      .map((row) => mapEvalSet(row as Record<string, unknown>));
+  }
+
+  getEvalResults(evalSetId?: string): EvalResult[] {
+    const rows = evalSetId
+      ? this.db.prepare('SELECT * FROM eval_results WHERE eval_set_id = ? ORDER BY created_at DESC LIMIT 200').all(evalSetId)
+      : this.db.prepare('SELECT * FROM eval_results ORDER BY created_at DESC LIMIT 200').all();
+    return rows.map((row) => mapEvalResult(row as Record<string, unknown>));
+  }
+
+  getObservabilityPrivacySettings(): ObservabilityPrivacySettings {
+    const raw = this.getSetting(OBSERVABILITY_PRIVACY_SETTING_KEY);
+    if (!raw) {
+      return normalizeObservabilityPrivacySettings({
+        ...DEFAULT_OBSERVABILITY_PRIVACY_SETTINGS,
+        updatedAt: now(),
+      });
+    }
+    try {
+      return normalizeObservabilityPrivacySettings(JSON.parse(raw) as Partial<ObservabilityPrivacySettings>);
+    } catch {
+      return normalizeObservabilityPrivacySettings({
+        ...DEFAULT_OBSERVABILITY_PRIVACY_SETTINGS,
+        updatedAt: now(),
+      });
+    }
+  }
+
+  queryObservability(input: ObservabilityQueryInput = {}): ObservabilitySnapshot {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.observabilityRead, 'observability', null);
+    const query = normalizeObservabilityQuery(input);
+    const requestLogs = filterObservabilityRequestLogs(this.getRequestLogs(), query);
+    const requestLogIds = new Set(requestLogs.map((log) => log.id));
+    const gatewayLogs = this.getGatewayLogs().filter((log) => !log.requestLogId || requestLogIds.has(log.requestLogId) || !query.query);
+    const usageRecords = this.getUsageRecords().filter((record) => !record.requestLogId || requestLogIds.has(record.requestLogId));
+    const auditLogs = query.includeAudit ? this.getAuditLogs() : [];
+    const executionTraceEvents = query.includeTrace ? this.getExecutionTraceEvents() : [];
+    const knowledgeRetrievals = this.getKnowledgeRetrievalTraces();
+    const providerHealthRecords = this.getProviderHealthRecords().filter((record) =>
+      (!query.providerId || record.providerId === query.providerId) && (!query.modelId || record.modelId === query.modelId),
+    );
+    const feedbackItems = this.getFeedbackItems().filter((item) => !item.requestLogId || requestLogIds.has(item.requestLogId));
+    const evalSets = this.getEvalSets();
+    const evalResults = this.getEvalResults().filter((result) =>
+      (!query.providerId || result.providerId === query.providerId) && (!query.modelId || result.modelId === query.modelId),
+    );
+    const privacy = this.getObservabilityPrivacySettings();
+    return {
+      summary: buildObservabilitySummary({
+        providers: this.getProviders(),
+        requestLogs,
+        gatewayLogs,
+        usageRecords,
+        auditLogs,
+        executionTraceEvents,
+        knowledgeRetrievals,
+        feedbackCount: feedbackItems.length,
+        evalResultCount: evalResults.length,
+      }),
+      query,
+      requestLogs,
+      gatewayLogs,
+      usageRecords,
+      auditLogs,
+      executionTraceEvents,
+      knowledgeRetrievals,
+      providerHealthRecords,
+      feedbackItems,
+      evalSets,
+      evalResults,
+      privacy,
+    };
+  }
+
+  createFeedback(input: FeedbackCreateInput): FeedbackItem {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.observabilityWrite, 'feedback', input.requestLogId ?? input.messageId ?? null);
+    const label = OBSERVABILITY_FEEDBACK_LABELS.includes(input.label) ? input.label : 'other';
+    const requestLog = input.requestLogId ? this.requireRequestLog(input.requestLogId) : null;
+    const message = input.messageId ? this.requireMessage(input.messageId) : requestLog?.messageId ? this.requireMessage(requestLog.messageId) : null;
+    const timestamp = now();
+    const id = createId('feedback');
+    this.db
+      .prepare(
+        `INSERT INTO feedback_items (id, label, message_id, request_log_id, notes, metadata_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        label,
+        message?.id ?? null,
+        requestLog?.id ?? input.requestLogId ?? null,
+        input.notes ? redactSensitive(input.notes).slice(0, 500) : null,
+        JSON.stringify({
+          linkedProviderId: requestLog?.providerId ?? message?.providerId ?? null,
+          linkedModelId: requestLog?.modelId ?? message?.modelId ?? null,
+        }),
+        timestamp,
+      );
+    this.audit('observability.feedback.created', 'feedback', id, { label, requestLogId: requestLog?.id ?? null }, SECURITY_ACTION_PERMISSIONS.observabilityWrite);
+    return this.requireFeedbackItem(id);
+  }
+
+  async runEvaluation(input: EvalRunInput): Promise<EvalResult> {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.observabilityWrite, 'eval_set', input.evalSetId);
+    const evalSet = this.requireEvalSet(input.evalSetId);
+    const routeDecision = this.route(undefined, input.modelId ?? undefined);
+    const provider = this.requireProvider(routeDecision.providerId);
+    const model = this.requireModel(routeDecision.modelId);
+    const adapterName = getProviderAdapterName(provider.type);
+    const timestamp = now();
+    const requestLogId = createId('req');
+    this.db
+      .prepare(
+        `INSERT INTO request_logs (id, conversation_id, message_id, provider_id, model_id, model_name_snapshot, route_id, gateway_request_id, status, endpoint, request_summary_json, response_summary_json, input_tokens, output_tokens, latency_ms, finish_reason, error_code, error_message, started_at, completed_at, created_at)
+         VALUES (?, NULL, NULL, ?, ?, ?, NULL, NULL, 'started', '/eval/run', ?, NULL, ?, NULL, NULL, NULL, NULL, NULL, ?, NULL, ?)`,
+      )
+      .run(
+        requestLogId,
+        provider.id,
+        model.id,
+        model.modelNameSnapshot,
+        JSON.stringify({
+          evalSetId: evalSet.id,
+          model: model.name,
+          expectedKeywords: safeStringArray(evalSet.expectedKeywordsJson),
+        }),
+        estimateTokens(evalSet.prompt),
+        timestamp,
+        timestamp,
+      );
+
+    let resultId = createId('eval_result');
+    try {
+      if (adapterName !== 'openai-compatible') {
+        throw new ProviderRuntimeError(t('models.errors.unsupportedProvider'), PROVIDER_RUNTIME_ERROR_CODES.unsupportedProvider);
+      }
+      const invocation = await invokeOpenAiCompatibleChat({
+        provider,
+        model,
+        apiKey: this.getProviderSecret(provider),
+        messages: [{ role: 'user', content: evalSet.prompt }],
+        stream: false,
+      });
+      const outputTokens = invocation.outputTokens ?? estimateTokens(invocation.content);
+      const inputTokens = invocation.inputTokens ?? estimateTokens(evalSet.prompt);
+      const expectedKeywords = safeStringArray(evalSet.expectedKeywordsJson);
+      const score = scoreEvaluationOutput(invocation.content, expectedKeywords);
+      this.db
+        .prepare(
+          `UPDATE request_logs
+           SET status = 'completed', response_summary_json = ?, input_tokens = ?, output_tokens = ?, latency_ms = ?, finish_reason = ?, completed_at = ?
+           WHERE id = ?`,
+        )
+        .run(
+          JSON.stringify({ redactedPreview: redactSensitive(invocation.content).slice(0, 280), score }),
+          inputTokens,
+          outputTokens,
+          invocation.latencyMs,
+          invocation.finishReason ?? 'stop',
+          now(),
+          requestLogId,
+        );
+      this.db
+        .prepare(
+          `INSERT INTO usage_records (id, workspace_id, provider_id, model_id, request_log_id, input_tokens, output_tokens, cost_estimate, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          createId('usage'),
+          DEFAULT_WORKSPACE_ID,
+          provider.id,
+          model.id,
+          requestLogId,
+          inputTokens,
+          outputTokens,
+          this.estimateCost(model.id, inputTokens, outputTokens),
+          now(),
+        );
+      this.db
+        .prepare(
+          `INSERT INTO eval_results (id, eval_set_id, provider_id, model_id, request_log_id, status, score, latency_ms, output_preview, error_code, error_message, created_at)
+           VALUES (?, ?, ?, ?, ?, 'completed', ?, ?, ?, NULL, NULL, ?)`,
+        )
+        .run(resultId, evalSet.id, provider.id, model.id, requestLogId, score, invocation.latencyMs, redactSensitive(invocation.content).slice(0, 500), now());
+      this.recordProviderHealth(provider.id, model.id, 'healthy', invocation.latencyMs, 'chat', null, null);
+      this.audit('observability.eval.completed', 'eval_set', evalSet.id, { resultId, score, requestLogId }, SECURITY_ACTION_PERMISSIONS.observabilityWrite);
+    } catch (error) {
+      const normalized = this.normalizeProviderError(error);
+      this.db
+        .prepare(
+          `UPDATE request_logs
+           SET status = 'failed', response_summary_json = ?, latency_ms = ?, error_code = ?, error_message = ?, completed_at = ?
+           WHERE id = ?`,
+        )
+        .run(JSON.stringify({ retryable: normalized.retryable }), Math.max(1, now() - timestamp), normalized.code, normalized.message, now(), requestLogId);
+      this.db
+        .prepare(
+          `INSERT INTO eval_results (id, eval_set_id, provider_id, model_id, request_log_id, status, score, latency_ms, output_preview, error_code, error_message, created_at)
+           VALUES (?, ?, ?, ?, ?, 'failed', NULL, ?, NULL, ?, ?, ?)`,
+        )
+        .run(resultId, evalSet.id, provider.id, model.id, requestLogId, Math.max(1, now() - timestamp), normalized.code, normalized.message, now());
+      this.recordProviderHealth(provider.id, model.id, 'error', Math.max(1, now() - timestamp), 'chat', normalized.code, normalized.message);
+      this.audit('observability.eval.failed', 'eval_set', evalSet.id, { resultId, errorCode: normalized.code, requestLogId }, SECURITY_ACTION_PERMISSIONS.observabilityWrite);
+    }
+    this.db.prepare('UPDATE eval_sets SET status = ?, updated_at = ? WHERE id = ?').run('completed', now(), evalSet.id);
+    return this.requireEvalResult(resultId);
+  }
+
+  saveObservabilityPrivacy(input: Partial<ObservabilityPrivacySettings>): ObservabilityPrivacySettings {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.observabilityWrite, 'observability_privacy', null);
+    const settings = normalizeObservabilityPrivacySettings({ ...this.getObservabilityPrivacySettings(), ...input, updatedAt: now() });
+    this.setSetting(OBSERVABILITY_PRIVACY_SETTING_KEY, JSON.stringify(settings));
+    this.audit('observability.privacy.updated', 'observability_privacy', null, settings, SECURITY_ACTION_PERMISSIONS.observabilityWrite);
+    return settings;
+  }
+
+  exportObservability(input: ObservabilityQueryInput = {}): ObservabilityExportResult {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.observabilityExport, 'observability', null);
+    const snapshot = this.queryObservability(input);
+    const id = createId('observability_export');
+    const createdAt = now();
+    const content = buildRedactedObservabilityExport(
+      {
+        summary: snapshot.summary,
+        requestLogs: snapshot.requestLogs,
+        gatewayLogs: snapshot.gatewayLogs,
+        usageRecords: snapshot.usageRecords,
+        providerHealthRecords: snapshot.providerHealthRecords,
+        feedbackItems: snapshot.feedbackItems,
+        evalSets: snapshot.evalSets,
+        evalResults: snapshot.evalResults,
+        auditLogs: snapshot.auditLogs,
+        executionTraceEvents: snapshot.executionTraceEvents,
+        knowledgeRetrievals: snapshot.knowledgeRetrievals,
+      },
+      snapshot.privacy,
+    );
+    this.audit('observability.exported', 'observability', id, { requestCount: snapshot.summary.requestCount, redacted: true }, SECURITY_ACTION_PERMISSIONS.observabilityExport);
+    return {
+      id,
+      redacted: true,
+      content,
+      summary: snapshot.summary,
+      createdAt,
+    };
   }
 
   getGatewayKeys(): GatewayApiKey[] {
@@ -814,6 +1108,7 @@ export class NexaStore {
       modelCount: health.modelNames.length,
       errorCode: health.errorCode,
     });
+    this.recordProviderHealth(providerId, null, status, health.latencyMs, 'provider-test', health.errorCode, health.errorMessage);
     return this.requireProvider(providerId);
   }
 
@@ -1220,6 +1515,7 @@ export class NexaStore {
         streamed: result.streamed,
         retryCount: result.retryCount,
       });
+      this.recordProviderHealth(routeDecision.providerId, routeDecision.modelId, 'healthy', result.latencyMs, 'chat', null, null);
     } catch (error) {
       const normalized = this.normalizeProviderError(error);
       this.db
@@ -1288,6 +1584,7 @@ export class NexaStore {
         modelId: routeDecision.modelId,
         errorCode: normalized.code,
       });
+      this.recordProviderHealth(routeDecision.providerId, routeDecision.modelId, 'error', Math.max(1, now() - timestamp), 'chat', normalized.code, normalized.message);
     }
 
     const updatedConversation = this.requireConversation(conversation.id);
@@ -1473,6 +1770,7 @@ export class NexaStore {
   }
 
   recordGatewayLog(input: GatewayLogInput): void {
+    const linkedRequest = input.requestLogId ? this.requireRequestLog(input.requestLogId) : null;
     this.db
       .prepare(
         `INSERT INTO gateway_logs (id, request_log_id, gateway_key_id, key_preview, scope, error_code, latency_ms, remote_address, method, path, status_code, redacted_headers_json, created_at)
@@ -1493,6 +1791,17 @@ export class NexaStore {
         JSON.stringify(redactHeaders(input.headers ?? {})),
         now(),
       );
+    if (linkedRequest?.providerId) {
+      this.recordProviderHealth(
+        linkedRequest.providerId,
+        linkedRequest.modelId,
+        input.statusCode >= 400 ? 'error' : 'healthy',
+        input.latencyMs ?? linkedRequest.latencyMs,
+        'gateway',
+        input.errorCode ?? linkedRequest.errorCode,
+        linkedRequest.errorMessage,
+      );
+    }
   }
 
   saveUiPreferences(preferences: UiPreferences): UiPreferences {
@@ -2258,6 +2567,24 @@ export class NexaStore {
     const keyCount = Number((this.db.prepare('SELECT COUNT(*) AS count FROM gateway_api_keys').get() as { count: number }).count);
     if (keyCount === 0) {
       this.createGatewayKey('Local app integration');
+    }
+
+    const evalSetCount = Number((this.db.prepare('SELECT COUNT(*) AS count FROM eval_sets').get() as { count: number }).count);
+    if (evalSetCount === 0) {
+      this.db
+        .prepare(
+          `INSERT INTO eval_sets (id, name, description, prompt, expected_keywords_json, status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 'draft', ?, ?)`,
+        )
+        .run(
+          'eval_round13_basic',
+          t('observability.eval.seed.name'),
+          t('observability.eval.seed.description'),
+          t('observability.eval.seed.prompt'),
+          JSON.stringify(['NexaChat', 'local']),
+          timestamp,
+          timestamp,
+        );
     }
   }
 
@@ -3132,6 +3459,41 @@ export class NexaStore {
     return mapRequestLog(row as Record<string, unknown>);
   }
 
+  private requireFeedbackItem(id: string): FeedbackItem {
+    const row = this.db.prepare('SELECT * FROM feedback_items WHERE id = ?').get(id);
+    if (!row) throw new Error(`Feedback item not found: ${id}`);
+    return mapFeedbackItem(row as Record<string, unknown>);
+  }
+
+  private requireEvalSet(id: string): EvalSet {
+    const row = this.db.prepare('SELECT * FROM eval_sets WHERE id = ?').get(id);
+    if (!row) throw new Error(`Eval set not found: ${id}`);
+    return mapEvalSet(row as Record<string, unknown>);
+  }
+
+  private requireEvalResult(id: string): EvalResult {
+    const row = this.db.prepare('SELECT * FROM eval_results WHERE id = ?').get(id);
+    if (!row) throw new Error(`Eval result not found: ${id}`);
+    return mapEvalResult(row as Record<string, unknown>);
+  }
+
+  private recordProviderHealth(
+    providerId: string,
+    modelId: string | null,
+    status: ProviderHealthRecord['status'],
+    latencyMs: number | null,
+    source: ProviderHealthRecord['source'],
+    errorCode: string | null,
+    errorMessage: string | null,
+  ): void {
+    this.db
+      .prepare(
+        `INSERT INTO provider_health_records (id, provider_id, model_id, status, latency_ms, source, error_code, error_message, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(createId('health'), providerId, modelId, status, latencyMs, source, errorCode, errorMessage ? redactSensitive(errorMessage) : null, now());
+  }
+
   private requireGatewayKey(id: string): GatewayApiKey {
     const row = this.db.prepare('SELECT * FROM gateway_api_keys WHERE id = ?').get(id);
     if (!row) throw new Error(`Gateway key not found: ${id}`);
@@ -3621,6 +3983,26 @@ function safeJsonParse(value: string): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+function safeStringArray(value: string): string[] {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.map((item) => String(item).trim()).filter(Boolean)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function scoreEvaluationOutput(output: string, expectedKeywords: string[]): number {
+  if (expectedKeywords.length === 0) {
+    return output.trim().length > 0 ? 1 : 0;
+  }
+  const normalized = output.toLowerCase();
+  const matches = expectedKeywords.filter((keyword) => normalized.includes(keyword.toLowerCase()));
+  return Number((matches.length / expectedKeywords.length).toFixed(3));
 }
 
 function computeAuditHash(input: {

@@ -168,3 +168,13 @@
 - Electron smoke must run after `npm.cmd run build`; running it in parallel with build can launch against an older `dist` and produce a false failure.
 - OpenAI-compatible endpoint text such as `/v1/chat/completions` is valid product content and should not be treated as an app-route leak. Tests now only reject first-level app routes such as `/workspace/...`, `/models/...`, and `/gateway/...`.
 - The responsive visual audit should write screenshots only under ignored `test-results/` to avoid committing process artifacts.
+
+## Full App Round 13 Findings
+
+- The observability gap was not missing raw logs. Request logs, usage records, gateway logs, audit logs, execution traces, and retrieval traces already existed, but they lacked one privacy-first aggregation and redaction authority.
+- `src/shared/observabilityRuntime.ts` is now the authority for metric names, log event types, feedback labels, eval statuses, retention/export policy, query normalization, aggregation, and export redaction.
+- Provider health belongs in the same chain as Provider tests, chat calls, gateway-linked request logs, and eval runs. This avoids a separate health dashboard that could drift from the real Provider path.
+- Feedback, evals, privacy settings, and export need main-process permission checks and Store guards like the rest of the sensitive actions. Renderer-only controls are not a security boundary.
+- Usage belongs near Gateway operations, while feedback/evals/privacy belong in Settings second-level pages. Round 13 removed old aliases that sent those routes to unrelated pages instead of adding a ninth Observability module.
+- Redacted observability export must not include API keys, local file paths, or full prompt snippets by default; tests should keep this privacy boundary explicit.
+- Round 14 should build desktop packaging and launch diagnostics from the current verified Electron path, while keeping the existing local Electron shortcut documented until packaged launch smoke passes.

@@ -55,7 +55,17 @@ import type {
   SecurityState,
   AuditIntegrityReport,
   AuditExportResult,
+  EvalResult,
+  EvalRunInput,
+  EvalSet,
+  FeedbackCreateInput,
+  FeedbackItem,
   MigrationRun,
+  ObservabilityPrivacySettings,
+  ObservabilityQueryInput,
+  ObservabilitySnapshot,
+  ObservabilityExportResult,
+  ProviderHealthRecord,
   RollbackRecord,
 } from '../shared/types';
 import type { AppApi } from '../shared/api';
@@ -73,6 +83,15 @@ import {
   stableKnowledgeHash,
   type KnowledgeScoredChunkInput,
 } from '../shared/knowledgeRuntime';
+import {
+  DEFAULT_OBSERVABILITY_PRIVACY_SETTINGS,
+  OBSERVABILITY_FEEDBACK_LABELS,
+  buildObservabilitySummary,
+  buildRedactedObservabilityExport,
+  filterObservabilityRequestLogs,
+  normalizeObservabilityPrivacySettings,
+  normalizeObservabilityQuery,
+} from '../shared/observabilityRuntime';
 
 const t = (key: Parameters<typeof translate>[1], params?: Parameters<typeof translate>[2]) => translate('zh-CN', key, params);
 
@@ -89,6 +108,11 @@ interface MockState {
   requestLogs: RequestLog[];
   gatewayLogs: GatewayLog[];
   usageRecords: UsageRecord[];
+  providerHealthRecords: ProviderHealthRecord[];
+  feedbackItems: FeedbackItem[];
+  evalSets: EvalSet[];
+  evalResults: EvalResult[];
+  observabilityPrivacy: ObservabilityPrivacySettings;
   gatewayStatus: GatewayStatus;
   gatewayKeys: GatewayApiKey[];
   knowledgeFiles: KnowledgeFile[];
@@ -289,6 +313,37 @@ function createSeedState(): MockState {
     requestLogs: [],
     gatewayLogs: [],
     usageRecords: [],
+    providerHealthRecords: [
+      {
+        id: 'provider_health_browser_mock',
+        providerId,
+        modelId,
+        status: 'healthy',
+        latencyMs: 42,
+        source: 'manual',
+        errorCode: null,
+        errorMessage: null,
+        createdAt: timestamp,
+      },
+    ],
+    feedbackItems: [],
+    evalSets: [
+      {
+        id: 'eval_round13_basic',
+        name: t('observability.eval.seed.name'),
+        description: t('observability.eval.seed.description'),
+        prompt: t('observability.eval.seed.prompt'),
+        expectedKeywordsJson: JSON.stringify(['NexaChat', 'local']),
+        status: 'draft',
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+    ],
+    evalResults: [],
+    observabilityPrivacy: normalizeObservabilityPrivacySettings({
+      ...DEFAULT_OBSERVABILITY_PRIVACY_SETTINGS,
+      updatedAt: timestamp,
+    }),
     gatewayStatus: {
       enabled: true,
       running: true,
@@ -524,6 +579,11 @@ function buildSnapshot(state: MockState): AppSnapshot {
     requestLogs: state.requestLogs,
     gatewayLogs: state.gatewayLogs,
     usageRecords: state.usageRecords,
+    providerHealthRecords: state.providerHealthRecords,
+    feedbackItems: state.feedbackItems,
+    evalSets: state.evalSets,
+    evalResults: state.evalResults,
+    observability: buildObservabilitySnapshot(state),
     gatewayKeys: state.gatewayKeys,
     knowledgeFiles: activeKnowledgeFiles,
     knowledgeChunks: activeKnowledgeChunks,
@@ -593,6 +653,49 @@ function buildAuditIntegrity(auditLogs: AuditLog[]): AuditIntegrityReport {
     checkedCount: auditLogs.length,
     firstBrokenAuditId: null,
     lastHash: auditLogs[0]?.entryHash ?? null,
+  };
+}
+
+function buildObservabilitySnapshot(state: MockState, input: ObservabilityQueryInput = {}): ObservabilitySnapshot {
+  const query = normalizeObservabilityQuery(input);
+  const requestLogs = filterObservabilityRequestLogs(state.requestLogs, query);
+  const requestLogIds = new Set(requestLogs.map((log) => log.id));
+  const gatewayLogs = state.gatewayLogs.filter((log) => !log.requestLogId || requestLogIds.has(log.requestLogId) || !query.query);
+  const usageRecords = state.usageRecords.filter((record) => !record.requestLogId || requestLogIds.has(record.requestLogId));
+  const auditLogs = query.includeAudit ? state.auditLogs : [];
+  const executionTraceEvents = query.includeTrace ? state.executionTraceEvents : [];
+  const knowledgeRetrievals = state.knowledgeRetrievals;
+  const providerHealthRecords = state.providerHealthRecords.filter((record) =>
+    (!query.providerId || record.providerId === query.providerId) && (!query.modelId || record.modelId === query.modelId),
+  );
+  const feedbackItems = state.feedbackItems.filter((item) => !item.requestLogId || requestLogIds.has(item.requestLogId));
+  const evalResults = state.evalResults.filter((result) =>
+    (!query.providerId || result.providerId === query.providerId) && (!query.modelId || result.modelId === query.modelId),
+  );
+  return {
+    summary: buildObservabilitySummary({
+      providers: state.providers,
+      requestLogs,
+      gatewayLogs,
+      usageRecords,
+      auditLogs,
+      executionTraceEvents,
+      knowledgeRetrievals,
+      feedbackCount: feedbackItems.length,
+      evalResultCount: evalResults.length,
+    }),
+    query,
+    requestLogs,
+    gatewayLogs,
+    usageRecords,
+    auditLogs,
+    executionTraceEvents,
+    knowledgeRetrievals,
+    providerHealthRecords,
+    feedbackItems,
+    evalSets: state.evalSets,
+    evalResults,
+    privacy: state.observabilityPrivacy,
   };
 }
 
@@ -930,6 +1033,18 @@ export function createMockApi(): AppApi {
       provider.lastCheckedAt = timestamp;
       provider.updatedAt = timestamp;
 
+      state.providerHealthRecords.unshift({
+        id: createId('health'),
+        providerId: provider.id,
+        modelId: null,
+        status,
+        latencyMs: status === 'healthy' ? 42 : 1,
+        source: 'provider-test',
+        errorCode: status === 'healthy' ? null : 'invalid_base_url',
+        errorMessage: status === 'healthy' ? null : t('models.errors.invalidBaseUrl'),
+        createdAt: timestamp,
+      });
+
       state.models
         .filter((model) => model.providerId === provider.id)
         .forEach((model) => {
@@ -1098,6 +1213,17 @@ export function createMockApi(): AppApi {
       state.knowledgeCitations.unshift(...attachedCitations);
       state.requestLogs.unshift(requestLog);
       state.usageRecords.unshift(usageRecord);
+      state.providerHealthRecords.unshift({
+        id: createId('health'),
+        providerId: routeDecision.providerId,
+        modelId: routeDecision.modelId,
+        status: 'healthy',
+        latencyMs: assistantMessage.latencyMs,
+        source: 'chat',
+        errorCode: null,
+        errorMessage: null,
+        createdAt: now(),
+      });
 
       storedConversation.defaultProviderId = routeDecision.providerId;
       storedConversation.defaultModelId = routeDecision.modelId;
@@ -1670,6 +1796,159 @@ export function createMockApi(): AppApi {
       rollback.appliedAt = now();
       const result = createResult('rollback', t('data.snapshot.summary.rollbackApplied', { count: 1 }), true);
       return clone(findById(state.dataMobilityJobs, result.id, 'Data mobility job'));
+    },
+
+    async queryObservability(input?: ObservabilityQueryInput) {
+      return clone(buildObservabilitySnapshot(state, input));
+    },
+
+    async createFeedback(input: FeedbackCreateInput) {
+      const timestamp = now();
+      const requestLog = input.requestLogId
+        ? findById(state.requestLogs, input.requestLogId, 'Request log')
+        : state.requestLogs[0] ?? null;
+      const message = input.messageId
+        ? findById(state.messages, input.messageId, 'Message')
+        : requestLog?.messageId
+          ? state.messages.find((item) => item.id === requestLog.messageId) ?? null
+          : null;
+      const label = OBSERVABILITY_FEEDBACK_LABELS.includes(input.label) ? input.label : 'other';
+      const feedback: FeedbackItem = {
+        id: createId('feedback'),
+        label,
+        messageId: message?.id ?? null,
+        requestLogId: requestLog?.id ?? input.requestLogId ?? null,
+        notes: input.notes?.slice(0, 500) ?? null,
+        metadataJson: JSON.stringify({ runtime: 'browser-mock', providerId: requestLog?.providerId ?? message?.providerId ?? null }),
+        createdAt: timestamp,
+      };
+      state.feedbackItems.unshift(feedback);
+      pushAudit('observability.feedback.created', 'feedback', feedback.id, { label });
+      return clone(feedback);
+    },
+
+    async runEvaluation(input: EvalRunInput) {
+      const evalSet = findById(state.evalSets, input.evalSetId, 'Eval set');
+      const model = input.modelId
+        ? findById(state.models, input.modelId, 'Model')
+        : state.models.find((candidate) => candidate.id === state.workspace.defaultModelId) ?? state.models[0];
+      const provider = findById(state.providers, model.providerId, 'Provider');
+      const timestamp = now();
+      const requestLogId = createId('request');
+      const output = t('observability.eval.mockOutput', { prompt: evalSet.prompt });
+      let expectedKeywords: string[] = [];
+      try {
+        const parsed = JSON.parse(evalSet.expectedKeywordsJson) as unknown;
+        expectedKeywords = Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
+      } catch {
+        expectedKeywords = [];
+      }
+      const score = expectedKeywords.length === 0
+        ? 1
+        : expectedKeywords.filter((keyword) => output.toLowerCase().includes(String(keyword).toLowerCase())).length / expectedKeywords.length;
+      const inputTokens = estimateTokens(evalSet.prompt);
+      const outputTokens = estimateTokens(output);
+      const requestLog: RequestLog = {
+        id: requestLogId,
+        conversationId: null,
+        messageId: null,
+        providerId: provider.id,
+        modelId: model.id,
+        modelNameSnapshot: model.name,
+        routeId: null,
+        gatewayRequestId: null,
+        status: 'completed',
+        endpoint: '/eval/run',
+        requestSummaryJson: JSON.stringify({ evalSetId: evalSet.id, expectedKeywords }),
+        responseSummaryJson: JSON.stringify({ score }),
+        inputTokens,
+        outputTokens,
+        latencyMs: 55,
+        finishReason: 'stop',
+        errorCode: null,
+        errorMessage: null,
+        startedAt: timestamp,
+        completedAt: timestamp,
+        createdAt: timestamp,
+      };
+      const usageRecord: UsageRecord = {
+        id: createId('usage'),
+        workspaceId: state.workspace.id,
+        providerId: provider.id,
+        modelId: model.id,
+        requestLogId,
+        inputTokens,
+        outputTokens,
+        costEstimate: 0,
+        createdAt: timestamp,
+      };
+      const result: EvalResult = {
+        id: createId('eval_result'),
+        evalSetId: evalSet.id,
+        providerId: provider.id,
+        modelId: model.id,
+        requestLogId,
+        status: 'completed',
+        score: Number(score.toFixed(3)),
+        latencyMs: 55,
+        outputPreview: output.slice(0, 500),
+        errorCode: null,
+        errorMessage: null,
+        createdAt: timestamp,
+      };
+      evalSet.status = 'completed';
+      evalSet.updatedAt = timestamp;
+      state.requestLogs.unshift(requestLog);
+      state.usageRecords.unshift(usageRecord);
+      state.evalResults.unshift(result);
+      state.providerHealthRecords.unshift({
+        id: createId('health'),
+        providerId: provider.id,
+        modelId: model.id,
+        status: 'healthy',
+        latencyMs: 55,
+        source: 'chat',
+        errorCode: null,
+        errorMessage: null,
+        createdAt: timestamp,
+      });
+      pushAudit('observability.eval.completed', 'eval_set', evalSet.id, { resultId: result.id, score: result.score });
+      return clone(result);
+    },
+
+    async saveObservabilityPrivacy(input) {
+      state.observabilityPrivacy = normalizeObservabilityPrivacySettings({
+        ...state.observabilityPrivacy,
+        ...input,
+        updatedAt: now(),
+      });
+      pushAudit('observability.privacy.updated', 'observability_privacy', null, state.observabilityPrivacy);
+      return clone(state.observabilityPrivacy);
+    },
+
+    async exportObservability(input?: ObservabilityQueryInput) {
+      const snapshot = buildObservabilitySnapshot(state, input);
+      const result: ObservabilityExportResult = {
+        id: createId('observability_export'),
+        redacted: true,
+        content: buildRedactedObservabilityExport({
+          summary: snapshot.summary,
+          requestLogs: snapshot.requestLogs,
+          gatewayLogs: snapshot.gatewayLogs,
+          usageRecords: snapshot.usageRecords,
+          providerHealthRecords: snapshot.providerHealthRecords,
+          feedbackItems: snapshot.feedbackItems,
+          evalSets: snapshot.evalSets,
+          evalResults: snapshot.evalResults,
+          auditLogs: snapshot.auditLogs,
+          executionTraceEvents: snapshot.executionTraceEvents,
+          knowledgeRetrievals: snapshot.knowledgeRetrievals,
+        }, snapshot.privacy),
+        summary: snapshot.summary,
+        createdAt: now(),
+      };
+      pushAudit('observability.exported', 'observability', result.id, { requestCount: result.summary.requestCount, redacted: true });
+      return clone(result);
     },
 
     async searchAuditLogs(query?: string) {

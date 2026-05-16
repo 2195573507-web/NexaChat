@@ -1,0 +1,181 @@
+import { describe, expect, it } from 'vitest';
+import {
+  buildObservabilitySummary,
+  buildRedactedObservabilityExport,
+  filterObservabilityRequestLogs,
+  normalizeObservabilityPrivacySettings,
+} from '../src/shared/observabilityRuntime';
+import type { AuditLog, ExecutionTraceEvent, GatewayLog, KnowledgeRetrievalTrace, Provider, RequestLog, UsageRecord } from '../src/shared/types';
+
+describe('Round 13 observability runtime', () => {
+  it('filters request logs and builds usage health and error summaries without duplicate log stores', () => {
+    const requestLogs: RequestLog[] = [
+      requestLog({ id: 'req_1', providerId: 'provider_1', modelId: 'model_1', status: 'completed', inputTokens: 8, outputTokens: 13, latencyMs: 40 }),
+      requestLog({ id: 'req_2', providerId: 'provider_1', modelId: 'model_1', status: 'failed', errorCode: 'timeout', errorMessage: 'timeout', latencyMs: 200 }),
+    ];
+    const gatewayLogs: GatewayLog[] = [
+      gatewayLog({ id: 'gateway_1', requestLogId: 'req_2', statusCode: 502, errorCode: 'provider_error' }),
+    ];
+    const providers: Provider[] = [provider({ id: 'provider_1', name: 'Runtime Provider', healthStatus: 'healthy' })];
+    const usageRecords: UsageRecord[] = [usageRecord({ requestLogId: 'req_1', inputTokens: 8, outputTokens: 13 })];
+    const filtered = filterObservabilityRequestLogs(requestLogs, { status: 'failed', query: 'timeout' });
+
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].id).toBe('req_2');
+
+    const summary = buildObservabilitySummary({
+      providers,
+      requestLogs,
+      gatewayLogs,
+      usageRecords,
+      auditLogs: [auditLog()],
+      executionTraceEvents: [traceEvent()],
+      knowledgeRetrievals: [retrievalTrace()],
+      feedbackCount: 2,
+      evalResultCount: 1,
+    });
+
+    expect(summary.requestCount).toBe(2);
+    expect(summary.failedRequestCount).toBe(1);
+    expect(summary.inputTokens).toBe(8);
+    expect(summary.outputTokens).toBe(13);
+    expect(summary.providerHealth[0].requestCount).toBe(2);
+    expect(summary.topErrors.map((item) => item.code)).toContain('timeout');
+    expect(summary.topErrors.map((item) => item.code)).toContain('provider_error');
+  });
+
+  it('redacts keys prompts and local paths from observability exports by default', () => {
+    const settings = normalizeObservabilityPrivacySettings({
+      includePromptSnippets: false,
+      includeLocalPaths: false,
+      updatedAt: 1,
+    });
+    const content = buildRedactedObservabilityExport({
+      authorization: 'Bearer sk-round-13-secret',
+      requestSummaryJson: '{"message":"hello secret"}',
+      localPath: 'D:\\NexaChat\\secret.txt',
+    }, settings);
+
+    expect(content).not.toContain('sk-round-13-secret');
+    expect(content).not.toContain('hello secret');
+    expect(content).not.toContain('D:\\NexaChat');
+    expect(content).toContain('[REDACTED]');
+  });
+});
+
+function requestLog(input: Partial<RequestLog>): RequestLog {
+  return {
+    id: input.id ?? 'req',
+    conversationId: null,
+    messageId: null,
+    providerId: input.providerId ?? null,
+    modelId: input.modelId ?? null,
+    modelNameSnapshot: 'model',
+    routeId: null,
+    gatewayRequestId: null,
+    status: input.status ?? 'completed',
+    endpoint: '/v1/chat/completions',
+    requestSummaryJson: null,
+    responseSummaryJson: null,
+    inputTokens: input.inputTokens ?? null,
+    outputTokens: input.outputTokens ?? null,
+    latencyMs: input.latencyMs ?? null,
+    finishReason: 'stop',
+    errorCode: input.errorCode ?? null,
+    errorMessage: input.errorMessage ?? null,
+    startedAt: 1,
+    completedAt: 2,
+    createdAt: 1,
+  };
+}
+
+function gatewayLog(input: Partial<GatewayLog>): GatewayLog {
+  return {
+    id: input.id ?? 'gateway',
+    requestLogId: input.requestLogId ?? null,
+    gatewayKeyId: null,
+    keyPreview: null,
+    scope: null,
+    errorCode: input.errorCode ?? null,
+    latencyMs: null,
+    remoteAddress: null,
+    method: 'POST',
+    path: '/v1/chat/completions',
+    statusCode: input.statusCode ?? 200,
+    redactedHeadersJson: null,
+    createdAt: 1,
+  };
+}
+
+function provider(input: Pick<Provider, 'id' | 'name' | 'healthStatus'>): Provider {
+  return {
+    id: input.id,
+    name: input.name,
+    type: 'openai-compatible',
+    baseUrl: 'http://127.0.0.1:11434/v1',
+    proxyUrl: null,
+    authType: 'none',
+    secretRef: null,
+    customHeadersJson: null,
+    enabled: true,
+    healthStatus: input.healthStatus,
+    lastCheckedAt: 1,
+    createdAt: 1,
+    updatedAt: 1,
+  };
+}
+
+function usageRecord(input: Partial<UsageRecord>): UsageRecord {
+  return {
+    id: 'usage_1',
+    workspaceId: 'ws_default',
+    providerId: 'provider_1',
+    modelId: 'model_1',
+    requestLogId: input.requestLogId ?? null,
+    inputTokens: input.inputTokens ?? 0,
+    outputTokens: input.outputTokens ?? 0,
+    costEstimate: 0,
+    createdAt: 1,
+  };
+}
+
+function auditLog(): AuditLog {
+  return {
+    id: 'audit_1',
+    action: 'test',
+    actor: 'test',
+    targetType: 'request',
+    targetId: 'req_1',
+    detailsJson: null,
+    permissionKey: null,
+    previousHash: null,
+    entryHash: null,
+    integrityState: 'verified',
+    createdAt: 1,
+  };
+}
+
+function traceEvent(): ExecutionTraceEvent {
+  return {
+    id: 'trace_1',
+    runId: 'run_1',
+    stepId: null,
+    eventType: 'run_planned',
+    message: 'started',
+    metadataJson: null,
+    createdAt: 1,
+  };
+}
+
+function retrievalTrace(): KnowledgeRetrievalTrace {
+  return {
+    id: 'retrieval_1',
+    query: 'local',
+    strategy: 'lexical',
+    topK: 3,
+    selectedChunkIdsJson: JSON.stringify(['chunk_1']),
+    resultCount: 1,
+    fallbackReason: null,
+    createdAt: 1,
+  };
+}

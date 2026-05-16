@@ -43,7 +43,7 @@ export function DashboardPage({ activeTab, snapshot, onOpenModule }: TabPageProp
             <ListRows
               rows={dashboard.recentConversations.map((conversation) => ({
                 title: conversation.title,
-                meta: `${t('common.messageCount', { count: conversation.messageCount })} · ${conversation.isPinned ? t('common.pinned') : t('common.normal')}`,
+                meta: t('common.valueSeparator', { left: t('common.messageCount', { count: conversation.messageCount }), right: conversation.isPinned ? t('common.pinned') : t('common.normal') }),
               }))}
               empty={
                 <EmptyState
@@ -60,7 +60,7 @@ export function DashboardPage({ activeTab, snapshot, onOpenModule }: TabPageProp
             <ListRows
               rows={[
                 ...snapshot.requestLogs.slice(0, 4).map((request) => ({
-                  title: `${request.status} · ${request.endpoint}`,
+                  title: t('common.valueSeparator', { left: request.status, right: request.endpoint }),
                   meta: request.errorMessage ?? request.modelNameSnapshot ?? t('dashboard.requestLogged'),
                 })),
                 ...snapshot.auditLogs.slice(0, 4).map((audit) => ({
@@ -69,7 +69,7 @@ export function DashboardPage({ activeTab, snapshot, onOpenModule }: TabPageProp
                 })),
                 ...snapshot.gatewayLogs.slice(0, 4).map((log) => ({
                   title: `${log.method} ${log.path}`,
-                  meta: `${log.statusCode} · ${formatTime(log.createdAt, t('dashboard.noRecord'))}`,
+                  meta: t('common.valueSeparator', { left: log.statusCode, right: formatTime(log.createdAt, t('dashboard.noRecord')) }),
                 })),
               ]}
               empty={
@@ -93,7 +93,7 @@ export function DashboardPage({ activeTab, snapshot, onOpenModule }: TabPageProp
         <section className="overview-grid">
           <Metric title={t('dashboard.metric.provider')} value={snapshot.providers.length} detail={t('dashboard.metric.enabled', { count: snapshot.providers.filter((provider) => provider.enabled).length })} />
           <Metric title={t('dashboard.metric.model')} value={snapshot.models.length} detail={t('dashboard.metric.healthy', { count: snapshot.models.filter((model) => model.healthStatus === 'healthy').length })} />
-          <Metric title={t('dashboard.metric.knowledgeFiles')} value={snapshot.knowledgeFiles.length} detail={`${snapshot.knowledgeFiles.reduce((sum, file) => sum + file.chunkCount, 0)} chunks`} />
+          <Metric title={t('dashboard.metric.knowledgeFiles')} value={snapshot.knowledgeFiles.length} detail={t('dashboard.metric.chunks', { count: snapshot.knowledgeFiles.reduce((sum, file) => sum + file.chunkCount, 0) })} />
           <Metric title={t('dashboard.metric.gatewayLogs')} value={snapshot.gatewayLogs.length} detail={`${dashboard.gatewayStatus.bindHost}:${dashboard.gatewayStatus.port}`} />
         </section>
         <section className="two-column">
@@ -175,7 +175,7 @@ export function DashboardPage({ activeTab, snapshot, onOpenModule }: TabPageProp
           <div className="overview-grid">
             <Metric title={t('dashboard.metric.localConversations')} value={snapshot.conversations.length} detail={t('common.messageCount', { count: snapshot.messages.length })} />
             <Metric title={t('dashboard.metric.todayRequests')} value={dashboard.usageToday.requests} detail={latestRequest ? latestRequest.status : t('dashboard.noRequest')} />
-            <Metric title={t('dashboard.metric.tokenUsage')} value={tokenTotal} detail={`${dashboard.usageToday.inputTokens} in / ${dashboard.usageToday.outputTokens} out`} />
+            <Metric title={t('dashboard.metric.tokenUsage')} value={tokenTotal} detail={t('observability.summary.tokenBreakdown', { input: dashboard.usageToday.inputTokens, output: dashboard.usageToday.outputTokens })} />
             <Metric title={t('dashboard.metric.auditHealth')} value={latestAudit?.action ?? t('dashboard.activity.noAudit')} detail={countHealthy(snapshot, t)} />
           </div>
         </section>
@@ -212,25 +212,25 @@ export function DashboardPage({ activeTab, snapshot, onOpenModule }: TabPageProp
           <div className="recent-activity-grid">
             <article>
               <span>{t('dashboard.activity.request')}</span>
-              <strong>{latestRequest ? `${latestRequest.status} · ${latestRequest.endpoint}` : t('dashboard.noRequest')}</strong>
+              <strong>{latestRequest ? t('common.valueSeparator', { left: latestRequest.status, right: latestRequest.endpoint }) : t('dashboard.noRequest')}</strong>
               <p>{latestRequest?.modelNameSnapshot ?? latestRequest?.errorMessage ?? t('dashboard.activity.requestHint')}</p>
             </article>
             <article>
               <span>{t('dashboard.activity.import')}</span>
               <strong>{latestImport?.summary ?? t('dashboard.activity.noImport')}</strong>
-              <p>{latestImport ? `${latestImport.status} · ${formatTime(latestImport.createdAt, t('dashboard.noRecord'))}` : t('dashboard.activity.importHint')}</p>
+              <p>{latestImport ? t('common.valueSeparator', { left: latestImport.status, right: formatTime(latestImport.createdAt, t('dashboard.noRecord')) }) : t('dashboard.activity.importHint')}</p>
             </article>
             <article>
               <span>{t('dashboard.activity.audit')}</span>
               <strong>{latestAudit?.action ?? t('dashboard.activity.noAudit')}</strong>
-              <p>{latestAudit ? `${latestAudit.targetType} · ${formatTime(latestAudit.createdAt, t('dashboard.noRecord'))}` : t('dashboard.activity.auditHint')}</p>
+              <p>{latestAudit ? t('common.valueSeparator', { left: latestAudit.targetType, right: formatTime(latestAudit.createdAt, t('dashboard.noRecord')) }) : t('dashboard.activity.auditHint')}</p>
             </article>
             <article>
               <span>{t('dashboard.activity.conversation')}</span>
               <strong>{dashboard.recentConversations[0]?.title ?? t('dashboard.activity.noConversation')}</strong>
               <p>
                 {dashboard.recentConversations[0]
-                  ? `${t('common.messageCount', { count: dashboard.recentConversations[0].messageCount })} · ${formatTime(dashboard.recentConversations[0].lastMessageAt, t('dashboard.noRecord'))}`
+                  ? t('common.valueSeparator', { left: t('common.messageCount', { count: dashboard.recentConversations[0].messageCount }), right: formatTime(dashboard.recentConversations[0].lastMessageAt, t('dashboard.noRecord')) })
                   : t('dashboard.activity.conversationHint')}
               </p>
             </article>

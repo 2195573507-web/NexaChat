@@ -26,6 +26,10 @@ import type {
   DataMobilityJob,
   DataRestorePreflightInput,
   DataRollbackInput,
+  EvalResult,
+  EvalRunInput,
+  FeedbackCreateInput,
+  FeedbackItem,
   KnowledgeDeleteInput,
   KnowledgeFile,
   KnowledgeImportInput,
@@ -44,6 +48,10 @@ import type {
   RestoreSnapshotOptions,
   RetryMessageInput,
   ImportPlanApplyOptions,
+  ObservabilityExportResult,
+  ObservabilityPrivacySettings,
+  ObservabilityQueryInput,
+  ObservabilitySnapshot,
 } from './types.js';
 
 export interface AppApi {
@@ -88,6 +96,11 @@ export interface AppApi {
   createEncryptedBackup(input: DataBackupCreateInput): Promise<DataBackupRecord>;
   createRestorePreflight(input: DataRestorePreflightInput): Promise<DataMobilityJob>;
   applyDataRollback(input: DataRollbackInput): Promise<DataMobilityJob>;
+  queryObservability(input?: ObservabilityQueryInput): Promise<ObservabilitySnapshot>;
+  createFeedback(input: FeedbackCreateInput): Promise<FeedbackItem>;
+  runEvaluation(input: EvalRunInput): Promise<EvalResult>;
+  saveObservabilityPrivacy(input: Partial<ObservabilityPrivacySettings>): Promise<ObservabilityPrivacySettings>;
+  exportObservability(input?: ObservabilityQueryInput): Promise<ObservabilityExportResult>;
   searchAuditLogs(query?: string): Promise<AuditLog[]>;
   verifyAuditIntegrity(): Promise<AuditIntegrityReport>;
   exportAuditLogs(): Promise<AuditExportResult>;
@@ -133,6 +146,11 @@ export const APP_API_METHODS = [
   'createEncryptedBackup',
   'createRestorePreflight',
   'applyDataRollback',
+  'queryObservability',
+  'createFeedback',
+  'runEvaluation',
+  'saveObservabilityPrivacy',
+  'exportObservability',
   'searchAuditLogs',
   'verifyAuditIntegrity',
   'exportAuditLogs',

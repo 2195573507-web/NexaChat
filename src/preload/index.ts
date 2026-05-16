@@ -4,7 +4,9 @@ import { IPC_CHANNELS, type IpcChannel, type IpcInvokeArgs } from '../shared/ipc
 import type {
   CancelMessageInput,
   CompareModelsInput,
+  EvalRunInput,
   ExportConversationInput,
+  FeedbackCreateInput,
   GatewayKeyCreateInput,
   GatewayKeyRotateInput,
   GatewayKeyUpdateInput,
@@ -24,6 +26,8 @@ import type {
   DataExportOptions,
   DataRestorePreflightInput,
   DataRollbackInput,
+  ObservabilityPrivacySettings,
+  ObservabilityQueryInput,
 } from '../shared/types.js';
 
 function invoke<C extends IpcChannel>(channel: C, ...args: IpcInvokeArgs[C]) {
@@ -69,6 +73,11 @@ const api: AppApi = {
   createEncryptedBackup: (input: DataBackupCreateInput) => invoke(IPC_CHANNELS.dataCreateEncryptedBackup, input),
   createRestorePreflight: (input: DataRestorePreflightInput) => invoke(IPC_CHANNELS.dataCreateRestorePreflight, input),
   applyDataRollback: (input: DataRollbackInput) => invoke(IPC_CHANNELS.dataApplyRollback, input),
+  queryObservability: (input?: ObservabilityQueryInput) => invoke(IPC_CHANNELS.observabilityQuery, input),
+  createFeedback: (input: FeedbackCreateInput) => invoke(IPC_CHANNELS.observabilityCreateFeedback, input),
+  runEvaluation: (input: EvalRunInput) => invoke(IPC_CHANNELS.observabilityRunEval, input),
+  saveObservabilityPrivacy: (input: Partial<ObservabilityPrivacySettings>) => invoke(IPC_CHANNELS.observabilitySavePrivacy, input),
+  exportObservability: (input?: ObservabilityQueryInput) => invoke(IPC_CHANNELS.observabilityExport, input),
   searchAuditLogs: (query?: string) => invoke(IPC_CHANNELS.auditSearch, query),
   verifyAuditIntegrity: () => invoke(IPC_CHANNELS.auditVerify),
   exportAuditLogs: () => invoke(IPC_CHANNELS.auditExport),

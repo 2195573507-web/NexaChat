@@ -108,6 +108,7 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
   }
 
   if (activeTab.id === 'logs') {
+    const filteredLogs = snapshot.observability.requestLogs;
     return (
       <TabPanel moduleId="gateway" tab={activeTab}>
         <section className="two-column">
@@ -115,7 +116,7 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
             <h2>{t('gateway.logs.requests')}</h2>
             <DataTable
               columns={[t('gateway.columns.status'), t('gateway.columns.endpoint'), t('gateway.columns.model'), t('gateway.columns.tokens'), t('gateway.columns.latency'), t('gateway.columns.error')]}
-              rows={snapshot.requestLogs.map((log) => [
+              rows={filteredLogs.map((log) => [
                 <StateBadge key={`${log.id}-status`} label={statusLabel(log.status, t)} tone={log.status === 'failed' ? 'error' : log.status === 'completed' ? 'success' : 'warning'} />,
                 log.endpoint,
                 log.modelNameSnapshot ?? '-',
@@ -140,6 +141,73 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
               ])}
             />
           </div>
+        </section>
+      </TabPanel>
+    );
+  }
+
+  if (activeTab.id === 'usage') {
+    const summary = snapshot.observability.summary;
+    return (
+      <TabPanel moduleId="gateway" tab={activeTab}>
+        <section className="summary-grid">
+          <article className="metric-card">
+            <span>{t('observability.summary.requests')}</span>
+            <strong>{summary.requestCount}</strong>
+            <p>{t('observability.summary.successRate', { value: Math.round(summary.successRate * 100) })}</p>
+          </article>
+          <article className="metric-card">
+            <span>{t('observability.summary.tokens')}</span>
+            <strong>{summary.inputTokens + summary.outputTokens}</strong>
+            <p>{t('observability.summary.tokenBreakdown', { input: summary.inputTokens, output: summary.outputTokens })}</p>
+          </article>
+          <article className="metric-card">
+            <span>{t('observability.summary.latency')}</span>
+            <strong>{summary.averageLatencyMs ?? '-'}</strong>
+            <p>{t('observability.summary.p95', { value: summary.p95LatencyMs ?? '-' })}</p>
+          </article>
+          <article className="metric-card">
+            <span>{t('observability.summary.feedbackEval')}</span>
+            <strong>{summary.feedbackCount + summary.evalResultCount}</strong>
+            <p>{t('observability.summary.feedbackEvalDetail', { feedback: summary.feedbackCount, evals: summary.evalResultCount })}</p>
+          </article>
+        </section>
+        <section className="two-column">
+          <div className="panel">
+            <h2>{t('observability.health.title')}</h2>
+            <DataTable
+              columns={[t('observability.columns.provider'), t('observability.columns.status'), t('observability.columns.requests'), t('observability.columns.failures'), t('observability.columns.latency')]}
+              rows={summary.providerHealth.map((health) => [
+                health.providerName,
+                <StateBadge key={`${health.providerId}-health`} label={statusLabel(health.status, t)} tone={health.status === 'healthy' ? 'success' : health.status === 'error' ? 'error' : 'warning'} />,
+                health.requestCount,
+                health.failureCount,
+                health.averageLatencyMs ?? '-',
+              ])}
+            />
+          </div>
+          <div className="panel">
+            <h2>{t('observability.usage.title')}</h2>
+            <DataTable
+              columns={[t('gateway.columns.model'), t('gateway.columns.tokens'), t('gateway.columns.request'), t('gateway.columns.time')]}
+              rows={snapshot.observability.usageRecords.map((record) => {
+                const model = snapshot.models.find((item) => item.id === record.modelId);
+                return [
+                  model?.displayName ?? record.modelId ?? '-',
+                  t('observability.summary.tokenBreakdown', { input: record.inputTokens, output: record.outputTokens }),
+                  record.requestLogId ?? '-',
+                  new Date(record.createdAt).toLocaleString(),
+                ];
+              })}
+            />
+          </div>
+        </section>
+        <section className="panel">
+          <h2>{t('observability.errors.title')}</h2>
+          <DataTable
+            columns={[t('observability.columns.errorCode'), t('observability.columns.count')]}
+            rows={summary.topErrors.map((error) => [error.code, error.count])}
+          />
         </section>
       </TabPanel>
     );

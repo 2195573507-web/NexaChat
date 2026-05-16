@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
-import type { UiPreferences } from '../../shared/types';
+import type { ObservabilityFeedbackLabel, UiPreferences } from '../../shared/types';
 import { useI18n } from '../i18n';
 import type { TabPageProps } from './shared';
 import { DataTable, Metric, StateBadge, TabPanel, statusLabel } from './shared';
@@ -9,7 +9,11 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
   const { t } = useI18n();
   const [prefs, setPrefs] = useState<UiPreferences>(snapshot.uiPreferences);
   const [auditQuery, setAuditQuery] = useState('');
+  const [feedbackLabel, setFeedbackLabel] = useState<ObservabilityFeedbackLabel>('bug');
+  const [feedbackNotes, setFeedbackNotes] = useState(t('observability.feedback.defaultNote'));
+  const [privacy, setPrivacy] = useState(snapshot.observability.privacy);
   useEffect(() => setPrefs(snapshot.uiPreferences), [snapshot.uiPreferences]);
+  useEffect(() => setPrivacy(snapshot.observability.privacy), [snapshot.observability.privacy]);
 
   if (activeTab.id === 'security') {
     return (
@@ -128,6 +132,156 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
                 [t('settings.environment.installer'), <StateBadge key="installer" label={t('common.notConfigured')} tone="muted" />, t('settings.environment.installer.note')],
               ]}
             />
+          </div>
+        </section>
+      </TabPanel>
+    );
+  }
+
+  if (activeTab.id === 'feedback') {
+    const latestRequest = snapshot.observability.requestLogs[0];
+    return (
+      <TabPanel moduleId="settings" tab={activeTab}>
+        <section className="two-column">
+          <div className="panel">
+            <h2>{t('observability.feedback.title')}</h2>
+            <p>{t('observability.feedback.note')}</p>
+            <div className="form-grid">
+              <label>
+                {t('observability.feedback.label')}
+                <select value={feedbackLabel} onChange={(event) => setFeedbackLabel(event.target.value as ObservabilityFeedbackLabel)}>
+                  <option value="thumbs_up">{t('observability.feedback.thumbs_up')}</option>
+                  <option value="thumbs_down">{t('observability.feedback.thumbs_down')}</option>
+                  <option value="bug">{t('observability.feedback.bug')}</option>
+                  <option value="unsafe">{t('observability.feedback.unsafe')}</option>
+                  <option value="other">{t('observability.feedback.other')}</option>
+                </select>
+              </label>
+              <label>
+                {t('observability.feedback.notes')}
+                <textarea value={feedbackNotes} onChange={(event) => setFeedbackNotes(event.target.value)} />
+              </label>
+            </div>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() =>
+                onAction(t('observability.feedback.created'), () =>
+                  api.createFeedback({
+                    label: feedbackLabel,
+                    requestLogId: latestRequest?.id ?? null,
+                    notes: feedbackNotes,
+                  }),
+                )
+              }
+            >
+              {t('observability.feedback.create')}
+            </button>
+          </div>
+          <div className="panel">
+            <h2>{t('observability.feedback.history')}</h2>
+            <DataTable
+              columns={[t('observability.columns.label'), t('gateway.columns.request'), t('settings.columns.details'), t('gateway.columns.time')]}
+              rows={snapshot.observability.feedbackItems.map((item) => [
+                t(`observability.feedback.${item.label}`),
+                item.requestLogId ?? '-',
+                item.notes ?? '-',
+                new Date(item.createdAt).toLocaleString(),
+              ])}
+            />
+          </div>
+        </section>
+      </TabPanel>
+    );
+  }
+
+  if (activeTab.id === 'evals') {
+    return (
+      <TabPanel moduleId="settings" tab={activeTab}>
+        <section className="two-column">
+          <div className="panel">
+            <h2>{t('observability.eval.title')}</h2>
+            <p>{t('observability.eval.note')}</p>
+            <DataTable
+              columns={[t('gateway.columns.name'), t('settings.columns.details'), t('gateway.columns.status'), t('gateway.columns.actions')]}
+              rows={snapshot.observability.evalSets.map((evalSet) => [
+                evalSet.name,
+                evalSet.description ?? '-',
+                <StateBadge key={`${evalSet.id}-status`} label={statusLabel(evalSet.status, t)} tone={evalSet.status === 'completed' ? 'success' : evalSet.status === 'failed' ? 'error' : 'warning'} />,
+                <button type="button" key={evalSet.id} onClick={() => onAction(t('observability.eval.started'), () => api.runEvaluation({ evalSetId: evalSet.id }))}>
+                  {t('observability.eval.run')}
+                </button>,
+              ])}
+            />
+          </div>
+          <div className="panel">
+            <h2>{t('observability.eval.results')}</h2>
+            <DataTable
+              columns={[t('gateway.columns.status'), t('observability.columns.score'), t('gateway.columns.model'), t('gateway.columns.latency'), t('gateway.columns.error')]}
+              rows={snapshot.observability.evalResults.map((result) => [
+                <StateBadge key={`${result.id}-status`} label={statusLabel(result.status, t)} tone={result.status === 'completed' ? 'success' : result.status === 'failed' ? 'error' : 'warning'} />,
+                result.score ?? '-',
+                snapshot.models.find((model) => model.id === result.modelId)?.displayName ?? result.modelId ?? '-',
+                result.latencyMs ?? '-',
+                result.errorMessage ?? result.outputPreview ?? '-',
+              ])}
+            />
+          </div>
+        </section>
+      </TabPanel>
+    );
+  }
+
+  if (activeTab.id === 'observability') {
+    return (
+      <TabPanel moduleId="settings" tab={activeTab}>
+        <section className="two-column">
+          <div className="panel">
+            <h2>{t('observability.privacy.title')}</h2>
+            <p>{t('observability.privacy.note')}</p>
+            <div className="form-grid">
+              <label>
+                {t('observability.privacy.retention')}
+                <select value={privacy.retentionPolicy} onChange={(event) => setPrivacy({ ...privacy, retentionPolicy: event.target.value as typeof privacy.retentionPolicy })}>
+                  <option value="seven_days">{t('observability.privacy.retention.seven_days')}</option>
+                  <option value="thirty_days">{t('observability.privacy.retention.thirty_days')}</option>
+                  <option value="ninety_days">{t('observability.privacy.retention.ninety_days')}</option>
+                  <option value="forever">{t('observability.privacy.retention.forever')}</option>
+                </select>
+              </label>
+              <label>
+                {t('observability.privacy.exportScope')}
+                <select value={privacy.exportScope} onChange={(event) => setPrivacy({ ...privacy, exportScope: event.target.value as typeof privacy.exportScope })}>
+                  <option value="summary">{t('observability.privacy.exportScope.summary')}</option>
+                  <option value="redacted_details">{t('observability.privacy.exportScope.redacted_details')}</option>
+                </select>
+              </label>
+              <label className="checkbox-row">
+                <input type="checkbox" checked={privacy.includePromptSnippets} onChange={(event) => setPrivacy({ ...privacy, includePromptSnippets: event.target.checked })} />
+                {t('observability.privacy.includePromptSnippets')}
+              </label>
+              <label className="checkbox-row">
+                <input type="checkbox" checked={privacy.includeLocalPaths} onChange={(event) => setPrivacy({ ...privacy, includeLocalPaths: event.target.checked })} />
+                {t('observability.privacy.includeLocalPaths')}
+              </label>
+            </div>
+            <div className="button-row">
+              <button type="button" className="primary-button" onClick={() => onAction(t('observability.privacy.saved'), () => api.saveObservabilityPrivacy(privacy))}>
+                {t('observability.privacy.save')}
+              </button>
+              <button type="button" onClick={() => onAction(t('observability.export.created'), () => api.exportObservability())}>
+                {t('observability.export.button')}
+              </button>
+            </div>
+          </div>
+          <div className="panel">
+            <h2>{t('observability.privacy.localOnly')}</h2>
+            <dl className="detail-list">
+              <div><dt>{t('observability.privacy.cloudTelemetry')}</dt><dd>{privacy.cloudTelemetryEnabled ? t('common.yes') : t('common.no')}</dd></div>
+              <div><dt>{t('observability.summary.requests')}</dt><dd>{snapshot.observability.summary.requestCount}</dd></div>
+              <div><dt>{t('observability.summary.feedbackEval')}</dt><dd>{snapshot.observability.summary.feedbackCount + snapshot.observability.summary.evalResultCount}</dd></div>
+              <div><dt>{t('settings.columns.time')}</dt><dd>{new Date(privacy.updatedAt).toLocaleString()}</dd></div>
+            </dl>
           </div>
         </section>
       </TabPanel>

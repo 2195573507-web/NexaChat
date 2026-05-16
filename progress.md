@@ -478,3 +478,32 @@
 - Committed Round 12 hash backfill as `2a14e45598e46fb9697f896a767a3869f0b72433`.
 - Direct `git push origin main` failed because GitHub HTTPS timed out.
 - Pushed through Git OpenSSL plus local proxy; `origin/main` confirmed at `2a14e45598e46fb9697f896a767a3869f0b72433`.
+
+## 2026-05-16 Full App Round 13 Execution
+
+- Reconfirmed real project root with `git rev-parse --show-toplevel`: `D:/NexaChat`.
+- Rechecked requested skills: `using-superpower` is unavailable and `using-superpowers` is available.
+- Continued the active `/goal` at Round 13 after Round 0-12 completion and remote delivery.
+- Used parallel lanes:
+  - Lane A: observability authority, schema/migration, Store aggregation, provider health, feedback, eval, privacy, and redacted export.
+  - Lane B: IPC/API/preload/security permission mapping, browser mock parity, Gateway usage UI, Settings feedback/evals/privacy UI, and i18n.
+  - Lane C: runtime/store/IPC/i18n/app/UI tests, desktop shortcut readback, docs, and Git closeout.
+  - Lane D/E: read-only Round 14 packaging and release-entry pre-audit.
+- Added `src/shared/observabilityRuntime.ts`.
+- Added provider health, feedback item, eval set, and eval result schema/migration support.
+- Extended shared types, API, IPC, preload, main handlers, security permissions, mappers, Store, navigation, i18n, browser mock, and UI pages for the observability chain.
+- Implemented Store observability query, feedback creation, real Provider-backed evaluation run, privacy save, and redacted observability export.
+- Added `/gateway/usage`, `/settings/feedback`, `/settings/evals`, and `/settings/observability` as focused second-level pages without creating a ninth module.
+- Replaced stale aliases for Settings usage, feedback, and evals with first-class Round 13 targets.
+- Added `tests/observability-runtime.test.ts` and `tests/observability-store.test.ts`, and extended IPC, app, i18n, and UI smoke coverage.
+- Ran `npm.cmd run typecheck`: passed.
+- Ran `npm.cmd run test -- tests/observability-runtime.test.ts tests/observability-store.test.ts tests/ipc-contract.test.ts tests/app.test.tsx tests/i18n-authority.test.ts`: passed, 5 files / 15 tests.
+- Ran `npm.cmd run test:ui-smoke`: passed, 16 Playwright tests.
+- Ran `npm.cmd run test`: passed, 16 files / 50 tests.
+- First `npm.cmd run build` failed because a new observability test fixture used an invalid trace event type and stale retrieval trace field; fixed the fixture.
+- Reran `npm.cmd run build`: passed.
+- Ran `npm.cmd run verify`: passed, including typecheck, full unit test suite, and build.
+- Ran `npm.cmd run test:electron-smoke`: passed; Electron shell rendered.
+- Ran `git diff --check`: passed with LF/CRLF conversion warnings only.
+- Checked `C:\Users\至亲\Desktop\NexaChat.lnk`: target, arguments, working directory, and icon still point to the current local Electron launch entry.
+- Updated the authoritative blueprint Round 13 execution record, `PROJECT_PROGRESS.md`, matrix, `docs/implementation/round-13-observability-usage-logs-feedback-evaluation-closure.md`, `task_plan.md`, `progress.md`, and `findings.md`; commit hash is pending until the Round 13 delivery commit.

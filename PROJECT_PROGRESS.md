@@ -1,5 +1,48 @@
 # NexaChat Project Progress
 
+## 2026-05-16 Full App Round 13 Observability, Usage, Logs, Feedback And Evaluation
+
+Round 13 of `docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md` is completed as implementation and verification; delivery commit is pending.
+
+Parallel execution lanes:
+
+- Lane A: observability authority, schema/migration, Store aggregation, provider health, feedback, eval, privacy, redacted export.
+- Lane B: IPC/API/preload/security, browser mock parity, Gateway usage page, Settings feedback/evals/privacy pages.
+- Lane C: runtime/store/IPC/i18n/app/UI tests, desktop shortcut readback, docs, Git closeout.
+
+Key changes:
+
+- Added `src/shared/observabilityRuntime.ts` for metric names, log event types, feedback labels, eval statuses, retention/export policy, query normalization, aggregation, and redaction.
+- Added provider health, feedback, eval set, and eval result tables plus migration/mappers/types.
+- Added Store observability query, feedback creation, real Provider-backed eval run, privacy save, and redacted export.
+- Added observability API/IPC/preload/main handlers and permissions.
+- Added browser mock parity for observability operations in UI smoke mode.
+- Added `/gateway/usage`, `/settings/feedback`, `/settings/evals`, and `/settings/observability`.
+- Replaced stale aliases for settings usage/evals/feedback with first-class Round 13 targets.
+- Added `tests/observability-runtime.test.ts` and `tests/observability-store.test.ts`, and extended IPC/app/UI smoke tests.
+
+Verification:
+
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test -- tests/observability-runtime.test.ts tests/observability-store.test.ts tests/ipc-contract.test.ts tests/app.test.tsx tests/i18n-authority.test.ts`: passed, 5 files / 15 tests.
+- `npm.cmd run test:ui-smoke`: passed, 16 Playwright tests.
+- `npm.cmd run test`: passed, 16 files / 50 tests.
+- First `npm.cmd run build`: failed because a new test fixture used an invalid trace event type and stale retrieval trace field; fixture was corrected.
+- Rerun `npm.cmd run build`: passed.
+- `npm.cmd run verify`: passed, including typecheck, full unit test suite, and build.
+- `npm.cmd run test:electron-smoke`: passed.
+- `git diff --check`: passed with LF/CRLF warnings only.
+
+Desktop shortcut status:
+
+- `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"` as the app argument, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`.
+- No shortcut was modified in Round 13.
+
+Git:
+
+- Round 13 delivery commit hash: pending.
+- Push result: pending.
+
 ## 2026-05-14 Full App Round 0 Health Check
 
 Round 0 of `docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md` is completed as an inventory-only implementation round.

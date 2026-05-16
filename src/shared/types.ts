@@ -34,6 +34,21 @@ import type {
   DataOperationKind,
   DataRollbackState,
 } from './dataRuntime.js';
+import type {
+  ObservabilityEvalStatus,
+  ObservabilityFeedbackLabel,
+  ObservabilityPrivacySettings,
+  ObservabilityQueryInput,
+  ObservabilitySummary,
+} from './observabilityRuntime.js';
+
+export type {
+  ObservabilityEvalStatus,
+  ObservabilityFeedbackLabel,
+  ObservabilityPrivacySettings,
+  ObservabilityQueryInput,
+  ObservabilitySummary,
+} from './observabilityRuntime.js';
 
 export type ModuleStage = 'ready' | 'implemented' | 'planned' | 'reserved' | 'environment-limited';
 
@@ -431,6 +446,90 @@ export interface UsageRecord {
   outputTokens: number;
   costEstimate: number;
   createdAt: number;
+}
+
+export interface ProviderHealthRecord {
+  id: string;
+  providerId: string;
+  modelId: string | null;
+  status: HealthStatus;
+  latencyMs: number | null;
+  source: 'provider-test' | 'chat' | 'gateway' | 'manual';
+  errorCode: string | null;
+  errorMessage: string | null;
+  createdAt: number;
+}
+
+export interface FeedbackItem {
+  id: string;
+  label: ObservabilityFeedbackLabel;
+  messageId: string | null;
+  requestLogId: string | null;
+  notes: string | null;
+  metadataJson: string | null;
+  createdAt: number;
+}
+
+export interface FeedbackCreateInput {
+  label: ObservabilityFeedbackLabel;
+  messageId?: string | null;
+  requestLogId?: string | null;
+  notes?: string | null;
+}
+
+export interface EvalSet {
+  id: string;
+  name: string;
+  description: string | null;
+  prompt: string;
+  expectedKeywordsJson: string;
+  status: ObservabilityEvalStatus;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface EvalResult {
+  id: string;
+  evalSetId: string;
+  providerId: string | null;
+  modelId: string | null;
+  requestLogId: string | null;
+  status: ObservabilityEvalStatus;
+  score: number | null;
+  latencyMs: number | null;
+  outputPreview: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  createdAt: number;
+}
+
+export interface EvalRunInput {
+  evalSetId: string;
+  modelId?: string | null;
+}
+
+export interface ObservabilityExportResult {
+  id: string;
+  redacted: boolean;
+  content: string;
+  summary: ObservabilitySummary;
+  createdAt: number;
+}
+
+export interface ObservabilitySnapshot {
+  summary: ObservabilitySummary;
+  query: Required<ObservabilityQueryInput>;
+  requestLogs: RequestLog[];
+  gatewayLogs: GatewayLog[];
+  usageRecords: UsageRecord[];
+  auditLogs: AuditLog[];
+  executionTraceEvents: ExecutionTraceEvent[];
+  knowledgeRetrievals: KnowledgeRetrievalTrace[];
+  providerHealthRecords: ProviderHealthRecord[];
+  feedbackItems: FeedbackItem[];
+  evalSets: EvalSet[];
+  evalResults: EvalResult[];
+  privacy: ObservabilityPrivacySettings;
 }
 
 export interface GatewayStatus {
@@ -919,6 +1018,11 @@ export interface AppSnapshot {
   requestLogs: RequestLog[];
   gatewayLogs: GatewayLog[];
   usageRecords: UsageRecord[];
+  providerHealthRecords: ProviderHealthRecord[];
+  feedbackItems: FeedbackItem[];
+  evalSets: EvalSet[];
+  evalResults: EvalResult[];
+  observability: ObservabilitySnapshot;
   gatewayKeys: GatewayApiKey[];
   knowledgeFiles: KnowledgeFile[];
   knowledgeChunks: KnowledgeChunk[];

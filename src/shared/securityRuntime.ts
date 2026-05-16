@@ -25,6 +25,9 @@ export const SECURITY_PERMISSION_KEYS = [
   'audit:read',
   'audit:export',
   'audit:verify',
+  'observability:read',
+  'observability:write',
+  'observability:export',
   'security:manage',
 ] as const;
 
@@ -112,6 +115,9 @@ export const SECURITY_ROLES: SecurityRoleDefinition[] = [
       'system:logs:open',
       'audit:read',
       'audit:verify',
+      'observability:read',
+      'observability:write',
+      'observability:export',
     ],
   },
   {
@@ -123,6 +129,8 @@ export const SECURITY_ROLES: SecurityRoleDefinition[] = [
       'knowledge:read',
       'audit:read',
       'audit:verify',
+      'observability:read',
+      'observability:export',
       'data:export',
       'system:logs:open',
     ],
@@ -171,6 +179,11 @@ export const IPC_PERMISSION_BY_CHANNEL = {
   [IPC_CHANNELS.auditSearch]: 'audit:read',
   [IPC_CHANNELS.auditVerify]: 'audit:verify',
   [IPC_CHANNELS.auditExport]: 'audit:export',
+  [IPC_CHANNELS.observabilityQuery]: 'observability:read',
+  [IPC_CHANNELS.observabilityCreateFeedback]: 'observability:write',
+  [IPC_CHANNELS.observabilityRunEval]: 'observability:write',
+  [IPC_CHANNELS.observabilitySavePrivacy]: 'observability:write',
+  [IPC_CHANNELS.observabilityExport]: 'observability:export',
   [IPC_CHANNELS.systemOpenLogs]: 'system:logs:open',
 } as const satisfies Record<IpcChannel, SecurityPermissionKey>;
 
@@ -210,6 +223,9 @@ export const SECURITY_ACTION_PERMISSIONS = {
   auditRead: 'audit:read',
   auditExport: 'audit:export',
   auditVerify: 'audit:verify',
+  observabilityRead: 'observability:read',
+  observabilityWrite: 'observability:write',
+  observabilityExport: 'observability:export',
   securityManage: 'security:manage',
 } as const satisfies Record<string, SecurityPermissionKey>;
 

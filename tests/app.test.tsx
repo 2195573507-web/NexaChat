@@ -104,6 +104,18 @@ describe('NexaChat renderer', () => {
     openFeature(settings, settings.tabs.find((tab) => tab.id === 'audit')!);
     expect(activePanel()).toHaveAttribute('data-tab', 'audit');
     expect(activePanel()).toHaveTextContent(translate('zh-CN', 'settings.audit.verify'));
+    openFeature(gateway, gateway.tabs.find((tab) => tab.id === 'usage')!);
+    expect(activePanel()).toHaveAttribute('data-tab', 'usage');
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'observability.health.title'));
+    openFeature(settings, settings.tabs.find((tab) => tab.id === 'feedback')!);
+    expect(activePanel()).toHaveAttribute('data-tab', 'feedback');
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'observability.feedback.title'));
+    openFeature(settings, settings.tabs.find((tab) => tab.id === 'evals')!);
+    expect(activePanel()).toHaveAttribute('data-tab', 'evals');
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'observability.eval.title'));
+    openFeature(settings, settings.tabs.find((tab) => tab.id === 'observability')!);
+    expect(activePanel()).toHaveAttribute('data-tab', 'observability');
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'observability.privacy.title'));
   });
 });
 

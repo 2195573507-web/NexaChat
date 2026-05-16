@@ -6,11 +6,15 @@ import { IPC_PERMISSION_BY_CHANNEL } from '../shared/securityRuntime.js';
 import type {
   CancelMessageInput,
   CompareModelsInput,
+  EvalRunInput,
   ExportConversationInput,
+  FeedbackCreateInput,
   DataBackupCreateInput,
   DataExportOptions,
   DataRestorePreflightInput,
   DataRollbackInput,
+  ObservabilityPrivacySettings,
+  ObservabilityQueryInput,
   GatewayKeyCreateInput,
   GatewayKeyRotateInput,
   GatewayKeyUpdateInput,
@@ -91,6 +95,11 @@ export function registerIpcHandlers(): void {
   handleIpc(IPC_CHANNELS.dataCreateEncryptedBackup, (input: DataBackupCreateInput) => store.createEncryptedBackup(input));
   handleIpc(IPC_CHANNELS.dataCreateRestorePreflight, (input: DataRestorePreflightInput) => store.createRestorePreflight(input));
   handleIpc(IPC_CHANNELS.dataApplyRollback, (input: DataRollbackInput) => store.applyDataRollback(input));
+  handleIpc(IPC_CHANNELS.observabilityQuery, (input?: ObservabilityQueryInput) => store.queryObservability(input));
+  handleIpc(IPC_CHANNELS.observabilityCreateFeedback, (input: FeedbackCreateInput) => store.createFeedback(input));
+  handleIpc(IPC_CHANNELS.observabilityRunEval, (input: EvalRunInput) => store.runEvaluation(input));
+  handleIpc(IPC_CHANNELS.observabilitySavePrivacy, (input: Partial<ObservabilityPrivacySettings>) => store.saveObservabilityPrivacy(input));
+  handleIpc(IPC_CHANNELS.observabilityExport, (input?: ObservabilityQueryInput) => store.exportObservability(input));
   handleIpc(IPC_CHANNELS.auditSearch, (query?: string) => store.searchAuditLogs(query));
   handleIpc(IPC_CHANNELS.auditVerify, () => store.verifyAuditIntegrity());
   handleIpc(IPC_CHANNELS.auditExport, () => store.exportAuditLogs());

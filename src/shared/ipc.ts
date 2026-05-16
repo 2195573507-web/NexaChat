@@ -3,7 +3,9 @@ import type {
   ApprovalDecisionInput,
   CompareModelsInput,
   ExecutionStartInput,
+  EvalRunInput,
   ExportConversationInput,
+  FeedbackCreateInput,
   GatewayKeyCreateInput,
   GatewayKeyRotateInput,
   GatewayKeyUpdateInput,
@@ -24,6 +26,8 @@ import type {
   DataExportOptions,
   DataRestorePreflightInput,
   DataRollbackInput,
+  ObservabilityPrivacySettings,
+  ObservabilityQueryInput,
 } from './types.js';
 
 export const IPC_CHANNELS = {
@@ -65,6 +69,11 @@ export const IPC_CHANNELS = {
   dataCreateEncryptedBackup: 'data:createEncryptedBackup',
   dataCreateRestorePreflight: 'data:createRestorePreflight',
   dataApplyRollback: 'data:applyRollback',
+  observabilityQuery: 'observability:query',
+  observabilityCreateFeedback: 'observability:createFeedback',
+  observabilityRunEval: 'observability:runEval',
+  observabilitySavePrivacy: 'observability:savePrivacy',
+  observabilityExport: 'observability:export',
   auditSearch: 'audit:search',
   auditVerify: 'audit:verify',
   auditExport: 'audit:export',
@@ -119,6 +128,11 @@ export type IpcInvokeArgs = {
   [IPC_CHANNELS.dataCreateEncryptedBackup]: [DataBackupCreateInput];
   [IPC_CHANNELS.dataCreateRestorePreflight]: [DataRestorePreflightInput];
   [IPC_CHANNELS.dataApplyRollback]: [DataRollbackInput];
+  [IPC_CHANNELS.observabilityQuery]: [ObservabilityQueryInput?];
+  [IPC_CHANNELS.observabilityCreateFeedback]: [FeedbackCreateInput];
+  [IPC_CHANNELS.observabilityRunEval]: [EvalRunInput];
+  [IPC_CHANNELS.observabilitySavePrivacy]: [Partial<ObservabilityPrivacySettings>];
+  [IPC_CHANNELS.observabilityExport]: [ObservabilityQueryInput?];
   [IPC_CHANNELS.auditSearch]: [string?];
   [IPC_CHANNELS.auditVerify]: [];
   [IPC_CHANNELS.auditExport]: [];
@@ -181,6 +195,11 @@ const ipcPayloadArity: Record<IpcChannel, { min: number; max: number }> = {
   [IPC_CHANNELS.dataCreateEncryptedBackup]: { min: 1, max: 1 },
   [IPC_CHANNELS.dataCreateRestorePreflight]: { min: 1, max: 1 },
   [IPC_CHANNELS.dataApplyRollback]: { min: 1, max: 1 },
+  [IPC_CHANNELS.observabilityQuery]: { min: 0, max: 1 },
+  [IPC_CHANNELS.observabilityCreateFeedback]: { min: 1, max: 1 },
+  [IPC_CHANNELS.observabilityRunEval]: { min: 1, max: 1 },
+  [IPC_CHANNELS.observabilitySavePrivacy]: { min: 1, max: 1 },
+  [IPC_CHANNELS.observabilityExport]: { min: 0, max: 1 },
   [IPC_CHANNELS.auditSearch]: { min: 0, max: 1 },
   [IPC_CHANNELS.auditVerify]: { min: 0, max: 0 },
   [IPC_CHANNELS.auditExport]: { min: 0, max: 0 },

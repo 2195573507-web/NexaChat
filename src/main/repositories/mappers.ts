@@ -12,6 +12,9 @@ import type {
   ExecutionRun,
   ExecutionStep,
   ExecutionTraceEvent,
+  EvalResult,
+  EvalSet,
+  FeedbackItem,
   GatewayApiKey,
   GatewayLog,
   ImportExportResult,
@@ -27,6 +30,7 @@ import type {
   Model,
   PromptTemplate,
   Provider,
+  ProviderHealthRecord,
   RequestLog,
   MigrationRun,
   RollbackRecord,
@@ -261,6 +265,62 @@ export function mapUsageRecord(row: Row): UsageRecord {
     inputTokens: Number(row.input_tokens),
     outputTokens: Number(row.output_tokens),
     costEstimate: Number(row.cost_estimate),
+    createdAt: Number(row.created_at),
+  };
+}
+
+export function mapProviderHealthRecord(row: Row): ProviderHealthRecord {
+  return {
+    id: String(row.id),
+    providerId: String(row.provider_id),
+    modelId: nullableString(row.model_id),
+    status: String(row.status) as ProviderHealthRecord['status'],
+    latencyMs: nullableNumber(row.latency_ms),
+    source: String(row.source) as ProviderHealthRecord['source'],
+    errorCode: nullableString(row.error_code),
+    errorMessage: nullableString(row.error_message),
+    createdAt: Number(row.created_at),
+  };
+}
+
+export function mapFeedbackItem(row: Row): FeedbackItem {
+  return {
+    id: String(row.id),
+    label: String(row.label) as FeedbackItem['label'],
+    messageId: nullableString(row.message_id),
+    requestLogId: nullableString(row.request_log_id),
+    notes: nullableString(row.notes),
+    metadataJson: nullableString(row.metadata_json),
+    createdAt: Number(row.created_at),
+  };
+}
+
+export function mapEvalSet(row: Row): EvalSet {
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    description: nullableString(row.description),
+    prompt: String(row.prompt),
+    expectedKeywordsJson: String(row.expected_keywords_json),
+    status: String(row.status) as EvalSet['status'],
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
+  };
+}
+
+export function mapEvalResult(row: Row): EvalResult {
+  return {
+    id: String(row.id),
+    evalSetId: String(row.eval_set_id),
+    providerId: nullableString(row.provider_id),
+    modelId: nullableString(row.model_id),
+    requestLogId: nullableString(row.request_log_id),
+    status: String(row.status) as EvalResult['status'],
+    score: nullableNumber(row.score),
+    latencyMs: nullableNumber(row.latency_ms),
+    outputPreview: nullableString(row.output_preview),
+    errorCode: nullableString(row.error_code),
+    errorMessage: nullableString(row.error_message),
     createdAt: Number(row.created_at),
   };
 }

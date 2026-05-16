@@ -147,6 +147,36 @@ test('security audit tab verifies integrity and exports redacted audit data', as
   await expect(page.locator('main [data-tab="audit"]').getByRole('cell', { name: 'audit.export' }).first()).toBeVisible();
 });
 
+test('observability usage feedback eval and privacy pages share one local chain', async ({ page }) => {
+  await page.goto('/chat/playground');
+  await page.getByPlaceholder(translate('zh-CN', 'chat.composer.placeholder')).fill('round 13 observability smoke');
+  await page.getByRole('button', { name: translate('zh-CN', 'chat.send') }).click();
+  await expect(page.getByText('round 13 observability smoke', { exact: true })).toBeVisible();
+
+  await page.goto('/gateway/usage');
+  await expect(page.locator('main [data-tab="usage"]').getByRole('heading', { name: translate('zh-CN', 'observability.health.title') }).first()).toBeVisible();
+  await expect(page.locator('main [data-tab="usage"]').getByText(translate('zh-CN', 'observability.summary.tokens')).first()).toBeVisible();
+
+  await page.goto('/settings/feedback');
+  await page.getByLabel(translate('zh-CN', 'observability.feedback.notes')).fill('round 13 local feedback smoke');
+  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'observability.feedback.create')) }).click();
+  await expect(page.locator('main [data-tab="feedback"]').getByRole('cell', { name: 'round 13 local feedback smoke' })).toBeVisible();
+
+  await page.goto('/settings/evals');
+  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'observability.eval.run')) }).first().click();
+  await expect(page.locator('main [data-tab="evals"]').getByText(translate('zh-CN', 'observability.eval.results')).first()).toBeVisible();
+  await expect(page.locator('main [data-tab="evals"]').getByText(/completed|已完成/i).first()).toBeVisible();
+
+  await page.goto('/settings/observability');
+  await page.getByLabel(translate('zh-CN', 'observability.privacy.includePromptSnippets')).check();
+  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'observability.privacy.save')) }).click();
+  await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'observability.export.button')) }).click();
+  await expect(page.locator('main [data-tab="observability"]').getByText(translate('zh-CN', 'observability.privacy.localOnly')).first()).toBeVisible();
+  await expectNoVisibleRouteLeak(page);
+  await expectNoHorizontalOverflow(page, '.app-shell');
+  await expectNoHorizontalOverflow(page, '.content-grid');
+});
+
 test('all modules and feature routes sync sidebar subnav route and panel', async ({ page }) => {
   await page.goto('/');
 
