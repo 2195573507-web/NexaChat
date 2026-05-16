@@ -437,3 +437,4 @@
 - Ran `git diff --check`: passed with LF/CRLF conversion warnings only.
 - Checked `C:\Users\至亲\Desktop\NexaChat.lnk`: target, arguments, working directory, and icon still point to the current local Electron launch entry.
 - Updated the authoritative blueprint Round 11 execution record, `PROJECT_PROGRESS.md`, matrix, `docs/implementation/round-11-security-users-permissions-audit-closure.md`, `task_plan.md`, `progress.md`, and `findings.md`; commit hash is pending until Git commit.
+- Committed Round 11 delivery as `0bac7f927c90e2087c3bb80a81833ca4c599b629` and started delivery-hash backfill.
