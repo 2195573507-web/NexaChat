@@ -1960,3 +1960,22 @@ Git commit hash:
 
 - Baseline before this round: `a9f04a2 docs: record app fluidity implementation progress`.
 - Implementation commit hash is recorded by the follow-up PROJECT_PROGRESS closeout entry after the implementation commit exists.
+
+## 2026-05-17 CC Switch Reference Motion Closeout
+
+Time: 2026-05-17 22:31:00 +08:00.
+
+Implementation commit:
+
+- `385de6a9b98723275be54815deeffe7b76c940e6` (`feat: refine desktop motion and typography`).
+
+Closeout verification:
+
+- Implementation commit includes the motion audit report, token/font/style changes, token authority tests, and the first PROJECT_PROGRESS round entry.
+- Post-commit status before this closeout entry: `main...origin/main [ahead 1]`.
+- Focused post-doc check before commit closeout: `npm.cmd run test -- tests/theme-token-authority.test.ts tests/app.test.tsx` passed, 2 files / 37 tests.
+- Full verification evidence remains the current round run: `typecheck`, `test`, `build`, `test:ui-smoke`, and `test:electron-smoke` all passed.
+
+Push status:
+
+- Pending until this closeout entry is committed and pushed.
