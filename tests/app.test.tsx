@@ -10,7 +10,7 @@ import { DEFAULT_MODEL_FORM, DEFAULT_PROVIDER_FORM, PROVIDER_CATALOG } from '../
 import { GATEWAY_AVAILABLE_ENDPOINTS, GATEWAY_RESERVED_ENDPOINTS } from '../src/shared/gatewayRuntime';
 import { DATA_CONFIRMATION_PHRASES } from '../src/shared/dataRuntime';
 import type { AppApi } from '../src/shared/api';
-import type { ChatResponse, NavModule, NavTab } from '../src/shared/types';
+import type { ChatResponse, Conversation, Message, NavModule, NavTab, PageResult } from '../src/shared/types';
 
 beforeEach(() => {
   window.history.replaceState(null, '', '/');
@@ -48,6 +48,16 @@ function deferred<T>() {
     reject = innerReject;
   });
   return { promise, resolve, reject };
+}
+
+function pageResult<T>(items: T[], limit: number, offset: number): PageResult<T> {
+  return {
+    items: items.slice(offset, offset + limit),
+    total: items.length,
+    limit,
+    offset,
+    hasMore: offset + limit < items.length,
+  };
 }
 
 describe('NexaChat renderer', () => {
@@ -558,6 +568,154 @@ describe('NexaChat renderer', () => {
     openFeature(gateway, gateway.tabs.find((tab) => tab.id === 'usage')!);
     expect(activePanel()).toHaveTextContent(translate('zh-CN', 'gateway.usage.noTokenData'));
     expect(document.querySelector('.usage-trend-chart')).not.toBeInTheDocument();
+  });
+
+  it('loads chat history through paged message APIs, virtualizes long timelines, and exports the full conversation', async () => {
+    const baseApi = createMockApi();
+    const snapshot = await baseApi.getSnapshot();
+    const conversation = snapshot.conversations[0];
+    const longMessages: Message[] = Array.from({ length: 140 }, (_, index) => ({
+      ...snapshot.messages[0],
+      id: `long_message_${index}`,
+      conversationId: conversation.id,
+      parentMessageId: index > 0 ? `long_message_${index - 1}` : null,
+      role: index % 2 === 0 ? 'user' : 'assistant',
+      content: `long message ${index}`,
+      status: 'completed',
+      createdAt: index + 1,
+      updatedAt: index + 1,
+    }));
+    const pagedConversation: Conversation = {
+      ...conversation,
+      messageCount: longMessages.length,
+      lastMessageAt: longMessages.at(-1)?.createdAt ?? conversation.lastMessageAt,
+    };
+    const listMessages = vi.fn(async (input: { conversationId: string; limit?: number; offset?: number }) => {
+      const newestFirst = [...longMessages].reverse();
+      const page = pageResult(newestFirst, input.limit ?? 60, input.offset ?? 0);
+      return { ...page, items: [...page.items].reverse() };
+    });
+    const exportConversation = vi.fn(async () => ({
+      id: 'export_full_history',
+      conversationId: conversation.id,
+      format: 'json',
+      redacted: true,
+      status: 'completed',
+      content: JSON.stringify({ messages: longMessages }),
+      summaryJson: JSON.stringify({ messageCount: longMessages.length }),
+      createdAt: Date.now(),
+    }));
+    window.nexachat = {
+      ...baseApi,
+      async getSnapshot() {
+        const current = await baseApi.getSnapshot();
+        return {
+          ...current,
+          conversations: [pagedConversation],
+          messages: [],
+        };
+      },
+      async listConversations(input) {
+        return pageResult([pagedConversation], input?.limit ?? 30, input?.offset ?? 0);
+      },
+      listMessages,
+      exportConversation: exportConversation as AppApi['exportConversation'],
+    };
+    await renderApp();
+
+    await waitFor(() => {
+      expect(listMessages).toHaveBeenCalledWith(expect.objectContaining({ conversationId: conversation.id, limit: 60, offset: 0 }));
+    });
+    await waitFor(() => {
+      expect(screen.getByText('long message 139')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('long message 0')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: translate('zh-CN', 'common.loadOlder') }));
+    await waitFor(() => {
+      expect(listMessages).toHaveBeenCalledWith(expect.objectContaining({ conversationId: conversation.id, limit: 60, offset: 60 }));
+    });
+    await waitFor(() => {
+      expect(activePanel()).toHaveTextContent(translate('zh-CN', 'chat.virtualized.hidden', { count: 30 }));
+    });
+    expect(screen.getByText('long message 50')).toBeInTheDocument();
+    expect(screen.queryByText('long message 49')).not.toBeInTheDocument();
+
+    await window.nexachat.exportConversation({ conversationId: conversation.id, format: 'json', redacted: true });
+    expect(exportConversation).toHaveBeenCalledWith({ conversationId: conversation.id, format: 'json', redacted: true });
+    const exported = await exportConversation.mock.results[exportConversation.mock.results.length - 1].value;
+    expect(JSON.parse(exported.content).messages).toHaveLength(140);
+  });
+
+  it('loads gateway and audit logs through paged module APIs', async () => {
+    const baseApi = createMockApi();
+    const baseSnapshot = await baseApi.getSnapshot();
+    const timestamp = Date.now();
+    const gatewayLogs = Array.from({ length: 55 }, (_, index) => ({
+      id: `gateway_log_${index}`,
+      requestLogId: null,
+      gatewayKeyId: null,
+      keyPreview: null,
+      scope: null,
+      errorCode: null,
+      latencyMs: 10,
+      remoteAddress: '127.0.0.1',
+      method: 'POST',
+      path: `/v1/chat/completions/${index}`,
+      statusCode: index % 2 === 0 ? 200 : 502,
+      redactedHeadersJson: null,
+      createdAt: timestamp - index,
+    }));
+    const auditLogs = Array.from({ length: 64 }, (_, index) => ({
+      id: `audit_log_${index}`,
+      action: `audit.action.${index}`,
+      actor: 'browser-mock',
+      targetType: 'test',
+      targetId: null,
+      detailsJson: null,
+      permissionKey: null,
+      previousHash: null,
+      entryHash: `hash_${index}`,
+      integrityState: 'verified' as const,
+      createdAt: timestamp - index,
+    }));
+    const listGatewayLogs = vi.fn(async (input?: { limit?: number; offset?: number }) => pageResult(gatewayLogs, input?.limit ?? 24, input?.offset ?? 0));
+    const listAuditLogs = vi.fn(async (input?: { limit?: number; offset?: number }) => pageResult(auditLogs, input?.limit ?? 30, input?.offset ?? 0));
+    window.nexachat = {
+      ...baseApi,
+      async getSnapshot() {
+        const current = await baseApi.getSnapshot();
+        return {
+          ...current,
+          gatewayLogs: gatewayLogs.slice(0, 24),
+          auditLogs: auditLogs.slice(0, 30),
+          auditIntegrity: baseSnapshot.auditIntegrity,
+        };
+      },
+      listGatewayLogs,
+      listAuditLogs,
+    };
+    await renderApp();
+
+    const gateway = navModules.find((module) => module.id === 'gateway')!;
+    openFeature(gateway, gateway.tabs.find((tab) => tab.id === 'logs')!);
+    await waitFor(() => {
+      expect(listGatewayLogs).toHaveBeenCalledWith(expect.objectContaining({ limit: 24, offset: 0 }));
+    });
+    fireEvent.click(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'common.loadMore') }));
+    await waitFor(() => {
+      expect(listGatewayLogs).toHaveBeenCalledWith(expect.objectContaining({ limit: 24, offset: 24 }));
+    });
+
+    const settings = navModules.find((module) => module.id === 'settings')!;
+    openFeature(settings, settings.tabs.find((tab) => tab.id === 'audit')!);
+    await waitFor(() => {
+      expect(listAuditLogs).toHaveBeenCalledWith(expect.objectContaining({ limit: 30, offset: 0 }));
+    });
+    fireEvent.click(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'common.loadMore') }));
+    await waitFor(() => {
+      expect(listAuditLogs).toHaveBeenCalledWith(expect.objectContaining({ limit: 30, offset: 30 }));
+    });
   });
 
   it('keeps each module route backed by the registry', async () => {

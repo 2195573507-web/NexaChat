@@ -102,6 +102,21 @@ describe('database startup migrations', () => {
     expect(getColumnNames(db, 'knowledge_chunks')).toContain('status');
     expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_conversations_workspace_updated'").get()).toBeTruthy();
     expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_files_workspace_status'").get()).toBeTruthy();
+    for (const indexName of [
+      'idx_gateway_logs_created',
+      'idx_gateway_logs_key_created',
+      'idx_gateway_logs_status_created',
+      'idx_usage_records_created',
+      'idx_usage_records_workspace_created',
+      'idx_usage_records_provider_created',
+      'idx_usage_records_model_created',
+      'idx_audit_logs_created',
+      'idx_audit_logs_actor_created',
+      'idx_audit_logs_action_created',
+      'idx_provider_health_created',
+    ]) {
+      expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?").get(indexName), indexName).toBeTruthy();
+    }
   });
 });
 

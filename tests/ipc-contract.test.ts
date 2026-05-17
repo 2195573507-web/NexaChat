@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { APP_API_METHODS } from '../src/shared/api';
-import { IPC_CHANNELS, IPC_CHANNEL_LIST, IPC_EVENT_CHANNELS, IPC_EVENT_CHANNEL_LIST, assertIpcPayload, isIpcEventChannel } from '../src/shared/ipc';
+import { IPC_CHANNELS, IPC_CHANNEL_LIST, IPC_EVENT_CHANNELS, IPC_EVENT_CHANNEL_LIST, assertIpcPayload, isIpcEventChannel, type ChatStreamEventPayload, type TaskEventPayload } from '../src/shared/ipc';
 
 const projectRoot = process.cwd();
 
@@ -26,6 +26,17 @@ describe('IPC contract authority', () => {
     expect(() => assertIpcPayload(IPC_CHANNELS.providerDelete, ['provider_1'])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.providerModelsFetch, ['provider_1'])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.chatSendMessage, [])).toThrow(/Invalid IPC payload/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.chatListConversations, [])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.chatListConversations, [{ limit: 30, offset: 0 }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.chatListMessages, [{ conversationId: 'conversation_1', limit: 60 }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.chatListMessages, [])).toThrow(/Invalid IPC payload/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.gatewayLogsList, [{ limit: 24, statusCode: 200 }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.auditLogsList, [{ limit: 30, query: 'chat' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.knowledgeFilesList, [{ limit: 30, status: 'indexed' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.knowledgeChunksList, [{ fileId: 'file_1' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.usageTrendGet, [{ bucketMs: 86_400_000, limit: 14 }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.taskCancel, ['task_1'])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.taskCancel, [])).toThrow(/Invalid IPC payload/);
     expect(() => assertIpcPayload(IPC_CHANNELS.knowledgeCreateFile, [{ name: 'note.md', type: 'text/markdown', content: 'hello' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.knowledgeCreateFile, ['note.md', 'text/markdown', 1024])).toThrow(/Invalid IPC payload/);
     expect(() => assertIpcPayload(IPC_CHANNELS.knowledgePreviewRetrieval, [{ query: 'hello' }])).not.toThrow();
@@ -46,6 +57,33 @@ describe('IPC contract authority', () => {
     expect(() => assertIpcPayload(IPC_CHANNELS.observabilityRunEval, [{ evalSetId: 'eval_round13_basic' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.observabilitySavePrivacy, [{ includePromptSnippets: false }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.observabilityExport, [])).not.toThrow();
+  });
+
+  it('keeps chat stream and task progress payloads typed around request identity and progress', () => {
+    const chunk: ChatStreamEventPayload = {
+      type: 'chat.stream.chunk',
+      phase: 'streaming',
+      requestId: 'req_1',
+      clientRequestId: 'client_1',
+      conversationId: 'conversation_1',
+      timestamp: Date.now(),
+      progress: 0.5,
+      chunk: 'partial',
+    };
+    const completed: TaskEventPayload = {
+      type: 'task.completed',
+      phase: 'completed',
+      taskId: 'task_1',
+      taskKind: 'data.backup',
+      timestamp: Date.now(),
+      progress: 1,
+      message: 'done',
+    };
+
+    expect(chunk.requestId).toBe('req_1');
+    expect(chunk.type).toBe('chat.stream.chunk');
+    expect(completed.taskId).toBe('task_1');
+    expect(completed.progress).toBe(1);
   });
 
   it('prevents raw IPC string registration and invocation from returning', () => {
