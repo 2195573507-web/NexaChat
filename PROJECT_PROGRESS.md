@@ -1978,4 +1978,4 @@ Closeout verification:
 
 Push status:
 
-- Pending until this closeout entry is committed and pushed.
+- Final push verification is reported in the assistant closeout after this entry is committed; embedding the final remote ref for this documentation commit in the same commit would be self-referential.
