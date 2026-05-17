@@ -44,6 +44,8 @@ function handleIpc<C extends IpcChannel>(channel: C, handler: (...args: any[]) =
 export function registerIpcHandlers(): void {
   handleIpc(IPC_CHANNELS.appGetSnapshot, () => store.getSnapshot());
   handleIpc(IPC_CHANNELS.providerCreate, (input: ProviderInput) => store.createProvider(input));
+  handleIpc(IPC_CHANNELS.providerDelete, (providerId: string) => store.deleteProvider(providerId));
+  handleIpc(IPC_CHANNELS.providerModelsFetch, (providerId: string) => store.fetchProviderModels(providerId));
   handleIpc(IPC_CHANNELS.providerTest, (providerId: string) => store.testProvider(providerId));
   handleIpc(IPC_CHANNELS.modelCreate, (input: ModelInput) => store.createModel(input));
   handleIpc(IPC_CHANNELS.chatCreateConversation, (title?: string) => store.createConversation(title));

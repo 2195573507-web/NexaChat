@@ -37,6 +37,8 @@ function invoke<C extends IpcChannel>(channel: C, ...args: IpcInvokeArgs[C]) {
 const api: AppApi = {
   getSnapshot: () => invoke(IPC_CHANNELS.appGetSnapshot),
   createProvider: (input: ProviderInput) => invoke(IPC_CHANNELS.providerCreate, input),
+  deleteProvider: (providerId: string) => invoke(IPC_CHANNELS.providerDelete, providerId),
+  fetchProviderModels: (providerId: string) => invoke(IPC_CHANNELS.providerModelsFetch, providerId),
   createModel: (input: ModelInput) => invoke(IPC_CHANNELS.modelCreate, input),
   testProvider: (providerId: string) => invoke(IPC_CHANNELS.providerTest, providerId),
   sendMessage: (input: SendMessageInput) => invoke(IPC_CHANNELS.chatSendMessage, input),

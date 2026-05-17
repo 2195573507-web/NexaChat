@@ -140,6 +140,8 @@ export const SECURITY_ROLES: SecurityRoleDefinition[] = [
 export const IPC_PERMISSION_BY_CHANNEL = {
   [IPC_CHANNELS.appGetSnapshot]: 'app:snapshot:read',
   [IPC_CHANNELS.providerCreate]: 'provider:write',
+  [IPC_CHANNELS.providerDelete]: 'provider:write',
+  [IPC_CHANNELS.providerModelsFetch]: 'provider:test',
   [IPC_CHANNELS.providerTest]: 'provider:test',
   [IPC_CHANNELS.modelCreate]: 'model:write',
   [IPC_CHANNELS.chatCreateConversation]: 'chat:write',

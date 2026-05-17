@@ -230,6 +230,11 @@ export interface ModelInput {
   supportsEmbeddings?: boolean;
 }
 
+export interface ProviderModelOption {
+  id: string;
+  name: string;
+}
+
 export type HealthStatus = 'unknown' | 'healthy' | 'warning' | 'error';
 
 export interface Conversation {
@@ -370,6 +375,7 @@ export interface SendMessageInput {
   content: string;
   providerId?: string;
   modelId?: string;
+  clientRequestId?: string;
   contextStrategy?: ContextStrategy;
   parentMessageId?: string;
   attachments?: MessageAttachmentInput[];
@@ -537,10 +543,12 @@ export interface ObservabilitySnapshot {
 export interface GatewayStatus {
   enabled: boolean;
   running: boolean;
+  listenerState: 'stopped' | 'starting' | 'listening' | 'error';
   port: number;
   bindHost: string;
   endpoints: string[];
   recentError: string | null;
+  lastStartError: string | null;
 }
 
 export interface GatewayApiKey {

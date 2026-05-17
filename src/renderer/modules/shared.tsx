@@ -115,12 +115,15 @@ export function statusLabel(status: string, t: Translate): string {
   if (status === 'archived') return t('common.archived');
   if (status === 'available') return t('common.available');
   if (status === 'revoked') return t('common.revoked');
+  if (status === 'disabled') return t('gateway.keyState.disabled');
+  if (status === 'expired') return t('gateway.keyState.expired');
+  if (status === 'quota_exceeded') return t('gateway.keyState.quota_exceeded');
   return status;
 }
 
 export function healthState(status: string): 'ready' | 'warning' | 'danger' | 'muted' {
   if (status === 'healthy' || status === 'completed' || status === 'active' || status === 'indexed') return 'ready';
-  if (status === 'warning' || status === 'queued' || status === 'pending' || status === 'waiting_approval') return 'warning';
+  if (status === 'warning' || status === 'queued' || status === 'pending' || status === 'waiting_approval' || status === 'disabled' || status === 'quota_exceeded') return 'warning';
   if (status === 'error' || status === 'failed' || status === 'revoked' || status === 'denied') return 'danger';
   return 'muted';
 }

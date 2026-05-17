@@ -81,6 +81,33 @@ describe('provider invocation through NexaStore', () => {
     expect(store.getUsageRecords()).toHaveLength(1);
     expect(store.getAuditLogs().some((entry) => entry.action === 'chat.completed')).toBe(true);
   });
+
+  it('fetches provider model options and soft-deletes providers without losing history', async () => {
+    const { store } = await import('../src/main/services/store');
+    const provider = store.createProvider({
+      name: 'Round 6 Model List Upstream',
+      type: 'openai-compatible',
+      baseUrl,
+      apiKey: 'sk-round-06-secret',
+    });
+
+    await expect(store.fetchProviderModels(provider.id)).resolves.toEqual([{ id: 'round-06-chat', name: 'round-06-chat' }]);
+    const model = store.createModel({ providerId: provider.id, name: 'round-06-chat', supportsStreaming: false });
+    const conversation = store.createConversation('Soft delete trace');
+    await store.sendMessage({
+      conversationId: conversation.id,
+      content: 'keep provider trace',
+      modelId: model.id,
+    });
+
+    const deleted = store.deleteProvider(provider.id);
+
+    expect(deleted.enabled).toBe(false);
+    expect(store.getProviders().some((item) => item.id === provider.id)).toBe(false);
+    expect(store.getModels().some((item) => item.id === model.id)).toBe(false);
+    expect(store.getMessages(conversation.id).some((message) => message.providerId === provider.id && message.modelId === model.id)).toBe(true);
+    expect(store.getAuditLogs().some((entry) => entry.action === 'provider.deleted')).toBe(true);
+  });
 });
 
 function handleRequest(request: IncomingMessage, response: ServerResponse): void {

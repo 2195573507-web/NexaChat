@@ -75,7 +75,10 @@ describe('Round 12 data mobility runtime', () => {
       providers: [{ name: 'Imported Round 12 Provider', baseUrl: 'http://127.0.0.1:11434/v1' }],
       models: [{ providerName: 'Imported Round 12 Provider', name: 'round-12-model' }],
     }));
-    const replayApplied = store.applyImportPlan(replay.id, { mode: 'apply-metadata' });
+    const replayApplied = store.applyImportPlan(replay.id, {
+      mode: 'apply-metadata',
+      confirmationPhrase: DATA_CONFIRMATION_PHRASES.applyImport,
+    });
 
     expect(applied.status).toBe('completed');
     expect(applied.rollbackSnapshotId).toBeTruthy();
@@ -91,7 +94,11 @@ describe('Round 12 data mobility runtime', () => {
       providers: [{ name: 'Rollback Imported Provider', baseUrl: 'http://127.0.0.1:11434/v1' }],
       models: [{ providerName: 'Rollback Imported Provider', name: 'rollback-model' }],
     }));
-    store.applyImportPlan(result.id, { mode: 'apply-metadata' });
+    expect(() => store.applyImportPlan(result.id, { mode: 'apply-metadata' })).toThrow(/APPLY IMPORT|confirmation/i);
+    store.applyImportPlan(result.id, {
+      mode: 'apply-metadata',
+      confirmationPhrase: DATA_CONFIRMATION_PHRASES.applyImport,
+    });
 
     const rollback = store.getRollbackRecords().find((record) => record.jobId === result.id);
     expect(rollback).toBeTruthy();

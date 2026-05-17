@@ -43,6 +43,7 @@ import type {
   PromptTemplate,
   Provider,
   ProviderInput,
+  ProviderModelOption,
   RegenerateMessageInput,
   RequestLog,
   RetryMessageInput,
@@ -348,10 +349,12 @@ function createSeedState(): MockState {
     gatewayStatus: {
       enabled: true,
       running: true,
+      listenerState: 'listening',
       port: 8787,
       bindHost: '127.0.0.1',
       endpoints: [...GATEWAY_AVAILABLE_ENDPOINTS],
       recentError: null,
+      lastStartError: null,
     },
     gatewayKeys: [
       {
@@ -475,6 +478,9 @@ function createSeedState(): MockState {
 
 function resolveRoute(state: MockState, input: SendMessageInput): RouteDecision {
   const requestedModel = input.modelId ? state.models.find((model) => model.id === input.modelId) : null;
+  if (input.modelId && (!requestedModel || !requestedModel.enabled)) {
+    throw new Error(t('chat.route.explicitUnavailable'));
+  }
   const model =
     requestedModel ??
     state.models.find((candidate) => candidate.id === state.workspace.defaultModelId && candidate.enabled) ??
@@ -531,6 +537,8 @@ function buildSnapshot(state: MockState): AppSnapshot {
   const activeKnowledgeFileIds = new Set(activeKnowledgeFiles.map((file) => file.id));
   const activeKnowledgeChunks = state.knowledgeChunks.filter((chunk) => chunk.status !== 'deleted' && activeKnowledgeFileIds.has(chunk.fileId));
   const activeKnowledgeCitations = state.knowledgeCitations.filter((citation) => activeKnowledgeFileIds.has(citation.fileId));
+  const activeProviders = state.providers.filter((provider) => provider.enabled);
+  const activeModels = state.models.filter((model) => model.enabled && activeProviders.some((provider) => provider.id === model.providerId));
   const dayStart = new Date();
   dayStart.setHours(0, 0, 0, 0);
   const usageToday = state.usageRecords
@@ -546,10 +554,10 @@ function buildSnapshot(state: MockState): AppSnapshot {
     );
 
   const setupGaps: string[] = [];
-  if (state.providers.length === 0) {
+  if (activeProviders.length === 0) {
     setupGaps.push(t('dashboard.setup.browserProviderMissing'));
   }
-  if (state.models.length === 0) {
+  if (activeModels.length === 0) {
     setupGaps.push(t('dashboard.setup.browserModelMissing'));
   }
   if (!state.gatewayStatus.running) {
@@ -564,8 +572,8 @@ function buildSnapshot(state: MockState): AppSnapshot {
         .filter((conversation) => conversation.status !== 'deleted')
         .sort((left, right) => (right.lastMessageAt ?? right.updatedAt) - (left.lastMessageAt ?? left.updatedAt))
         .slice(0, 5),
-      providers: state.providers,
-      models: state.models,
+      providers: activeProviders,
+      models: activeModels,
       gatewayStatus: state.gatewayStatus,
       usageToday,
       setupGaps,
@@ -576,8 +584,8 @@ function buildSnapshot(state: MockState): AppSnapshot {
     messageAttachments: state.messageAttachments,
     promptTemplates: state.promptTemplates,
     conversationExports: state.conversationExports,
-    providers: state.providers,
-    models: state.models,
+    providers: activeProviders,
+    models: activeModels,
     requestLogs: state.requestLogs,
     gatewayLogs: state.gatewayLogs,
     usageRecords: state.usageRecords,
@@ -994,8 +1002,78 @@ export function createMockApi(): AppApi {
       return clone(provider);
     },
 
+    async deleteProvider(providerId: string) {
+      const provider = findById(state.providers, providerId, 'Provider');
+      const timestamp = now();
+      provider.enabled = false;
+      provider.healthStatus = 'unknown';
+      provider.updatedAt = timestamp;
+      const disabledModelIds: string[] = [];
+      state.models
+        .filter((model) => model.providerId === provider.id)
+        .forEach((model) => {
+          model.enabled = false;
+          model.healthStatus = 'unknown';
+          model.latencyMs = null;
+          model.updatedAt = timestamp;
+          disabledModelIds.push(model.id);
+        });
+      if (state.workspace.defaultProviderId === provider.id) {
+        state.workspace.defaultProviderId = null;
+      }
+      if (state.workspace.defaultModelId && disabledModelIds.includes(state.workspace.defaultModelId)) {
+        state.workspace.defaultModelId = null;
+      }
+      state.conversations.forEach((conversation) => {
+        if (conversation.defaultProviderId === provider.id) {
+          conversation.defaultProviderId = null;
+          conversation.updatedAt = timestamp;
+        }
+        if (conversation.defaultModelId && disabledModelIds.includes(conversation.defaultModelId)) {
+          conversation.defaultModelId = null;
+          conversation.updatedAt = timestamp;
+        }
+      });
+      touchWorkspace();
+      pushAudit('provider.delete', 'provider', provider.id, { disabledModelCount: disabledModelIds.length });
+      return clone(provider);
+    },
+
+    async fetchProviderModels(providerId: string): Promise<ProviderModelOption[]> {
+      const provider = findById(state.providers, providerId, 'Provider');
+      if (!provider.enabled) {
+        throw new Error(`Provider is disabled: ${providerId}`);
+      }
+      const timestamp = now();
+      provider.healthStatus = 'healthy';
+      provider.lastCheckedAt = timestamp;
+      provider.updatedAt = timestamp;
+      const slug = provider.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'provider';
+      state.providerHealthRecords.unshift({
+        id: createId('health'),
+        providerId: provider.id,
+        modelId: null,
+        status: 'healthy',
+        latencyMs: 38,
+        source: 'provider-test',
+        errorCode: null,
+        errorMessage: null,
+        createdAt: timestamp,
+      });
+      const options = [
+        ...state.models.filter((model) => model.providerId === provider.id && model.enabled).map((model) => model.name),
+        `${slug}-chat`,
+        `${slug}-fast`,
+      ];
+      pushAudit('provider.models.fetch', 'provider', provider.id, { modelCount: options.length });
+      return clone(Array.from(new Set(options)).map((name) => ({ id: name, name })));
+    },
+
     async createModel(input: ModelInput) {
-      findById(state.providers, input.providerId, 'Provider');
+      const provider = findById(state.providers, input.providerId, 'Provider');
+      if (!provider.enabled) {
+        throw new Error(`Provider is disabled: ${input.providerId}`);
+      }
 
       const timestamp = now();
       const model: Model = {
@@ -1096,7 +1174,7 @@ export function createMockApi(): AppApi {
       const userInputTokens = estimateTokens(input.content);
       const assistantContent = buildAssistantContent(input.content, routeDecision);
       const assistantOutputTokens = estimateTokens(assistantContent);
-      const requestLogId = createId('request');
+      const requestLogId = input.clientRequestId?.trim() || createId('request');
       const assistantChunks = assistantContent.split('\n\n').filter(Boolean);
 
       const previousMessage = [...state.messages]
@@ -1485,7 +1563,9 @@ export function createMockApi(): AppApi {
         ...state.gatewayStatus,
         enabled,
         running: enabled,
+        listenerState: enabled ? 'listening' : 'stopped',
         recentError: enabled ? null : 'Gateway stopped by browser mock user action.',
+        lastStartError: null,
       };
       pushAudit('gateway.toggle', 'gateway', null, { enabled });
       return clone(state.gatewayStatus);
@@ -1614,7 +1694,7 @@ export function createMockApi(): AppApi {
       const server = findById(state.mcpServers, serverId, 'MCP server');
       server.permissionState = permissionState;
       server.enabled = permissionState === 'granted';
-      server.lastStatus = permissionState === 'granted' ? 'healthy' : 'unknown';
+      server.lastStatus = permissionState === 'granted' ? 'warning' : 'unknown';
       server.updatedAt = now();
       pushAudit('mcp.updatePermission', 'mcpServer', server.id, { permissionState });
       return clone(server);
@@ -1694,7 +1774,10 @@ export function createMockApi(): AppApi {
       }
     },
 
-    async applyImportPlan(resultId: string) {
+    async applyImportPlan(resultId: string, options) {
+      if (options?.confirmationPhrase !== DATA_CONFIRMATION_PHRASES.applyImport) {
+        throw new Error(t('data.import.errors.confirmation'));
+      }
       const result = findById(state.importExportResults, resultId, 'Import result');
       if (result.action !== 'import' || result.status !== 'ready') {
         throw new Error(t('data.import.errors.readyOnly'));

@@ -47,6 +47,12 @@ export interface ProviderHealthResult {
   modelNames: string[];
 }
 
+export interface ProviderModelListResult {
+  modelNames: string[];
+  status: number;
+  latencyMs: number;
+}
+
 export class ProviderRuntimeError extends Error {
   readonly code: ProviderRuntimeErrorCode;
   readonly status: number | null;
@@ -131,32 +137,14 @@ export async function invokeOpenAiCompatibleChat(input: ProviderInvocationInput)
 export async function testOpenAiCompatibleProvider(provider: Provider, apiKey: string | null): Promise<ProviderHealthResult> {
   const startedAt = Date.now();
   try {
-    assertProviderReady(provider, apiKey);
-    const response = await fetch(joinEndpoint(provider.baseUrl, OPENAI_COMPATIBLE_ENDPOINTS.models), {
-      method: 'GET',
-      headers: buildHeaders(provider, apiKey),
-      signal: AbortSignal.timeout(PROVIDER_RUNTIME_POLICY.healthTimeoutMs),
-    });
-    const latencyMs = Math.max(1, Date.now() - startedAt);
-    if (!response.ok) {
-      const error = await buildHttpError(response);
-      return {
-        ok: false,
-        latencyMs,
-        status: response.status,
-        errorCode: error.code,
-        errorMessage: error.message,
-        modelNames: [],
-      };
-    }
-    const body = await response.json() as { data?: Array<{ id?: unknown }> };
+    const result = await fetchOpenAiCompatibleModels(provider, apiKey);
     return {
       ok: true,
-      latencyMs,
-      status: response.status,
+      latencyMs: result.latencyMs,
+      status: result.status,
       errorCode: null,
       errorMessage: null,
-      modelNames: Array.isArray(body.data) ? body.data.map((item) => String(item.id ?? '')).filter(Boolean) : [],
+      modelNames: result.modelNames,
     };
   } catch (error) {
     const normalized = normalizeInvocationError(error);
@@ -169,6 +157,26 @@ export async function testOpenAiCompatibleProvider(provider: Provider, apiKey: s
       modelNames: [],
     };
   }
+}
+
+export async function fetchOpenAiCompatibleModels(provider: Provider, apiKey: string | null): Promise<ProviderModelListResult> {
+  const startedAt = Date.now();
+  assertProviderReady(provider, apiKey);
+  const response = await fetch(joinEndpoint(provider.baseUrl, OPENAI_COMPATIBLE_ENDPOINTS.models), {
+    method: 'GET',
+    headers: buildHeaders(provider, apiKey),
+    signal: AbortSignal.timeout(PROVIDER_RUNTIME_POLICY.healthTimeoutMs),
+  });
+  const latencyMs = Math.max(1, Date.now() - startedAt);
+  if (!response.ok) {
+    throw await buildHttpError(response);
+  }
+  const body = await response.json() as { data?: Array<{ id?: unknown; object?: unknown }> };
+  return {
+    modelNames: Array.isArray(body.data) ? body.data.map((item) => String(item.id ?? '')).filter(Boolean) : [],
+    status: response.status,
+    latencyMs,
+  };
 }
 
 export function getProviderRequestSummary(input: ProviderInvocationInput): Record<string, unknown> {
@@ -340,6 +348,9 @@ function normalizeInvocationError(error: unknown): ProviderRuntimeError {
   }
   if (error instanceof DOMException && error.name === 'AbortError') {
     return new ProviderRuntimeError('Provider request was cancelled or timed out.', PROVIDER_RUNTIME_ERROR_CODES.cancelled, { retryable: false });
+  }
+  if (error instanceof Error && /cancelled|aborted/i.test(error.message)) {
+    return new ProviderRuntimeError('Provider request was cancelled.', PROVIDER_RUNTIME_ERROR_CODES.cancelled, { retryable: false });
   }
   if (error instanceof Error && error.name === 'TimeoutError') {
     return new ProviderRuntimeError('Provider request timed out.', PROVIDER_RUNTIME_ERROR_CODES.timeout, { retryable: true });

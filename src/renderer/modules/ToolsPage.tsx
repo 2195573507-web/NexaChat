@@ -114,7 +114,7 @@ export function ToolsPage({ activeTab, snapshot, api, onAction }: TabPageProps) 
         eyebrow="MCP"
         title={t('tools.mcp.title')}
         description={activeTab.featureBoundary}
-        status={<StatusPillLite label={t('common.countGranted', { count: snapshot.mcpServers.filter((server) => server.permissionState === 'granted').length })} state={snapshot.mcpServers.some((server) => server.permissionState === 'granted') ? 'ready' : 'muted'} />}
+        status={<StatusPillLite label={t('common.countGranted', { count: snapshot.mcpServers.filter((server) => server.permissionState === 'granted').length })} state={snapshot.mcpServers.some((server) => server.permissionState === 'granted') ? 'warning' : 'muted'} />}
         actions={<CommandButton variant="primary" icon={<PlugZap size={15} />} disabled={!serverName.trim() || !serverTarget.trim()} onClick={() => onAction(t('tools.toast.mcpRegistered'), () => api.createMcpServer(serverName.trim(), 'http', serverTarget.trim()))}>{t('tools.mcp.register')}</CommandButton>}
       />
       <div className="tool-layout">
@@ -133,6 +133,7 @@ export function ToolsPage({ activeTab, snapshot, api, onAction }: TabPageProps) 
             <Field label={t('tools.columns.transport')}>
               <input value={serverTarget} onChange={(event) => setServerTarget(event.target.value)} />
             </Field>
+            <InlineNotice tone="warning" title={t('tools.mcp.authorizationUnchecked')} detail={t('tools.mcp.authorizationUnchecked.detail')} />
           </div>
         </ToolSection>
 
@@ -141,10 +142,10 @@ export function ToolsPage({ activeTab, snapshot, api, onAction }: TabPageProps) 
             <div className="config-row" key={server.id}>
               <span>
                 <strong>{server.name}</strong>
-                <small>{server.transport} / {server.commandOrUrl} / {formatDate(server.updatedAt, t)}</small>
+                <small>{server.transport} / {server.commandOrUrl} / {formatDate(server.updatedAt, t)} / {server.permissionState === 'granted' ? t('tools.mcp.authorizationUnchecked') : t('common.unchecked')}</small>
               </span>
               <span className="row-actions">
-                <StatusPillLite label={statusLabel(server.permissionState, t)} state={healthState(server.permissionState)} />
+                <StatusPillLite label={server.permissionState === 'granted' ? t('tools.mcp.authorizationUnchecked') : statusLabel(server.permissionState, t)} state={server.permissionState === 'granted' ? 'warning' : healthState(server.permissionState)} />
                 <CommandButton onClick={() => onAction(server.permissionState === 'granted' ? t('tools.toast.mcpDenied') : t('tools.toast.mcpGranted'), () => api.updateMcpPermission(server.id, server.permissionState === 'granted' ? 'denied' : 'granted'))}>
                   {server.permissionState === 'granted' ? t('tools.deny') : t('tools.grant')}
                 </CommandButton>
@@ -156,6 +157,7 @@ export function ToolsPage({ activeTab, snapshot, api, onAction }: TabPageProps) 
 
       <ConfigDetail title={t('tools.runs.feature')} description={t('nav.tools.mcp.boundary')}>
         <InlineNotice tone="warning" title={t('tools.columns.dryRun')} detail={t('nav.tools.runs.boundary')} />
+        <InlineNotice tone="warning" title={t('tools.execution.reservedKinds')} detail={t('tools.execution.reservedKinds.detail')} />
         <DataRows rows={[
           { label: t('tools.columns.status'), value: t('stage.environment-limited') },
           { label: t('tools.columns.permission'), value: t('common.required') },

@@ -13,6 +13,7 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
   const [feedbackLabel, setFeedbackLabel] = useState<ObservabilityFeedbackLabel>('bug');
   const [feedbackNotes, setFeedbackNotes] = useState(t('observability.feedback.defaultNote'));
   const [privacy, setPrivacy] = useState<ObservabilityPrivacySettings>(snapshot.observability.privacy);
+  const feedbackEdited = feedbackNotes.trim().length > 0 && feedbackNotes.trim() !== t('observability.feedback.defaultNote');
 
   useEffect(() => setPrefs(snapshot.uiPreferences), [snapshot.uiPreferences]);
   useEffect(() => setPrivacy(snapshot.observability.privacy), [snapshot.observability.privacy]);
@@ -39,8 +40,13 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
             { label: t('settings.security.role'), value: snapshot.security.roles.length },
             { label: t('settings.security.permissions'), value: snapshot.security.aclGrants.length },
           ]} />
+          <DataRows rows={snapshot.security.roles.map((role) => ({
+            label: role.name,
+            value: snapshot.security.aclGrants.filter((grant) => grant.subjectId === role.id || grant.subjectId === snapshot.security.activeUser.id).slice(0, 6).map((grant) => grant.permissionKey).join(', ') || t('common.none'),
+          }))} />
         </ConfigList>
         <ConfigDetail title={t('settings.security.auditIntegrity')} description={t('nav.settings.security.boundary')}>
+          <InlineNotice tone="info" title={t('settings.security.permissionsMatrix')} detail={t('settings.security.permissionsMatrix.detail')} />
           <CommandButton icon={<ShieldCheck size={15} />} onClick={() => onAction(t('settings.audit.integrity'), () => api.verifyAuditIntegrity())}>{t('settings.audit.verify')}</CommandButton>
         </ConfigDetail>
         </div>
@@ -74,6 +80,7 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
           <ActivityList empty={t('app.recent.empty')} items={visibleLogs.slice(0, 14).map((log) => ({ title: log.action, meta: `${log.actor} / ${formatDate(log.createdAt, t)}`, state: healthState(log.integrityState) }))} />
         </ConfigList>
         <ConfigDetail title={t('settings.audit.integrity')} description={t('nav.settings.audit.boundary')}>
+          <InlineNotice tone="info" title={t('settings.audit.recentSlice')} detail={t('settings.audit.recentSlice.detail')} />
           <DataRows rows={[
             { label: t('observability.columns.status'), value: statusLabel(snapshot.auditIntegrity.status, t) },
             { label: t('settings.audit.integrity'), value: snapshot.auditIntegrity.checkedCount },
@@ -93,7 +100,7 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
           title={t('observability.feedback.title')}
           description={activeTab.featureBoundary}
           status={<StatusPillLite label={snapshot.feedbackItems.length} state="info" />}
-          actions={<CommandButton variant="primary" icon={<Save size={15} />} onClick={() => onAction(t('observability.feedback.created'), () => api.createFeedback({ label: feedbackLabel, notes: feedbackNotes }))}>{t('observability.feedback.create')}</CommandButton>}
+          actions={<CommandButton variant="primary" icon={<Save size={15} />} disabled={!feedbackEdited} disabledReason={t('observability.feedback.editRequired')} onClick={() => onAction(t('observability.feedback.created'), () => api.createFeedback({ label: feedbackLabel, notes: feedbackNotes }))}>{t('observability.feedback.create')}</CommandButton>}
         />
         <div className="tool-layout">
         <ConfigList title={t('observability.feedback.title')} description={activeTab.featureBoundary}>
@@ -107,6 +114,7 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
               <Field label={t('observability.feedback.notes')}>
                 <textarea value={feedbackNotes} onChange={(event) => setFeedbackNotes(event.target.value)} aria-label={t('observability.feedback.notes')} />
               </Field>
+              <InlineNotice tone={feedbackEdited ? 'info' : 'warning'} title={t('observability.feedback.notes')} detail={feedbackEdited ? t('observability.feedback.note') : t('observability.feedback.editRequired')} />
             </div>
           </ToolSection>
           <ActivityList empty={t('app.recent.empty')} items={snapshot.feedbackItems.slice(0, 10).map((item) => ({ title: item.label, meta: item.notes, state: 'info' }))} />

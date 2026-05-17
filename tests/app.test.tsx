@@ -8,7 +8,9 @@ import { translate } from '../src/shared/i18n';
 import { navModules, resolveNavigation, routeAliasRegistry } from '../src/shared/navigation';
 import { DEFAULT_MODEL_FORM, DEFAULT_PROVIDER_FORM, PROVIDER_CATALOG } from '../src/shared/providerCatalog';
 import { GATEWAY_AVAILABLE_ENDPOINTS, GATEWAY_RESERVED_ENDPOINTS } from '../src/shared/gatewayRuntime';
-import type { NavModule, NavTab } from '../src/shared/types';
+import { DATA_CONFIRMATION_PHRASES } from '../src/shared/dataRuntime';
+import type { AppApi } from '../src/shared/api';
+import type { ChatResponse, NavModule, NavTab } from '../src/shared/types';
 
 beforeEach(() => {
   window.history.replaceState(null, '', '/');
@@ -36,6 +38,16 @@ function openFeature(module: NavModule, tab: NavTab) {
     throw new Error(`Missing top tabs for ${module.id}`);
   }
   fireEvent.click(within(tabs as HTMLElement).getByRole('button', { name: new RegExp(tab.label) }));
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((innerResolve, innerReject) => {
+    resolve = innerResolve;
+    reject = innerReject;
+  });
+  return { promise, resolve, reject };
 }
 
 describe('NexaChat renderer', () => {
@@ -80,6 +92,51 @@ describe('NexaChat renderer', () => {
     expect(screen.getAllByText(translate('zh-CN', 'chat.message.regenerate')).length).toBeGreaterThan(0);
   });
 
+  it('shows generation state immediately and supports cancellation during a slow response', async () => {
+    const baseApi = createMockApi();
+    const pending = deferred<ChatResponse>();
+    let capturedRequestId = '';
+    const slowApi: AppApi = {
+      ...baseApi,
+      async sendMessage(input) {
+        capturedRequestId = input.clientRequestId ?? '';
+        return pending.promise;
+      },
+      async cancelMessage(input) {
+        expect(input.requestLogId).toBe(capturedRequestId);
+        const response = await baseApi.sendMessage({
+          content: 'cancel source',
+          clientRequestId: input.requestLogId,
+        });
+        return {
+          ...response,
+          requestLog: { ...response.requestLog, id: input.requestLogId, status: 'cancelled' },
+          assistantMessage: { ...response.assistantMessage, requestLogId: input.requestLogId, status: 'cancelled' },
+        };
+      },
+    };
+    window.nexachat = slowApi;
+    await renderApp();
+
+    fireEvent.change(screen.getByPlaceholderText(translate('zh-CN', 'chat.composer.placeholder')), { target: { value: 'slow response' } });
+    fireEvent.click(screen.getByRole('button', { name: translate('zh-CN', 'chat.send') }));
+
+    await waitFor(() => {
+      expect(document.querySelector('.generation-progress')).toBeInTheDocument();
+    });
+    expect(document.querySelector('.generation-progress')).toHaveAttribute('data-generation-phase', expect.stringMatching(/queued|sending|generating/));
+    expect(screen.getByText(translate('zh-CN', 'chat.generation.progressiveReveal'))).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: translate('zh-CN', 'chat.message.cancel') }).at(-1)!);
+    await waitFor(() => {
+      expect(document.querySelector('.generation-progress')).toHaveAttribute('data-generation-phase', 'canceled');
+    });
+
+    pending.resolve(await baseApi.sendMessage({ content: 'late response', clientRequestId: capturedRequestId }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.queryByText(/late response/)).not.toBeInTheDocument();
+  });
+
   it('keeps chat composer multiline and sends only plain Enter', async () => {
     await renderApp();
 
@@ -97,7 +154,9 @@ describe('NexaChat renderer', () => {
     await waitFor(() => {
       expect(document.querySelectorAll('.message-bubble').length).toBeGreaterThan(initialMessageCount);
     });
-    expect(Array.from(document.querySelectorAll('.message-bubble.role-user p')).some((element) => element.textContent === 'line one\nline two')).toBe(true);
+    await waitFor(() => {
+      expect(screen.getByText((content) => /line one\s*line two/.test(content))).toBeInTheDocument();
+    });
   });
 
   it('shows model gateway and settings key areas on canonical routes', async () => {
@@ -117,9 +176,21 @@ describe('NexaChat renderer', () => {
     openFeature(gateway, gateway.tabs.find((tab) => tab.id === 'keys')!);
     expect(activePanel()).toHaveAttribute('data-tab', 'keys');
     expect(activePanel()).toHaveTextContent(translate('zh-CN', 'gateway.keys.title'));
+    fireEvent.change(within(activePanel()).getByLabelText(`${translate('zh-CN', 'gateway.quotaLimit')} Browser dev key`), { target: { value: '42' } });
+    fireEvent.change(within(activePanel()).getByLabelText(`${translate('zh-CN', 'gateway.rateLimit')} Browser dev key`), { target: { value: '7' } });
+    fireEvent.click(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'common.saved') }));
+    await waitFor(() => {
+      expect(activePanel()).toHaveTextContent('quota 42 / rate 7/min');
+    });
+    fireEvent.click(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'gateway.disableKey') }));
+    await waitFor(() => {
+      expect(activePanel()).toHaveTextContent(translate('zh-CN', 'gateway.keyState.disabled'));
+    });
     openFeature(gateway, gateway.tabs.find((tab) => tab.id === 'docs')!);
     expect(activePanel()).toHaveTextContent(GATEWAY_AVAILABLE_ENDPOINTS[0]);
     expect(activePanel()).toHaveTextContent(GATEWAY_RESERVED_ENDPOINTS[0]);
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'gateway.chatNotRequired'));
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'gateway.alias.boundary'));
 
     openFeature(settings, settings.tabs.find((tab) => tab.id === 'preferences')!);
     expect(activePanel()).toHaveAttribute('data-tab', 'preferences');
@@ -129,6 +200,28 @@ describe('NexaChat renderer', () => {
     expect(activePanel()).toHaveAttribute('data-tab', 'security');
     expect(activePanel()).toHaveTextContent(translate('zh-CN', 'settings.security.title'));
     expect(activePanel()).toHaveTextContent(translate('zh-CN', 'settings.security.auditIntegrity'));
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'settings.security.permissionsMatrix'));
+  });
+
+  it('loads model choices automatically and supports provider deletion from the model page', async () => {
+    await renderApp();
+
+    const models = navModules.find((module) => module.id === 'models')!;
+    openFeature(models, models.tabs.find((tab) => tab.id === 'catalog')!);
+
+    await waitFor(() => {
+      expect(activePanel()).toHaveTextContent(translate('zh-CN', 'models.fetch.ready', { count: 3 }));
+    });
+    expect(within(activePanel()).getByLabelText(translate('zh-CN', 'models.availableModels'))).toBeInTheDocument();
+
+    openFeature(models, models.tabs.find((tab) => tab.id === 'providers')!);
+    fireEvent.click(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'models.deleteProvider') }));
+    fireEvent.click(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'models.delete.confirm') }));
+
+    await waitFor(() => {
+      expect(activePanel()).toHaveTextContent(translate('zh-CN', 'common.notConfigured'));
+    });
+    expect(activePanel()).not.toHaveTextContent('Local Mock Provider');
   });
 
   it('keeps each module route backed by the registry', async () => {
@@ -164,6 +257,39 @@ describe('NexaChat renderer', () => {
     openFeature(chat, chat.tabs.find((tab) => tab.id === 'conversations')!);
     fireEvent.click(screen.getByRole('button', { name: translate('zh-CN', 'chat.context.title') }));
     expect(document.querySelector('.chat-detail-panel')).toBeInTheDocument();
+  });
+
+  it('surfaces cross-module feedback boundaries without pretending reserved features are done', async () => {
+    await renderApp();
+
+    const knowledge = navModules.find((module) => module.id === 'knowledge')!;
+    const tools = navModules.find((module) => module.id === 'tools')!;
+    const gateway = navModules.find((module) => module.id === 'gateway')!;
+    const data = navModules.find((module) => module.id === 'data')!;
+    const settings = navModules.find((module) => module.id === 'settings')!;
+
+    openFeature(knowledge, knowledge.tabs.find((tab) => tab.id === 'files')!);
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'knowledge.import.unsupportedNote'));
+    expect(within(activePanel()).getByLabelText(translate('zh-CN', 'knowledge.import.file'))).toBeInTheDocument();
+
+    openFeature(tools, tools.tabs.find((tab) => tab.id === 'mcp')!);
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'tools.mcp.authorizationUnchecked'));
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'tools.execution.reservedKinds'));
+
+    openFeature(gateway, gateway.tabs.find((tab) => tab.id === 'overview')!);
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'gateway.listenerState'));
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'gateway.chatNotRequired'));
+
+    openFeature(data, data.tabs.find((tab) => tab.id === 'import')!);
+    const applyButton = within(activePanel()).getByRole('button', { name: translate('zh-CN', 'data.import.apply') });
+    expect(applyButton).toBeDisabled();
+    fireEvent.change(within(activePanel()).getByLabelText(translate('zh-CN', 'data.import.confirmTitle')), { target: { value: DATA_CONFIRMATION_PHRASES.applyImport } });
+    expect(applyButton).toBeDisabled();
+
+    openFeature(settings, settings.tabs.find((tab) => tab.id === 'feedback')!);
+    expect(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'observability.feedback.create') })).toBeDisabled();
+    fireEvent.change(within(activePanel()).getByLabelText(translate('zh-CN', 'observability.feedback.notes')), { target: { value: '具体反馈：生成状态需要更清晰。' } });
+    expect(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'observability.feedback.create') })).not.toBeDisabled();
   });
 });
 

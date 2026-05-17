@@ -17,17 +17,22 @@ let server: Server | null = null;
 
 export async function startLocalGateway(): Promise<void> {
   if (server) {
-    store.setGatewayRuntime(true);
+    store.setGatewayRuntime(true, null, 'listening');
     return;
   }
 
+  store.setGatewayRuntime(true, null, 'starting');
   server = createLocalGatewayServer();
 
   await new Promise<void>((resolve, reject) => {
     server?.once('error', reject);
     server?.listen(GATEWAY_PORT, GATEWAY_BIND_HOST, () => resolve());
+  }).catch((error) => {
+    server = null;
+    store.setGatewayRuntime(true, error instanceof Error ? error.message : String(error), 'error');
+    throw error;
   });
-  store.setGatewayRuntime(true);
+  store.setGatewayRuntime(true, null, 'listening');
 }
 
 export function createLocalGatewayServer(): Server {
@@ -69,7 +74,7 @@ export function createLocalGatewayServer(): Server {
     } catch (error) {
       const gatewayError = normalizeGatewayError(error);
       const message = gatewayError.message;
-      store.setGatewayRuntime(true, message);
+      store.setGatewayRuntime(true, message, 'listening');
       writeGatewayError(response, gatewayError.code, message);
       recordGatewayEvent(request, path, GATEWAY_ERROR_STATUS[gatewayError.code], startedAt, null, null, gatewayError.code);
     }
@@ -78,14 +83,14 @@ export function createLocalGatewayServer(): Server {
 
 export async function stopLocalGateway(): Promise<void> {
   if (!server) {
-    store.setGatewayRuntime(false);
+    store.setGatewayRuntime(false, null, 'stopped');
     return;
   }
   await new Promise<void>((resolve, reject) => {
     server?.close((error) => (error ? reject(error) : resolve()));
   });
   server = null;
-  store.setGatewayRuntime(false);
+  store.setGatewayRuntime(false, null, 'stopped');
 }
 
 async function handleModels(request: IncomingMessage, response: ServerResponse, startedAt: number): Promise<void> {

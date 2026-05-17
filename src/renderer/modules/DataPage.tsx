@@ -11,10 +11,14 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
   const [manifestText, setManifestText] = useState<string>(FORM_DEFAULTS.dataImportManifest);
   const [backupPassphrase, setBackupPassphrase] = useState<string>(FORM_DEFAULTS.backupPassphrase);
   const [restorePassphrase, setRestorePassphrase] = useState<string>(FORM_DEFAULTS.restorePassphrase);
+  const [applyImportPhrase, setApplyImportPhrase] = useState<string>('');
   const [rollbackPhrase, setRollbackPhrase] = useState<string>(FORM_DEFAULTS.rollbackPhrase);
   const latestReadyImport = snapshot.importExportResults.find((result) => result.action === 'import' && result.status === 'ready');
   const latestBackup = snapshot.dataBackups[0];
   const rollback = snapshot.rollbackRecords.find((record) => record.state === 'available') ?? snapshot.rollbackRecords[0];
+  const backupPassphraseValid = backupPassphrase.length >= 8;
+  const restorePassphraseValid = restorePassphrase.length >= 8;
+  const applyImportPhraseValid = applyImportPhrase === DATA_CONFIRMATION_PHRASES.applyImport;
 
   if (activeTab.id === 'backup') {
     return (
@@ -24,7 +28,7 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
           title={t('data.backup.title')}
           description={activeTab.featureBoundary}
           status={<StatusPillLite label={latestBackup?.profile ?? t('common.none')} state={latestBackup ? 'ready' : 'muted'} />}
-          actions={<CommandButton variant="primary" icon={<Archive size={15} />} disabled={!backupPassphrase} onClick={() => onAction(t('data.toast.backupCreated'), () => api.createEncryptedBackup({ profile: 'encrypted-full', passphrase: backupPassphrase }))}>{t('data.backup.create')}</CommandButton>}
+          actions={<CommandButton variant="primary" icon={<Archive size={15} />} disabled={!backupPassphraseValid} disabledReason={t('data.backup.passphrase.required')} onClick={() => onAction(t('data.toast.backupCreated'), () => api.createEncryptedBackup({ profile: 'encrypted-full', passphrase: backupPassphrase }))}>{t('data.backup.create')}</CommandButton>}
         />
         <div className="tool-layout">
         <ConfigList title={t('data.backup.title')} description={activeTab.featureBoundary}>
@@ -33,6 +37,7 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
               <Field label={t('data.backup.passphrase')}>
                 <input value={backupPassphrase} onChange={(event) => setBackupPassphrase(event.target.value)} type="password" />
               </Field>
+              <InlineNotice tone={backupPassphraseValid ? 'info' : 'warning'} title={t('data.backup.passphrase')} detail={backupPassphraseValid ? t('data.backup.passphrase.help') : t('data.backup.passphrase.required')} />
             </div>
           </ToolSection>
           <ActivityList
@@ -64,7 +69,7 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
           title={t('data.restore.title')}
           description={activeTab.featureBoundary}
           status={<StatusPillLite label={latestBackup ? t('common.available') : t('common.none')} state={latestBackup ? 'ready' : 'warning'} />}
-          actions={<CommandButton variant="primary" icon={<FileCheck size={15} />} disabled={!latestBackup || !restorePassphrase} onClick={() => onAction(t('data.toast.restoreCreated'), () => api.createRestorePreflight({ backupId: latestBackup?.id, passphrase: restorePassphrase }))}>{t('data.restore.preflight')}</CommandButton>}
+          actions={<CommandButton variant="primary" icon={<FileCheck size={15} />} disabled={!latestBackup || !restorePassphraseValid} disabledReason={!latestBackup ? t('data.restore.noBackup') : t('data.restore.passphrase.required')} onClick={() => onAction(t('data.toast.restoreCreated'), () => api.createRestorePreflight({ backupId: latestBackup?.id, passphrase: restorePassphrase }))}>{t('data.restore.preflight')}</CommandButton>}
         />
         <div className="tool-layout">
         <ConfigList title={t('data.restore.title')} description={activeTab.featureBoundary}>
@@ -73,11 +78,13 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
               <Field label={t('data.restore.passphrase')}>
                 <input value={restorePassphrase} onChange={(event) => setRestorePassphrase(event.target.value)} type="password" />
               </Field>
+              <InlineNotice tone={restorePassphraseValid ? 'info' : 'warning'} title={t('data.restore.passphrase')} detail={restorePassphraseValid ? t('data.restore.passphrase.help') : t('data.restore.passphrase.required')} />
             </div>
           </ToolSection>
           <JobList snapshot={snapshot} />
         </ConfigList>
         <ConfigDetail title={t('data.conflicts.title')} description={t('nav.data.restore.boundary')}>
+          <InlineNotice tone="info" title={t('data.restore.preflight')} detail={t('data.restore.safeFailure')} />
           <ActivityList empty={t('shared.empty.reason')} items={snapshot.dataConflicts.slice(0, 8).map((conflict) => ({ title: conflict.importName, meta: conflict.type, state: conflict.resolved ? 'ready' : 'warning' }))} />
         </ConfigDetail>
         </div>
@@ -157,8 +164,12 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
             <Field label={t('data.import.aria')}>
               <textarea value={manifestText} onChange={(event) => setManifestText(event.target.value)} aria-label={t('data.import.aria')} />
             </Field>
+            <Field label={t('data.import.confirmTitle')}>
+              <input value={applyImportPhrase} onChange={(event) => setApplyImportPhrase(event.target.value)} aria-label={t('data.import.confirmTitle')} />
+            </Field>
+            <InlineNotice tone={applyImportPhraseValid ? 'info' : 'warning'} title={t('data.import.confirmTitle')} detail={t('data.import.errors.confirmation')} />
             <span className="row-actions">
-              <CommandButton icon={<DatabaseBackup size={15} />} disabled={!latestReadyImport} onClick={() => onAction(t('data.toast.importApplied'), () => api.applyImportPlan(latestReadyImport?.id ?? '', { mode: 'apply-metadata', confirmationPhrase: DATA_CONFIRMATION_PHRASES.applyImport }))}>
+              <CommandButton icon={<DatabaseBackup size={15} />} disabled={!latestReadyImport || !applyImportPhraseValid} disabledReason={!latestReadyImport ? t('data.import.errors.readyOnly') : t('data.import.errors.confirmation')} onClick={() => onAction(t('data.toast.importApplied'), () => api.applyImportPlan(latestReadyImport?.id ?? '', { mode: 'apply-metadata', confirmationPhrase: applyImportPhrase }))}>
                 {t('data.import.apply')}
               </CommandButton>
             </span>

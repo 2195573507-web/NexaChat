@@ -204,9 +204,11 @@ import type {
   UiPreferences,
   UsageRecord,
   Workspace,
+  ProviderModelOption,
 } from '../../shared/types.js';
 import {
   ProviderRuntimeError,
+  fetchOpenAiCompatibleModels,
   getProviderRequestSummary,
   invokeOpenAiCompatibleChat,
   testOpenAiCompatibleProvider,
@@ -244,7 +246,10 @@ export interface GatewayLogInput {
 export class NexaStore {
   private readonly db: DatabaseSync;
   private gatewayEnabled = false;
+  private gatewayListenerState: GatewayStatus['listenerState'] = 'stopped';
   private gatewayRecentError: string | null = null;
+  private gatewayLastStartError: string | null = null;
+  private readonly activeChatControllers = new Map<string, AbortController>();
 
   constructor() {
     this.db = getDatabase().db;
@@ -339,14 +344,14 @@ export class NexaStore {
 
   getProviders(): Provider[] {
     return this.db
-      .prepare('SELECT * FROM providers ORDER BY updated_at DESC')
+      .prepare('SELECT * FROM providers WHERE enabled = 1 ORDER BY updated_at DESC')
       .all()
       .map((row) => mapProvider(row as Record<string, unknown>));
   }
 
   getModels(): Model[] {
     return this.db
-      .prepare('SELECT * FROM models ORDER BY updated_at DESC')
+      .prepare('SELECT * FROM models WHERE enabled = 1 ORDER BY updated_at DESC')
       .all()
       .map((row) => mapModel(row as Record<string, unknown>));
   }
@@ -695,11 +700,13 @@ export class NexaStore {
   getGatewayStatus(): GatewayStatus {
     return {
       enabled: this.gatewayEnabled,
-      running: this.gatewayEnabled,
+      running: this.gatewayEnabled && this.gatewayListenerState === 'listening',
+      listenerState: this.gatewayListenerState,
       port: GATEWAY_PORT,
       bindHost: GATEWAY_BIND_HOST,
       endpoints: [...GATEWAY_AVAILABLE_ENDPOINTS],
       recentError: this.gatewayRecentError,
+      lastStartError: this.gatewayLastStartError,
     };
   }
 
@@ -746,9 +753,15 @@ export class NexaStore {
     };
   }
 
-  setGatewayRuntime(enabled: boolean, recentError: string | null = null): GatewayStatus {
+  setGatewayRuntime(
+    enabled: boolean,
+    recentError: string | null = null,
+    listenerState: GatewayStatus['listenerState'] = enabled ? 'listening' : 'stopped',
+  ): GatewayStatus {
     this.gatewayEnabled = enabled;
+    this.gatewayListenerState = listenerState;
     this.gatewayRecentError = recentError;
+    this.gatewayLastStartError = listenerState === 'error' ? recentError : null;
     return this.getGatewayStatus();
   }
 
@@ -988,6 +1001,9 @@ export class NexaStore {
 
   createProvider(input: ProviderInput): Provider {
     this.requirePermission(SECURITY_ACTION_PERMISSIONS.providerWrite, 'provider', null);
+    if (!/^https?:\/\//i.test(input.baseUrl.trim())) {
+      throw new Error(t('models.errors.invalidBaseUrl'));
+    }
     const timestamp = now();
     const providerId = createId('provider');
     const secretRef = input.apiKey ? this.saveSecret(`${input.name} API Key`, input.apiKey) : null;
@@ -1012,9 +1028,114 @@ export class NexaStore {
     return this.requireProvider(providerId);
   }
 
+  deleteProvider(providerId: string): Provider {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.providerWrite, 'provider', providerId);
+    const provider = this.requireProvider(providerId);
+    const timestamp = now();
+    const disabledModelIds = this.db
+      .prepare('SELECT id FROM models WHERE provider_id = ? AND enabled = 1')
+      .all(providerId)
+      .map((row) => String((row as { id: unknown }).id));
+
+    try {
+      this.db.exec('BEGIN IMMEDIATE');
+      this.db
+        .prepare('UPDATE providers SET enabled = 0, health_status = ?, updated_at = ? WHERE id = ?')
+        .run('unknown', timestamp, providerId);
+      this.db
+        .prepare('UPDATE models SET enabled = 0, health_status = ?, latency_ms = NULL, updated_at = ? WHERE provider_id = ?')
+        .run('unknown', timestamp, providerId);
+      this.db
+        .prepare(
+          `UPDATE workspaces
+           SET default_provider_id = CASE WHEN default_provider_id = ? THEN NULL ELSE default_provider_id END,
+               default_model_id = CASE WHEN default_model_id IN (SELECT id FROM models WHERE provider_id = ?) THEN NULL ELSE default_model_id END,
+               updated_at = ?
+           WHERE default_provider_id = ? OR default_model_id IN (SELECT id FROM models WHERE provider_id = ?)`,
+        )
+        .run(providerId, providerId, timestamp, providerId, providerId);
+      this.db
+        .prepare(
+          `UPDATE conversations
+           SET default_provider_id = CASE WHEN default_provider_id = ? THEN NULL ELSE default_provider_id END,
+               default_model_id = CASE WHEN default_model_id IN (SELECT id FROM models WHERE provider_id = ?) THEN NULL ELSE default_model_id END,
+               updated_at = ?
+           WHERE default_provider_id = ? OR default_model_id IN (SELECT id FROM models WHERE provider_id = ?)`,
+        )
+        .run(providerId, providerId, timestamp, providerId, providerId);
+      if (disabledModelIds.length > 0) {
+        const placeholders = disabledModelIds.map(() => '?').join(', ');
+        this.db
+          .prepare(`UPDATE model_aliases SET enabled = 0, updated_at = ? WHERE model_id IN (${placeholders})`)
+          .run(timestamp, ...disabledModelIds);
+      }
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+
+    this.audit('provider.deleted', 'provider', providerId, {
+      name: provider.name,
+      disabledModelCount: disabledModelIds.length,
+      mode: 'soft-delete',
+    });
+    return this.requireProvider(providerId);
+  }
+
+  async fetchProviderModels(providerId: string): Promise<ProviderModelOption[]> {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.providerTest, 'provider', providerId);
+    const provider = this.requireProvider(providerId);
+    if (!provider.enabled) {
+      throw new Error(`Provider is disabled: ${providerId}`);
+    }
+    const adapterName = getProviderAdapterName(provider.type);
+    if (adapterName !== 'openai-compatible') {
+      this.recordProviderHealth(
+        providerId,
+        null,
+        'error',
+        null,
+        'provider-test',
+        PROVIDER_RUNTIME_ERROR_CODES.unsupportedProvider,
+        t('models.errors.unsupportedProvider'),
+      );
+      throw new ProviderRuntimeError(t('models.errors.unsupportedProvider'), PROVIDER_RUNTIME_ERROR_CODES.unsupportedProvider);
+    }
+
+    const start = now();
+    try {
+      const result = await fetchOpenAiCompatibleModels(provider, this.getProviderSecret(provider));
+      this.db
+        .prepare('UPDATE providers SET health_status = ?, last_checked_at = ?, updated_at = ? WHERE id = ?')
+        .run('healthy', start, now(), providerId);
+      this.recordProviderHealth(providerId, null, 'healthy', result.latencyMs, 'provider-test', null, null);
+      this.audit('provider.models.fetched', 'provider', providerId, {
+        status: result.status,
+        modelCount: result.modelNames.length,
+        models: result.modelNames.slice(0, 20),
+      }, SECURITY_ACTION_PERMISSIONS.providerTest);
+      return result.modelNames.map((name) => ({ id: name, name }));
+    } catch (error) {
+      const normalized = this.normalizeProviderError(error);
+      this.db
+        .prepare('UPDATE providers SET health_status = ?, last_checked_at = ?, updated_at = ? WHERE id = ?')
+        .run('error', start, now(), providerId);
+      this.recordProviderHealth(providerId, null, 'error', Math.max(1, now() - start), 'provider-test', normalized.code, normalized.message);
+      this.audit('provider.models.fetch_failed', 'provider', providerId, {
+        errorCode: normalized.code,
+        errorMessage: normalized.message,
+      }, SECURITY_ACTION_PERMISSIONS.providerTest);
+      throw error;
+    }
+  }
+
   createModel(input: ModelInput): Model {
     this.requirePermission(SECURITY_ACTION_PERMISSIONS.modelWrite, 'model', null);
     const provider = this.requireProvider(input.providerId);
+    if (!provider.enabled) {
+      throw new Error(`Provider is disabled: ${provider.id}`);
+    }
     const timestamp = now();
     const id = createId('model');
     const displayName = input.displayName?.trim() || input.name.trim();
@@ -1202,6 +1323,7 @@ export class NexaStore {
   cancelMessage(input: CancelMessageInput): ChatResponse {
     this.requirePermission(SECURITY_ACTION_PERMISSIONS.chatManage, 'request_log', input.requestLogId);
     const requestLog = this.requireRequestLog(input.requestLogId);
+    this.activeChatControllers.get(requestLog.id)?.abort(new Error('cancelled_by_user'));
     if (!requestLog.conversationId || !requestLog.messageId) {
       throw new Error(t('chat.errors.cancelRequestMissing'));
     }
@@ -1364,7 +1486,7 @@ export class NexaStore {
     this.db
       .prepare(
         `INSERT INTO request_logs (id, conversation_id, message_id, provider_id, model_id, model_name_snapshot, route_id, gateway_request_id, status, endpoint, request_summary_json, response_summary_json, input_tokens, output_tokens, latency_ms, finish_reason, error_code, error_message, started_at, completed_at, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, NULL, ?, 'started', '/v1/chat/completions', ?, NULL, ?, NULL, NULL, NULL, NULL, NULL, ?, NULL, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, NULL, ?, 'streaming', '/v1/chat/completions', ?, NULL, ?, NULL, NULL, NULL, NULL, NULL, ?, NULL, ?)`,
       )
       .run(
         requestLogId,
@@ -1390,6 +1512,54 @@ export class NexaStore {
         timestamp,
       );
 
+    this.db
+      .prepare(
+        `INSERT INTO messages (id, conversation_id, workspace_id, parent_message_id, role, content, provider_id, model_id, model_name_snapshot, request_id, request_log_id, input_tokens, output_tokens, latency_ms, finish_reason, error_message, status, content_format, context_strategy, context_message_ids_json, summary_id, artifact_ids_json, error_code, metadata_json, created_at, updated_at, deleted_at)
+         VALUES (?, ?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, 'streaming', 'markdown', ?, ?, NULL, NULL, NULL, ?, ?, ?, NULL)`,
+      )
+      .run(
+        assistantMessageId,
+        conversation.id,
+        conversation.workspaceId,
+        userMessageId,
+        t('chat.generation.placeholder'),
+        routeDecision.providerId,
+        routeDecision.modelId,
+        routeDecision.modelNameSnapshot,
+        requestId,
+        requestLogId,
+        inputTokens,
+        contextStrategy,
+        JSON.stringify(context.contextMessageIds),
+        JSON.stringify({
+          localHistoryRetained: true,
+          contextStrategy,
+          contextMessageIds: context.contextMessageIds,
+          retrievalId: retrieval.trace.id,
+          citations: retrieval.citations,
+          routeReason: routeDecision.reason,
+          fallbackUsed: routeDecision.fallbackUsed,
+          action: input.metadata?.action ?? 'send',
+          progressiveMode: 'renderer-side-progressive-reveal',
+          ...(input.metadata ?? {}),
+        }),
+        timestamp,
+        timestamp,
+      );
+    this.insertMessageChunks({
+      messageId: assistantMessageId,
+      conversationId: conversation.id,
+      requestLogId,
+      chunks: [t('chat.generation.placeholder')],
+      status: 'streaming',
+      chunkType: 'text',
+    });
+    this.db
+      .prepare('UPDATE conversations SET title = ?, last_message_at = ?, message_count = message_count + 2, updated_at = ? WHERE id = ?')
+      .run(inferTitle(conversation.title, trimmedContent), timestamp, timestamp, conversation.id);
+    const abortController = new AbortController();
+    this.activeChatControllers.set(requestLogId, abortController);
+
     try {
       const provider = this.requireProvider(routeDecision.providerId);
       const model = modelForContext;
@@ -1404,6 +1574,7 @@ export class NexaStore {
         apiKey,
         messages: context.providerMessages,
         stream: model.supportsStreaming,
+        signal: abortController.signal,
       };
       this.db
         .prepare('UPDATE request_logs SET request_summary_json = ? WHERE id = ?')
@@ -1438,30 +1609,21 @@ export class NexaStore {
 
       this.db
         .prepare(
-          `INSERT INTO messages (id, conversation_id, workspace_id, parent_message_id, role, content, provider_id, model_id, model_name_snapshot, request_id, request_log_id, input_tokens, output_tokens, latency_ms, finish_reason, error_message, status, content_format, context_strategy, context_message_ids_json, summary_id, artifact_ids_json, error_code, metadata_json, created_at, updated_at, deleted_at)
-           VALUES (?, ?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'completed', 'markdown', ?, ?, NULL, NULL, NULL, ?, ?, ?, NULL)`,
+          `UPDATE messages
+           SET content = ?, input_tokens = ?, output_tokens = ?, latency_ms = ?, finish_reason = ?, error_message = NULL, status = 'completed', error_code = NULL, metadata_json = ?, updated_at = ?
+           WHERE id = ?`,
         )
         .run(
-          assistantMessageId,
-          conversation.id,
-          conversation.workspaceId,
-          userMessageId,
           assistantContent,
-          routeDecision.providerId,
-          routeDecision.modelId,
-          routeDecision.modelNameSnapshot,
-          requestId,
-          requestLogId,
           result.inputTokens ?? inputTokens,
           outputTokens,
           result.latencyMs,
           result.finishReason ?? 'stop',
-          contextStrategy,
-          JSON.stringify(context.contextMessageIds),
           JSON.stringify(metadata),
           now(),
-          now(),
+          assistantMessageId,
         );
+      this.db.prepare('DELETE FROM message_chunks WHERE message_id = ? AND request_log_id = ?').run(assistantMessageId, requestLogId);
       this.insertMessageChunks({
         messageId: assistantMessageId,
         conversationId: conversation.id,
@@ -1506,7 +1668,7 @@ export class NexaStore {
         );
 
       this.db
-        .prepare('UPDATE conversations SET title = ?, last_message_at = ?, message_count = message_count + 2, updated_at = ? WHERE id = ?')
+        .prepare('UPDATE conversations SET title = ?, last_message_at = ?, updated_at = ? WHERE id = ?')
         .run(inferTitle(conversation.title, trimmedContent), now(), now(), conversation.id);
       this.audit('chat.completed', 'conversation', conversation.id, {
         requestLogId,
@@ -1518,27 +1680,19 @@ export class NexaStore {
       this.recordProviderHealth(routeDecision.providerId, routeDecision.modelId, 'healthy', result.latencyMs, 'chat', null, null);
     } catch (error) {
       const normalized = this.normalizeProviderError(error);
+      const failedStatus = normalized.code === PROVIDER_RUNTIME_ERROR_CODES.cancelled ? 'cancelled' : 'failed';
       this.db
         .prepare(
-          `INSERT INTO messages (id, conversation_id, workspace_id, parent_message_id, role, content, provider_id, model_id, model_name_snapshot, request_id, request_log_id, input_tokens, output_tokens, latency_ms, finish_reason, error_message, status, content_format, context_strategy, context_message_ids_json, summary_id, artifact_ids_json, error_code, metadata_json, created_at, updated_at, deleted_at)
-           VALUES (?, ?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?, 'failed', 'markdown', ?, ?, NULL, NULL, ?, ?, ?, ?, NULL)`,
+          `UPDATE messages
+           SET content = ?, input_tokens = ?, latency_ms = ?, error_message = ?, status = ?, error_code = ?, metadata_json = ?, updated_at = ?
+           WHERE id = ?`,
         )
         .run(
-          assistantMessageId,
-          conversation.id,
-          conversation.workspaceId,
-          userMessageId,
-          t('chat.assistant.upstreamFailed'),
-          routeDecision.providerId,
-          routeDecision.modelId,
-          routeDecision.modelNameSnapshot,
-          requestId,
-          requestLogId,
+          normalized.code === PROVIDER_RUNTIME_ERROR_CODES.cancelled ? t('chat.cancelled.message') : t('chat.assistant.upstreamFailed'),
           inputTokens,
           Math.max(1, now() - timestamp),
           normalized.message,
-          contextStrategy,
-          JSON.stringify(context.contextMessageIds),
+          failedStatus,
           normalized.code,
           JSON.stringify({
             adapter: getProviderAdapterName(this.requireProvider(routeDecision.providerId).type),
@@ -1546,12 +1700,14 @@ export class NexaStore {
             fallbackUsed: routeDecision.fallbackUsed,
             retryable: normalized.retryable,
             contextMessageIds: context.contextMessageIds,
+            progressiveMode: 'renderer-side-progressive-reveal',
             action: input.metadata?.action ?? 'send',
             ...(input.metadata ?? {}),
           }),
           now(),
-          now(),
+          assistantMessageId,
         );
+      this.db.prepare('DELETE FROM message_chunks WHERE message_id = ? AND request_log_id = ?').run(assistantMessageId, requestLogId);
       this.insertMessageChunks({
         messageId: assistantMessageId,
         conversationId: conversation.id,
@@ -1563,10 +1719,11 @@ export class NexaStore {
       this.db
         .prepare(
           `UPDATE request_logs
-           SET status = 'failed', response_summary_json = ?, latency_ms = ?, error_code = ?, error_message = ?, completed_at = ?, message_id = ?
+           SET status = ?, response_summary_json = ?, latency_ms = ?, error_code = ?, error_message = ?, completed_at = ?, message_id = ?
            WHERE id = ?`,
         )
         .run(
+          failedStatus,
           JSON.stringify({ errorCode: normalized.code, retryable: normalized.retryable }),
           Math.max(1, now() - timestamp),
           normalized.code,
@@ -1576,7 +1733,7 @@ export class NexaStore {
           requestLogId,
         );
       this.db
-        .prepare('UPDATE conversations SET title = ?, last_message_at = ?, message_count = message_count + 2, updated_at = ? WHERE id = ?')
+        .prepare('UPDATE conversations SET title = ?, last_message_at = ?, updated_at = ? WHERE id = ?')
         .run(inferTitle(conversation.title, trimmedContent), now(), now(), conversation.id);
       this.audit('chat.failed', 'conversation', conversation.id, {
         requestLogId,
@@ -1585,6 +1742,8 @@ export class NexaStore {
         errorCode: normalized.code,
       });
       this.recordProviderHealth(routeDecision.providerId, routeDecision.modelId, 'error', Math.max(1, now() - timestamp), 'chat', normalized.code, normalized.message);
+    } finally {
+      this.activeChatControllers.delete(requestLogId);
     }
 
     const updatedConversation = this.requireConversation(conversation.id);
@@ -1974,7 +2133,7 @@ export class NexaStore {
     const enabled = permissionState === 'granted' ? 1 : 0;
     this.db
       .prepare('UPDATE mcp_servers SET permission_state = ?, enabled = ?, last_status = ?, updated_at = ? WHERE id = ?')
-      .run(permissionState, enabled, permissionState === 'granted' ? 'healthy' : 'unknown', timestamp, serverId);
+      .run(permissionState, enabled, permissionState === 'granted' ? 'warning' : 'unknown', timestamp, serverId);
     this.audit('mcp.permission.updated', 'mcp_server', serverId, { permissionState, enabled: Boolean(enabled) });
     return this.requireMcpServer(serverId);
   }
@@ -2218,6 +2377,9 @@ export class NexaStore {
     if (result.action !== 'import' || result.status !== 'ready') {
       throw new Error(t('data.import.errors.readyOnly'));
     }
+    if (options.confirmationPhrase !== DATA_CONFIRMATION_PHRASES.applyImport) {
+      throw new Error(t('data.import.errors.confirmation'));
+    }
     const timestamp = now();
     const rollbackSnapshot = this.createSnapshot();
     const manifest = this.parseManifest(result.manifestJson);
@@ -2254,7 +2416,7 @@ export class NexaStore {
     const appliedEntityIds = this.parseStringList(snapshot.manifestJson ? this.parseManifest(snapshot.manifestJson).appliedPlan : null, 'appliedProviderIds')
       .concat(this.parseStringList(snapshot.manifestJson ? this.parseManifest(snapshot.manifestJson).appliedPlan : null, 'appliedModelIds'));
     if (mode === 'rollback') {
-      if (options.confirmationPhrase && options.confirmationPhrase !== DATA_CONFIRMATION_PHRASES.rollback) {
+      if (options.confirmationPhrase !== DATA_CONFIRMATION_PHRASES.rollback) {
         throw new Error(t('data.restore.errors.confirmation'));
       }
       for (const entityId of appliedEntityIds) {
@@ -2708,14 +2870,7 @@ export class NexaStore {
     if (modelId) {
       const explicit = models.find((model) => model.id === modelId);
       if (!explicit) {
-        const fallback = models[0];
-        return {
-          providerId: fallback.providerId,
-          modelId: fallback.id,
-          modelNameSnapshot: fallback.modelNameSnapshot,
-          reason: t('chat.route.explicitUnavailable'),
-          fallbackUsed: true,
-        };
+        throw new Error(t('chat.route.explicitUnavailable'));
       }
       return {
         providerId: explicit.providerId,

@@ -130,19 +130,31 @@ test('core management pages keep real contracts behind lightweight tabs', async 
   await openFeature(page, gateway, gateway.tabs.find((tab) => tab.id === 'overview')!);
   await expect(page.locator('main [data-tab="overview"] .gateway-console')).toBeVisible();
   await expect(page.locator('main [data-tab="overview"] .endpoint-list')).toBeVisible();
+  await expect(page.locator('main [data-tab="overview"]').getByText(translate('zh-CN', 'gateway.chatNotRequired'))).toBeVisible();
+  await expect(page.locator('main [data-tab="overview"]').getByText(translate('zh-CN', 'gateway.listenerState'))).toBeVisible();
   await openFeature(page, gateway, gateway.tabs.find((tab) => tab.id === 'keys')!);
   await expect(page.locator('main [data-tab="keys"]').getByRole('heading', { name: translate('zh-CN', 'gateway.keys.title') }).first()).toBeVisible();
   await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'gateway.generateKey')) }).click();
   await expect(page.locator('main [data-tab="keys"] .inline-notice').getByText(translate('zh-CN', 'gateway.oneTimeKey'))).toBeVisible();
+  await openFeature(page, gateway, gateway.tabs.find((tab) => tab.id === 'docs')!);
+  await expect(page.locator('main [data-tab="docs"]').getByText('/v1/responses', { exact: true })).toBeVisible();
+  await expect(page.locator('main [data-tab="docs"]').getByText(translate('zh-CN', 'gateway.alias.boundary'))).toBeVisible();
 
   await openFeature(page, knowledge, knowledge.tabs.find((tab) => tab.id === 'files')!);
   await expect(page.locator('main [data-tab="files"] .current-config-strip')).toBeVisible();
   await expect(page.locator('main [data-tab="files"]').getByLabel(translate('zh-CN', 'knowledge.import.content'))).toBeVisible();
+  await expect(page.locator('main [data-tab="files"]').getByLabel(translate('zh-CN', 'knowledge.import.file'))).toBeVisible();
+  await expect(page.locator('main [data-tab="files"]').getByText(translate('zh-CN', 'knowledge.import.unsupportedNote')).first()).toBeVisible();
 
   await openFeature(page, tools, tools.tabs.find((tab) => tab.id === 'mcp')!);
   await expect(page.locator('main [data-tab="mcp"] .current-config-strip')).toBeVisible();
   await expect(page.getByRole('button', { name: new RegExp(translate('zh-CN', 'tools.mcp.register')) })).toBeDisabled();
+  await expect(page.locator('main [data-tab="mcp"]').getByText(translate('zh-CN', 'tools.mcp.authorizationUnchecked')).first()).toBeVisible();
+  await expect(page.locator('main [data-tab="mcp"]').getByText(translate('zh-CN', 'tools.execution.reservedKinds'))).toBeVisible();
 
+  await openFeature(page, data, data.tabs.find((tab) => tab.id === 'import')!);
+  await expect(page.getByLabel(translate('zh-CN', 'data.import.confirmTitle'))).toBeVisible();
+  await expect(page.getByRole('button', { name: new RegExp(translate('zh-CN', 'data.import.apply')) })).toBeDisabled();
   await openFeature(page, data, data.tabs.find((tab) => tab.id === 'diagnostics')!);
   await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'data.diagnostics.export')) }).click();
   await expect(page.locator('.module-page > .inline-notice').getByText(translate('zh-CN', 'data.toast.diagnosticsExported'))).toBeVisible();
@@ -150,6 +162,9 @@ test('core management pages keep real contracts behind lightweight tabs', async 
   await openFeature(page, settings, settings.tabs.find((tab) => tab.id === 'security')!);
   await expect(page.locator('main [data-tab="security"] .current-config-strip')).toBeVisible();
   await expect(page.locator('main [data-tab="security"]').getByRole('heading', { name: translate('zh-CN', 'settings.security.title') }).first()).toBeVisible();
+  await expect(page.locator('main [data-tab="security"]').getByText(translate('zh-CN', 'settings.security.permissionsMatrix'))).toBeVisible();
+  await openFeature(page, settings, settings.tabs.find((tab) => tab.id === 'feedback')!);
+  await expect(page.getByRole('button', { name: new RegExp(translate('zh-CN', 'observability.feedback.create')) })).toBeDisabled();
 
   await expect(page.locator('table')).toHaveCount(0);
   await expectNoHorizontalOverflow(page, '.app-frame');
@@ -213,6 +228,8 @@ test('knowledge data and tools flows keep real contracts in the new panels', asy
   await page.getByLabel(translate('zh-CN', 'knowledge.retrieval.query')).fill('retrieval citations smoke');
   await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'knowledge.retrieval.run')) }).click();
   await expect(page.locator('main [data-tab="retrieval"]').getByText('round-redesign-smoke.md')).toBeVisible();
+  await expect(page.locator('main [data-tab="retrieval"]').getByText(translate('zh-CN', 'knowledge.columns.snippet')).first()).toBeVisible();
+  await expect(page.locator('main [data-tab="retrieval"]').getByText(translate('zh-CN', 'knowledge.columns.citation')).first()).toBeVisible();
 
   await openFeature(page, tools, tools.tabs.find((tab) => tab.id === 'runs')!);
   await page.getByRole('button', { name: new RegExp(translate('zh-CN', 'tools.execution.runStatusRead')) }).click();

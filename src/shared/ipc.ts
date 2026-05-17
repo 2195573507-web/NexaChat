@@ -33,6 +33,8 @@ import type {
 export const IPC_CHANNELS = {
   appGetSnapshot: 'app:getSnapshot',
   providerCreate: 'provider:create',
+  providerDelete: 'provider:delete',
+  providerModelsFetch: 'provider:models:fetch',
   providerTest: 'provider:test',
   modelCreate: 'model:create',
   chatCreateConversation: 'chat:createConversation',
@@ -85,6 +87,8 @@ export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
 export type IpcInvokeArgs = {
   [IPC_CHANNELS.appGetSnapshot]: [];
   [IPC_CHANNELS.providerCreate]: [ProviderInput];
+  [IPC_CHANNELS.providerDelete]: [string];
+  [IPC_CHANNELS.providerModelsFetch]: [string];
   [IPC_CHANNELS.providerTest]: [string];
   [IPC_CHANNELS.modelCreate]: [ModelInput];
   [IPC_CHANNELS.chatCreateConversation]: [string?];
@@ -159,6 +163,8 @@ export function assertIpcPayload<C extends IpcChannel>(channel: C, args: unknown
 const ipcPayloadArity: Record<IpcChannel, { min: number; max: number }> = {
   [IPC_CHANNELS.appGetSnapshot]: { min: 0, max: 0 },
   [IPC_CHANNELS.providerCreate]: { min: 1, max: 1 },
+  [IPC_CHANNELS.providerDelete]: { min: 1, max: 1 },
+  [IPC_CHANNELS.providerModelsFetch]: { min: 1, max: 1 },
   [IPC_CHANNELS.providerTest]: { min: 1, max: 1 },
   [IPC_CHANNELS.modelCreate]: { min: 1, max: 1 },
   [IPC_CHANNELS.chatCreateConversation]: { min: 0, max: 1 },

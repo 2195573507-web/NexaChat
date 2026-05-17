@@ -82,8 +82,8 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
           <ActivityList
             empty={t('shared.empty.reason')}
             items={latest.map((citation) => ({
-              title: citation.fileName,
-              meta: `${citation.strategy} / ${citation.score.toFixed(2)}`,
+              title: `${citation.fileName} / ${citation.citation}`,
+              meta: `${t('knowledge.columns.snippet')}: ${citation.snippet} / ${citation.strategy} / ${t('knowledge.columns.score')} ${citation.score.toFixed(2)}`,
               state: 'info',
             }))}
           />
@@ -91,6 +91,7 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
         <ConfigDetail title={t('stage.environment-limited')} description={t('nav.knowledge.retrieval.boundary')}>
           <StatusPillLite label={t('knowledge.strategy.lexical')} state="warning" />
           <InlineNotice tone="warning" title={t('common.required')} detail={t('knowledge.retrieval.dependency')} />
+          <InlineNotice tone="info" title={t('knowledge.columns.citation')} detail={t('knowledge.retrieval.note')} />
         </ConfigDetail>
         </div>
       </TabPanel>
@@ -119,9 +120,25 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
             <Field label={t('knowledge.import.name')}>
               <input value={importName} onChange={(event) => setImportName(event.target.value)} />
             </Field>
+            <Field label={t('knowledge.import.file')}>
+              <input
+                type="file"
+                accept=".txt,.md,.markdown,.json,.csv,text/plain,text/markdown,application/json,text/csv"
+                aria-label={t('knowledge.import.file')}
+                onChange={async (event) => {
+                  const file = event.target.files?.[0];
+                  if (!file) {
+                    return;
+                  }
+                  setImportName(file.name);
+                  setImportContent(await file.text());
+                }}
+              />
+            </Field>
             <Field label={t('knowledge.import.content')}>
               <textarea value={importContent} onChange={(event) => setImportContent(event.target.value)} aria-label={t('knowledge.import.content')} />
             </Field>
+            <InlineNotice tone="warning" title={t('common.unsupported')} detail={t('knowledge.import.unsupportedNote')} />
           </div>
         </ToolSection>
 
@@ -141,6 +158,7 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
           ]}
         />
         <InlineNotice tone="info" title={t('stage.environment-limited')} detail={t('knowledge.chunks.note')} />
+        <InlineNotice tone="warning" title={t('common.unsupported')} detail={t('knowledge.import.unsupportedNote')} />
       </ConfigDetail>
       </div>
     </TabPanel>
@@ -166,6 +184,7 @@ function KnowledgeFileRow({
       <span>
         <strong>{file.name}</strong>
         <small>{statusLabel(file.parseStatus, t)} / {statusLabel(file.indexStatus, t)} / {formatDate(file.updatedAt, t)}</small>
+        {file.errorMessage ? <small>{t('knowledge.columns.error')}: {file.errorMessage}</small> : null}
       </span>
       <span className="row-actions">
         <StatusPillLite label={statusLabel(file.indexStatus, t)} state={healthState(file.indexStatus)} />

@@ -1,6 +1,6 @@
-import { Activity, Plus, Server, ShieldCheck } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import type { ProviderType } from '../../shared/types';
+import { Activity, DownloadCloud, Plus, Server, ShieldCheck, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import type { ProviderModelOption, ProviderType } from '../../shared/types';
 import { DEFAULT_MODEL_FORM, DEFAULT_PROVIDER_FORM, PROVIDER_CATALOG } from '../../shared/providerCatalog';
 import { ActivityList, CommandButton, ConfigDetail, ConfigList, DataRows, EmptyBlock, Field, InlineNotice, PageHeader, StatusPillLite, ToolSection } from '../components/AppFrame';
 import { useI18n } from '../i18n';
@@ -23,15 +23,83 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
   const [apiKey, setApiKey] = useState(DEFAULT_PROVIDER_FORM.apiKey);
   const [modelName, setModelName] = useState(DEFAULT_MODEL_FORM.name);
   const [selectedProviderId, setSelectedProviderId] = useState(snapshot.providers[0]?.id ?? '');
+  const [modelOptions, setModelOptions] = useState<ProviderModelOption[]>([]);
+  const [modelFetchState, setModelFetchState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [modelFetchError, setModelFetchError] = useState('');
+  const [pendingDeleteProviderId, setPendingDeleteProviderId] = useState<string | null>(null);
   const defaultModel = getDefaultModel(snapshot);
   const defaultProvider = getDefaultProvider(snapshot);
   const selectedProvider = snapshot.providers.find((provider) => provider.id === selectedProviderId) ?? snapshot.providers[0];
+  const selectedProviderName = selectedProvider?.name;
+  const providerModels = useMemo(
+    () => snapshot.models.filter((model) => model.providerId === selectedProviderId),
+    [selectedProviderId, snapshot.models],
+  );
+  const existingModelNames = useMemo(() => new Set(providerModels.map((model) => model.name)), [providerModels]);
+  const selectableModelOptions = useMemo(
+    () => modelOptions.filter((option) => !existingModelNames.has(option.id)),
+    [existingModelNames, modelOptions],
+  );
 
   useEffect(() => {
     if (!selectedProviderId && snapshot.providers[0]) {
       setSelectedProviderId(snapshot.providers[0].id);
+      return;
+    }
+    if (selectedProviderId && !snapshot.providers.some((provider) => provider.id === selectedProviderId)) {
+      setSelectedProviderId(snapshot.providers[0]?.id ?? '');
     }
   }, [selectedProviderId, snapshot.providers]);
+
+  useEffect(() => {
+    setPendingDeleteProviderId(null);
+  }, [snapshot.providers]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const providerModelNames = new Set(providerModels.map((model) => model.name));
+    setModelOptions([]);
+    setModelFetchError('');
+    setModelName('');
+    if (!selectedProviderId) {
+      setModelFetchState('idle');
+      return undefined;
+    }
+
+    setModelFetchState('loading');
+    const timer = window.setTimeout(() => {
+      if (!cancelled) {
+        setModelFetchState('loading');
+      }
+    }, 0);
+    api.fetchProviderModels(selectedProviderId)
+      .then((options) => {
+        if (cancelled) return;
+        window.clearTimeout(timer);
+        setModelOptions(options);
+        setModelFetchState('ready');
+        const firstNewModel = options.find((option) => !providerModelNames.has(option.id)) ?? options[0];
+        if (firstNewModel) {
+          setModelName(firstNewModel.id);
+        }
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        window.clearTimeout(timer);
+        setModelFetchState('error');
+        setModelFetchError(error instanceof Error ? error.message : String(error));
+      });
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [api, selectedProviderId, providerModels]);
+
+  const createSelectedModel = async () => {
+    await api.createModel({ providerId: selectedProviderId, name: modelName.trim() });
+    setModelName('');
+  };
 
   if (activeTab.id === 'catalog') {
     return (
@@ -41,11 +109,22 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
           title={t('models.create.title')}
           description={activeTab.description}
           status={<StatusPillLite label={selectedProvider?.name ?? t('common.notConfigured')} state={selectedProvider ? 'ready' : 'warning'} />}
-          actions={<CommandButton variant="primary" icon={<Plus size={15} />} disabled={!selectedProviderId || !modelName.trim()} onClick={() => onAction(t('models.toast.added'), () => api.createModel({ providerId: selectedProviderId, name: modelName.trim() }))}>{t('models.create.title')}</CommandButton>}
+          actions={<CommandButton variant="primary" icon={<Plus size={15} />} disabled={!selectedProviderId || !modelName.trim()} onClick={() => onAction(t('models.toast.added'), createSelectedModel)}>{t('models.create.title')}</CommandButton>}
         />
         <div className="tool-layout">
         <ConfigList title={t('models.create.title')} description={activeTab.description}>
-          <ToolSection title={t('models.modelName')} description={t('models.modelName.help')}>
+          <ToolSection
+            title={t('models.modelName')}
+            description={t('models.modelName.help')}
+            actions={<CommandButton icon={<DownloadCloud size={14} />} disabled={!selectedProviderId || modelFetchState === 'loading'} onClick={() => onAction(t('models.toast.fetched'), async () => {
+              const options = await api.fetchProviderModels(selectedProviderId);
+              setModelOptions(options);
+              setModelFetchState('ready');
+              setModelFetchError('');
+              const firstNewModel = options.find((option) => !existingModelNames.has(option.id)) ?? options[0];
+              if (firstNewModel) setModelName(firstNewModel.id);
+            })}>{t('models.fetchModels')}</CommandButton>}
+          >
             <div className="form-stack">
             <Field label={t('models.columns.provider')}>
                 <select value={selectedProviderId} onChange={(event) => setSelectedProviderId(event.target.value)}>
@@ -54,14 +133,24 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
                   ))}
                 </select>
               </Field>
+              {selectableModelOptions.length > 0 ? (
+                <Field label={t('models.availableModels')}>
+                  <select value={modelName} onChange={(event) => setModelName(event.target.value)}>
+                    {selectableModelOptions.map((option) => (
+                      <option value={option.id} key={option.id}>{option.name}</option>
+                    ))}
+                  </select>
+                </Field>
+              ) : null}
               <Field label={t('models.modelName')}>
                 <input value={modelName} onChange={(event) => setModelName(event.target.value)} placeholder={t('models.modelName.placeholder')} />
               </Field>
+              <ModelFetchNotice state={modelFetchState} error={modelFetchError} options={modelOptions} providerName={selectedProviderName} />
             </div>
           </ToolSection>
 
           <div className="config-items">
-            {snapshot.models.map((model) => (
+            {snapshot.models.length > 0 ? snapshot.models.map((model) => (
               <div className={`config-row ${model.id === defaultModel?.id ? 'is-active' : ''}`} key={model.id}>
                 <span>
                   <strong>{model.displayName}</strong>
@@ -69,7 +158,7 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
                 </span>
                 <StatusPillLite label={statusLabel(model.healthStatus, t)} state={healthState(model.healthStatus)} />
               </div>
-            ))}
+            )) : <EmptyBlock title={t('common.notConfigured')} detail={t('models.create.note')} />}
           </div>
         </ConfigList>
         <ConfigDetail title={t('models.router.title')} description={t('models.router.note')}>
@@ -165,17 +254,15 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
 
         <div className="config-items provider-switch-list">
           {snapshot.providers.length > 0 ? snapshot.providers.map((provider) => (
-            <div className={`config-row ${provider.id === defaultProvider?.id ? 'is-active' : ''}`} key={provider.id}>
-              <span>
-                <strong>{provider.name}</strong>
-                <small>{providerTypeLabel(provider.type, t)} / {provider.baseUrl || t('common.notConfigured')}</small>
-              </span>
-              <span className="row-actions">
-                <StatusPillLite label={provider.secretRef ? t('common.saved') : t('common.notConfigured')} state={provider.secretRef ? 'ready' : 'warning'} />
-                <StatusPillLite label={statusLabel(provider.healthStatus, t)} state={healthState(provider.healthStatus)} />
-                <CommandButton icon={<Activity size={14} />} onClick={() => onAction(t('models.toast.tested'), () => api.testProvider(provider.id))}>{t('models.testConnection')}</CommandButton>
-              </span>
-            </div>
+            <ProviderRow
+              key={provider.id}
+              provider={provider}
+              isDefault={provider.id === defaultProvider?.id}
+              pendingDeleteProviderId={pendingDeleteProviderId}
+              setPendingDeleteProviderId={setPendingDeleteProviderId}
+              api={api}
+              onAction={onAction}
+            />
           )) : <EmptyBlock title={t('common.notConfigured')} detail={t('models.provider.note')} />}
         </div>
       </ConfigList>
@@ -193,6 +280,75 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
       </ConfigDetail>
       </div>
     </TabPanel>
+  );
+}
+
+function ModelFetchNotice({
+  state,
+  error,
+  options,
+  providerName,
+}: {
+  state: 'idle' | 'loading' | 'ready' | 'error';
+  error: string;
+  options: ProviderModelOption[];
+  providerName?: string;
+}) {
+  const { t } = useI18n();
+  if (state === 'loading') {
+    return <InlineNotice tone="info" title={t('models.fetch.loading')} detail={providerName} />;
+  }
+  if (state === 'error') {
+    return <InlineNotice tone="warning" title={t('models.fetch.failed')} detail={error} />;
+  }
+  if (state === 'ready') {
+    return <InlineNotice tone={options.length > 0 ? 'success' : 'muted'} title={t(options.length > 0 ? 'models.fetch.ready' : 'models.fetch.empty', { count: options.length })} />;
+  }
+  return null;
+}
+
+function ProviderRow({
+  provider,
+  isDefault,
+  pendingDeleteProviderId,
+  setPendingDeleteProviderId,
+  api,
+  onAction,
+}: {
+  provider: TabPageProps['snapshot']['providers'][number];
+  isDefault: boolean;
+  pendingDeleteProviderId: string | null;
+  setPendingDeleteProviderId: (id: string | null) => void;
+  api: TabPageProps['api'];
+  onAction: TabPageProps['onAction'];
+}) {
+  const { t } = useI18n();
+  const confirming = pendingDeleteProviderId === provider.id;
+  return (
+    <div className={`config-row ${isDefault ? 'is-active' : ''}`}>
+      <span>
+        <strong>{provider.name}</strong>
+        <small>{providerTypeLabel(provider.type, t)} / {provider.baseUrl || t('common.notConfigured')}</small>
+      </span>
+      <span className="row-actions">
+        <StatusPillLite label={provider.secretRef ? t('common.saved') : t('common.notConfigured')} state={provider.secretRef ? 'ready' : 'warning'} />
+        <StatusPillLite label={statusLabel(provider.healthStatus, t)} state={healthState(provider.healthStatus)} />
+        <CommandButton icon={<Activity size={14} />} onClick={() => onAction(t('models.toast.tested'), () => api.testProvider(provider.id))}>{t('models.testConnection')}</CommandButton>
+        <CommandButton
+          variant={confirming ? 'danger' : 'default'}
+          icon={<Trash2 size={14} />}
+          onClick={() => {
+            if (!confirming) {
+              setPendingDeleteProviderId(provider.id);
+              return;
+            }
+            onAction(t('models.toast.deleted'), () => api.deleteProvider(provider.id));
+          }}
+        >
+          {confirming ? t('models.delete.confirm') : t('models.deleteProvider')}
+        </CommandButton>
+      </span>
+    </div>
   );
 }
 

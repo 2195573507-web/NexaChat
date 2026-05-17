@@ -1,7 +1,8 @@
 import { BookOpenText, Copy, DatabaseBackup, GitCompareArrows, KeyRound, MessageSquarePlus, Pin, RefreshCw, RotateCcw, Search, Send, ServerCog, Settings, SlidersHorizontal, Star, XCircle } from 'lucide-react';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { ContextStrategy, Conversation, Message, Model } from '../../shared/types';
-import { ChatInput, CommandButton, EmptyBlock, MessageBubble, StatusPillLite } from '../components/AppFrame';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { I18nKey } from '../../shared/i18n';
+import type { ChatResponse, ContextStrategy, Conversation, KnowledgeCitation, Message, Model } from '../../shared/types';
+import { ChatInput, CommandButton, EmptyBlock, InlineNotice, MessageBubble, StatusPillLite } from '../components/AppFrame';
 import { useI18n } from '../i18n';
 import {
   contextStrategies,
@@ -36,6 +37,47 @@ function getGroupedConversations(conversations: Conversation[], query: string) {
   ];
 }
 
+type GenerationPhase = 'queued' | 'sending' | 'generating' | 'completed' | 'failed' | 'canceled';
+
+const generationLabelKeys: Record<GenerationPhase, I18nKey> = {
+  queued: 'chat.generation.queued',
+  sending: 'chat.generation.sending',
+  generating: 'chat.generation.generating',
+  completed: 'chat.generation.completed',
+  failed: 'chat.generation.failed',
+  canceled: 'chat.generation.canceled',
+};
+
+type LocalGenerationState = {
+  requestLogId: string;
+  conversationId: string;
+  content: string;
+  modelId?: string;
+  modelName: string;
+  phase: GenerationPhase;
+  visibleContent: string;
+  response?: ChatResponse;
+  error?: string;
+  source: 'renderer-side-progressive-reveal';
+};
+
+function createClientRequestId() {
+  return `req_ui_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function splitProgressiveSegments(value: string) {
+  const paragraphs = value.split(/\n{2,}/).map((segment) => segment.trim()).filter(Boolean);
+  if (paragraphs.length > 1) {
+    return paragraphs.map((segment, index) => (index === 0 ? segment : `\n\n${segment}`));
+  }
+  const sentences = value.match(/[^.!?。！？]+[.!?。！？]?\s*/g)?.map((segment) => segment.trim()).filter(Boolean) ?? [value];
+  return sentences.length > 0 ? sentences : [value];
+}
+
+function getMessageCitations(snapshot: TabPageProps['snapshot'], message: Message) {
+  return snapshot.knowledgeCitations.filter((citation) => citation.messageId === message.id);
+}
+
 export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: TabPageProps) {
   const { t } = useI18n();
   const [activeConversationId, setActiveConversationId] = useState(snapshot.conversations[0]?.id ?? '');
@@ -45,17 +87,26 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
   const [selectedModelId, setSelectedModelId] = useState(getDefaultModel(snapshot)?.id ?? '');
   const [compareModelIds, setCompareModelIds] = useState<string[]>([]);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [generation, setGeneration] = useState<LocalGenerationState | null>(null);
+  const timelineRef = useRef<HTMLDivElement | null>(null);
+  const canceledRequestIds = useRef(new Set<string>());
 
   const defaultModel = getDefaultModel(snapshot);
   const advancedMode = snapshot.uiPreferences.advancedMode;
   const selectedModel = snapshot.models.find((model) => model.id === selectedModelId) ?? defaultModel;
   const activeConversation = snapshot.conversations.find((conversation) => conversation.id === activeConversationId) ?? snapshot.conversations[0];
   const messages = getConversationMessages(snapshot.messages, activeConversation?.id);
+  const visibleMessages = messages.filter((message) => message.requestLogId !== generation?.requestLogId);
+  const generationInActiveConversation = generation && generation.conversationId === activeConversation?.id ? generation : null;
   const groupedConversations = useMemo(() => getGroupedConversations(snapshot.conversations, searchQuery), [snapshot.conversations, searchQuery]);
 
   useEffect(() => {
     if (!activeConversationId && snapshot.conversations[0]) {
       setActiveConversationId(snapshot.conversations[0].id);
+      return;
+    }
+    if (activeConversationId && !snapshot.conversations.some((conversation) => conversation.id === activeConversationId)) {
+      setActiveConversationId(snapshot.conversations[0]?.id ?? '');
     }
   }, [activeConversationId, snapshot.conversations]);
 
@@ -74,17 +125,85 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
 
   const sendCurrentMessage = async () => {
     const content = draft.trim();
-    if (!content) {
+    if (!content || !selectedModel || generation?.phase === 'sending' || generation?.phase === 'generating' || generation?.phase === 'queued') {
       return;
     }
-    await api.sendMessage({
-      conversationId: activeConversation?.id,
+    const requestLogId = createClientRequestId();
+    canceledRequestIds.current.delete(requestLogId);
+    const targetConversationId = activeConversation?.id ?? '';
+    setGeneration({
+      requestLogId,
+      conversationId: targetConversationId,
       content,
-      modelId: selectedModel?.id,
-      contextStrategy,
+      modelId: selectedModel.id,
+      modelName: selectedModel.displayName,
+      phase: 'queued',
+      visibleContent: '',
+      source: 'renderer-side-progressive-reveal',
     });
     setDraft('');
+    try {
+      setGeneration((current) => current?.requestLogId === requestLogId ? { ...current, phase: 'sending' } : current);
+      const response = await api.sendMessage({
+        conversationId: activeConversation?.id,
+        content,
+        modelId: selectedModel.id,
+        clientRequestId: requestLogId,
+        contextStrategy,
+      });
+      if (!targetConversationId && response.conversation.id) {
+        setActiveConversationId(response.conversation.id);
+      }
+      if (canceledRequestIds.current.has(requestLogId)) {
+        return;
+      }
+      setGeneration((current) => current?.requestLogId === requestLogId ? { ...current, conversationId: response.conversation.id, phase: 'generating', response } : current);
+      await revealResponse(requestLogId, response);
+    } catch (error) {
+      setGeneration((current) => current?.requestLogId === requestLogId
+        ? { ...current, phase: 'failed', error: error instanceof Error ? error.message : String(error) }
+        : current);
+      throw error;
+    }
   };
+
+  const revealResponse = async (requestLogId: string, response: ChatResponse) => {
+    const segments = splitProgressiveSegments(response.assistantMessage.content);
+    let visible = '';
+    for (const segment of segments) {
+      if (canceledRequestIds.current.has(requestLogId)) {
+        return;
+      }
+      visible += segment;
+      setGeneration((current) => current?.requestLogId === requestLogId ? { ...current, phase: 'generating', visibleContent: visible, response } : current);
+      await new Promise((resolve) => setTimeout(resolve, Math.min(140, Math.max(28, segment.length * 3))));
+    }
+    setGeneration((current) => current?.requestLogId === requestLogId ? { ...current, phase: response.requestLog.status === 'cancelled' ? 'canceled' : 'completed', visibleContent: response.assistantMessage.content, response } : current);
+    window.setTimeout(() => {
+      setGeneration((current) => current?.requestLogId === requestLogId && current.phase === 'completed' ? null : current);
+    }, 350);
+  };
+
+  const cancelGeneration = () => {
+    if (!generation) {
+      return;
+    }
+    canceledRequestIds.current.add(generation.requestLogId);
+    setGeneration({ ...generation, phase: 'canceled', error: t('chat.cancelled.message') });
+    onAction(t('chat.toast.cancelled'), () => api.cancelMessage({ requestLogId: generation.requestLogId }));
+  };
+
+  useEffect(() => {
+    const timeline = timelineRef.current;
+    if (!timeline) {
+      return;
+    }
+    if (typeof timeline.scrollTo === 'function') {
+      timeline.scrollTo({ top: timeline.scrollHeight, behavior: 'smooth' });
+      return;
+    }
+    timeline.scrollTop = timeline.scrollHeight;
+  }, [visibleMessages.length, generationInActiveConversation?.visibleContent, generationInActiveConversation?.phase]);
 
   return (
     <TabPanel moduleId="chat" tab={activeTab} className="chat-first-page">
@@ -131,7 +250,7 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
           <header className="chat-topbar">
             <div className="chat-title-block">
               <h1>{activeConversation?.title ?? t('chat.seed.newConversation')}</h1>
-              <span>{messages.length > 0 ? t('common.messageCount', { count: messages.length }) : t('chat.empty.title')}</span>
+              <span>{generationInActiveConversation ? t(generationLabelKeys[generationInActiveConversation.phase]) : messages.length > 0 ? t('common.messageCount', { count: messages.length }) : t('chat.empty.title')}</span>
             </div>
             <div className="chat-runtime-controls">
               <ModelPicker models={snapshot.models} selectedModel={selectedModel} onChange={setSelectedModelId} />
@@ -150,17 +269,18 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
           </header>
 
           <div className="chat-quick-actions" aria-label={t('chat.quickActions.aria')}>
-            <QuickAction icon={<MessageSquarePlus size={16} />} title={t('chat.quickActions.newChat')} detail={t('chat.quickActions.newChat.detail')} onClick={createConversationFromQuickAction} />
-            <QuickAction icon={<ServerCog size={16} />} title={t('chat.quickActions.chooseModel')} detail={t('chat.quickActions.chooseModel.detail')} onClick={() => onOpenModule({ moduleId: 'models', tabId: 'providers' })} />
+            <QuickAction primary icon={<ServerCog size={16} />} title={t('chat.quickActions.chooseModel')} detail={t('chat.quickActions.chooseModel.detail')} onClick={() => onOpenModule({ moduleId: 'models', tabId: 'providers' })} />
+            <QuickAction primary icon={<MessageSquarePlus size={16} />} title={t('chat.quickActions.newChat')} detail={t('chat.quickActions.newChat.detail')} onClick={createConversationFromQuickAction} />
             <QuickAction icon={<BookOpenText size={16} />} title={t('chat.quickActions.knowledge')} detail={t('chat.quickActions.knowledge.detail')} onClick={() => onOpenModule({ moduleId: 'knowledge', tabId: 'files' })} />
             <QuickAction icon={<KeyRound size={16} />} title={t('chat.quickActions.gateway')} detail={t('chat.quickActions.gateway.detail')} onClick={() => onOpenModule({ moduleId: 'gateway', tabId: 'overview' })} />
             <QuickAction icon={<DatabaseBackup size={16} />} title={t('chat.quickActions.importConfig')} detail={t('chat.quickActions.importConfig.detail')} onClick={() => onOpenModule({ moduleId: 'data', tabId: 'import' })} />
             <QuickAction icon={<Settings size={16} />} title={t('chat.quickActions.settings')} detail={t('chat.quickActions.settings.detail')} onClick={() => onOpenModule({ moduleId: 'settings', tabId: 'preferences' })} />
           </div>
 
-          <div className="message-timeline">
-            {messages.length > 0 ? (
-              messages.map((message) => (
+          <div className="message-timeline" ref={timelineRef}>
+            {visibleMessages.length > 0 || generationInActiveConversation ? (
+              <>
+              {visibleMessages.map((message) => (
                 <MessageBubble
                   key={message.id}
                   role={message.role}
@@ -178,14 +298,22 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
                   }
                 >
                   <p>{message.content}</p>
+                  {message.role === 'assistant' ? <CitationList citations={getMessageCitations(snapshot, message)} /> : null}
                   {message.errorMessage ? <small>{message.errorMessage}</small> : null}
                 </MessageBubble>
-              ))
+              ))}
+              {generationInActiveConversation ? <GenerationBubble generation={generationInActiveConversation} onCancel={cancelGeneration} /> : null}
+              </>
             ) : (
               <div className="chat-welcome">
                 <strong>NexaChat</strong>
                 <p>{t('chat.empty.reason')}</p>
-                {!selectedModel ? <StatusPillLite label={t('common.notConfigured')} state="warning" /> : null}
+                {!selectedModel ? (
+                  <>
+                    <StatusPillLite label={t('common.notConfigured')} state="warning" />
+                    <CommandButton variant="primary" icon={<ServerCog size={15} />} onClick={() => onOpenModule({ moduleId: 'models', tabId: 'providers' })}>{t('chat.setup.start')}</CommandButton>
+                  </>
+                ) : null}
               </div>
             )}
           </div>
@@ -193,18 +321,22 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
           <ChatInput
             value={draft}
             placeholder={t('chat.composer.placeholder')}
-            contextControl={<span>{selectedModel?.displayName ?? t('common.notConfigured')}</span>}
+            contextControl={<span>{selectedModel ? `${selectedModel.displayName} / ${generationInActiveConversation ? t(generationLabelKeys[generationInActiveConversation.phase]) : t('app.status.idle')}` : t('common.notConfigured')}</span>}
             utilityActions={
-              <ConversationTools
-                conversation={activeConversation}
-                api={api}
-                onAction={onAction}
-              />
+              generationInActiveConversation && (generationInActiveConversation.phase === 'sending' || generationInActiveConversation.phase === 'generating' || generationInActiveConversation.phase === 'queued') ? (
+                <button type="button" className="ghost-button" onClick={cancelGeneration}><XCircle size={14} />{t('chat.message.cancel')}</button>
+              ) : (
+                <ConversationTools
+                  conversation={activeConversation}
+                  api={api}
+                  onAction={onAction}
+                />
+              )
             }
             sendLabel={t('chat.send')}
             sendIcon={<Send size={15} />}
-            disabled={!selectedModel}
-            disabledReason={t('common.notConfigured')}
+            disabled={!selectedModel || Boolean(generationInActiveConversation && ['queued', 'sending', 'generating'].includes(generationInActiveConversation.phase))}
+            disabledReason={!selectedModel ? t('common.notConfigured') : t('chat.generation.generating')}
             onChange={setDraft}
             onSend={() => onAction(t('chat.toast.sent'), sendCurrentMessage)}
           />
@@ -256,15 +388,53 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
   );
 }
 
-function QuickAction({ icon, title, detail, onClick }: { icon: ReactNode; title: string; detail: string; onClick: () => void }) {
+function QuickAction({ icon, title, detail, onClick, primary = false }: { icon: ReactNode; title: string; detail: string; onClick: () => void; primary?: boolean }) {
   return (
-    <button type="button" className="chat-quick-action" onClick={onClick}>
+    <button type="button" className={`chat-quick-action ${primary ? 'is-primary' : ''}`} onClick={onClick}>
       <span className="quick-action-icon">{icon}</span>
       <span>
         <strong>{title}</strong>
         <small>{detail}</small>
       </span>
     </button>
+  );
+}
+
+function GenerationBubble({ generation, onCancel }: { generation: LocalGenerationState; onCancel: () => void }) {
+  const { t } = useI18n();
+  const isBusy = generation.phase === 'queued' || generation.phase === 'sending' || generation.phase === 'generating';
+  return (
+    <MessageBubble
+      role="assistant"
+      status={generation.phase === 'canceled' ? 'cancelled' : generation.phase === 'failed' ? 'failed' : 'streaming'}
+      meta={<span>{generation.modelName} / {t(generationLabelKeys[generation.phase])}</span>}
+      actionsLabel={t('chat.message.actions.aria')}
+      actions={isBusy ? (
+        <button type="button" className="ghost-button" onClick={onCancel}><XCircle size={14} />{t('chat.message.cancel')}</button>
+      ) : null}
+    >
+      <div className="generation-progress" data-generation-phase={generation.phase}>
+        <StatusPillLite label={t(generationLabelKeys[generation.phase])} state={generation.phase === 'failed' ? 'danger' : generation.phase === 'canceled' ? 'warning' : 'info'} />
+        <p>{generation.visibleContent || t('chat.generation.placeholder')}</p>
+        {generation.error ? <small>{generation.error}</small> : null}
+        <InlineNotice tone="muted" title={t('chat.generation.progressiveReveal')} detail={t('chat.generation.progressiveReveal.detail')} />
+      </div>
+    </MessageBubble>
+  );
+}
+
+function CitationList({ citations }: { citations: KnowledgeCitation[] }) {
+  const { t } = useI18n();
+  if (citations.length === 0) {
+    return null;
+  }
+  return (
+    <div className="message-citations" aria-label={t('chat.citations.aria')}>
+      <strong>{t('chat.citations.title', { count: citations.length })}</strong>
+      {citations.slice(0, 4).map((citation) => (
+        <span key={citation.id}>{t('chat.citations.source', { file: citation.fileName, score: citation.score.toFixed(2) })} / {citation.snippet}</span>
+      ))}
+    </div>
   );
 }
 

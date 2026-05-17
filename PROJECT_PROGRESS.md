@@ -1,5 +1,67 @@
 # NexaChat Project Progress
 
+## 2026-05-17 Agent Feedback Full Fix Round
+
+This round implemented the full closeout requested from `docs/build-plans/00-modular-refactor-master-plan/chat-experience-agent-long-run-feedback.md`.
+
+Execution baseline:
+
+- Real project root confirmed with `git rev-parse --show-toplevel`: `D:/NexaChat`.
+- Branch confirmed as `main`.
+- Start HEAD: `fcda00ca47e8d3e8184e09ab99b9749ebd424630`.
+- Start `origin/main`: `fcda00ca47e8d3e8184e09ab99b9749ebd424630`.
+- `using-superpower` singular was not installed; `using-superpowers` was available and read.
+- Available execution tools included Git, PowerShell, Node 24, `npm.cmd`, `rg`, Vitest, Vite build, Playwright UI smoke, and Electron smoke.
+
+Pre-existing dirty state audit:
+
+- The initial dirty files under `src/` and `tests/` were reviewed before further edits.
+- The dirty source/test set was not a test artifact. It was a coherent Provider/Models contract change set that directly addressed this feedback round: provider model fetch, provider soft delete, IPC/preload/API contract updates, model UI state, and provider tests.
+- Those existing changes were included in this round because they were relevant to Models/Provider feedback.
+- No tracked file was identified as a test artifact or unrelated dirty change requiring restore.
+- No `git restore`, broad overwrite, or blind formatting pass was used.
+
+Feedback issue treatment:
+
+- P1: 13 fixed, 0 already-covered, 0 deferred, 0 invalid.
+- P2: 22 fixed, 0 already-covered, 0 deferred, 0 invalid.
+- P3: 10 fixed, 0 already-covered, 1 deferred, 0 invalid.
+- The only deferred item is the historical mojibake cleanup in older progress entries (`I-042`). It is intentionally separated as a docs encoding cleanup task to avoid a large historical rewrite in this product behavior fix round.
+
+Major implementation changes:
+
+- Chat now creates an immediate assistant placeholder, tracks request-scoped generation state, exposes cancel, guards late responses, renders citations, shows model snapshot, and uses renderer-side progressive reveal with explicit non-streaming boundary copy.
+- Store now binds in-flight chat requests to `AbortController`, preserves `clientRequestId`, fails explicit missing model selection instead of silently falling back, and marks request/message states as streaming/completed/failed/cancelled consistently.
+- Models now supports provider model fetching, provider soft delete, clearer Provider test feedback, early base URL validation, API-key plaintext clearing semantics, and model empty/error states.
+- Knowledge Base now exposes text-like import boundaries, file picker import, unsupported PDF/Office/OCR/vector copy, retrieval snippet/citation/score details, and failed-file error messages.
+- Tools/MCP now shows authorized-but-unchecked state instead of healthy, and labels reserved MCP/workflow execution as fixture-only/experimental.
+- Gateway now separates enabled from actual listener state, keeps `/v1/responses` reserved/501, explains that normal Chat does not require Gateway, shows alias/mapping boundaries, expands logs/usage feedback, and adds Gateway Key quota/rate/disabled policy editing.
+- Data now requires typed `APPLY IMPORT`, enforces rollback confirmation across paths, validates backup/restore passphrase length in the UI, and explains restore safe-failure behavior.
+- Settings now adds role/permission matrix visibility, audit recent-slice/export guidance, and blocks default unedited feedback submission.
+
+Architecture boundaries preserved:
+
+- Renderer continues to access runtime capability only through `window.nexachat`.
+- No renderer direct SQLite, filesystem, or raw-secret access was added.
+- The current 7 first-level modules remain Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings.
+- `/` remains chat-first and resolves to `/chat/conversations`.
+- Workspace/Dashboard-first and `/workspace` main entry were not restored.
+- PDF, Office, OCR, external vector DB, arbitrary MCP executor, and Agent sandbox were not claimed as completed.
+- `/v1/responses` remains reserved and returns 501.
+
+Validation results:
+
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test`: passed, 20 files / 71 tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run test:ui-smoke`: passed, 7 Playwright tests.
+- `npm.cmd run test:electron-smoke`: passed.
+
+Report:
+
+- Full report written to `docs/build-plans/00-modular-refactor-master-plan/agent-feedback-full-fix-report.md`.
+- The final pushed commit hash is reported after Git commit/push because a Git commit cannot contain its own final SHA in the committed content.
+
 ## 2026-05-16 Phase 0 Documentation Fact Cleanup
 
 - Confirmed real project root with `git rev-parse --show-toplevel`: `D:/NexaChat`.

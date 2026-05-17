@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createServer, type Server } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { DATA_CONFIRMATION_PHRASES } from '../src/shared/dataRuntime';
 
 let gateway: Server | null = null;
 let dataDir = '';
@@ -79,13 +80,20 @@ describe('Round 8 gateway runtime authority', () => {
     }));
     expect(result.status).toBe('ready');
 
-    const applied = store.applyImportPlan(result.id, { mode: 'apply-metadata' });
+    const applied = store.applyImportPlan(result.id, {
+      mode: 'apply-metadata',
+      confirmationPhrase: DATA_CONFIRMATION_PHRASES.applyImport,
+    });
     expect(applied.status).toBe('completed');
     expect(applied.rollbackSnapshotId).toBeTruthy();
     expect(store.getProviders().some((provider) => provider.name === 'Imported Round 8 Provider' && provider.enabled)).toBe(true);
     expect(store.getModels().some((model) => model.name === 'imported-chat' && model.enabled)).toBe(true);
 
-    const rolledBack = store.restoreSnapshot(applied.id, { mode: 'rollback' });
+    expect(() => store.restoreSnapshot(applied.id, { mode: 'rollback' })).toThrow();
+    const rolledBack = store.restoreSnapshot(applied.id, {
+      mode: 'rollback',
+      confirmationPhrase: DATA_CONFIRMATION_PHRASES.rollback,
+    });
     expect(rolledBack.status).toBe('completed');
     expect(store.getProviders().some((provider) => provider.name === 'Imported Round 8 Provider' && provider.enabled)).toBe(false);
     expect(store.getModels().some((model) => model.name === 'imported-chat' && model.enabled)).toBe(false);

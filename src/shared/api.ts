@@ -41,6 +41,7 @@ import type {
   ModelInput,
   Provider,
   ProviderInput,
+  ProviderModelOption,
   SendMessageInput,
   UiPreferences,
   CancelMessageInput,
@@ -57,6 +58,8 @@ import type {
 export interface AppApi {
   getSnapshot(): Promise<AppSnapshot>;
   createProvider(input: ProviderInput): Promise<Provider>;
+  deleteProvider(providerId: string): Promise<Provider>;
+  fetchProviderModels(providerId: string): Promise<ProviderModelOption[]>;
   createModel(input: ModelInput): Promise<Model>;
   testProvider(providerId: string): Promise<Provider>;
   sendMessage(input: SendMessageInput): Promise<ChatResponse>;
@@ -110,6 +113,8 @@ export interface AppApi {
 export const APP_API_METHODS = [
   'getSnapshot',
   'createProvider',
+  'deleteProvider',
+  'fetchProviderModels',
   'createModel',
   'testProvider',
   'sendMessage',
