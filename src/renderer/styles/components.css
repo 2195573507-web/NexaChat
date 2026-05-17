@@ -243,6 +243,22 @@
   overflow-wrap: anywhere;
 }
 
+.field-action-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: end;
+}
+
+.field-action-row .field-row {
+  min-width: 0;
+}
+
+.field-action-row > button {
+  min-height: 34px;
+}
+
 .field-row,
 .toggle-row {
   align-items: stretch;

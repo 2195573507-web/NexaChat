@@ -4,7 +4,7 @@
 
 NexaChat uses a local-first layered architecture. UI calls typed IPC clients. Provider adapters own protocol differences, and the local Gateway is an independent core module.
 
-Current source fact: `src/main/services/store.ts` still owns the aggregate `NexaStore` service for most business logic, SQLite access, security checks, audit writes, and snapshot assembly. The service names in this diagram are extraction targets and boundaries for future refactors, not proof that those standalone services are already fully split.
+Current source fact, 2026-05-17: `src/main/services/store.ts` is now only a compatibility export over `serviceRegistry`. Domain behavior is implemented in main-process services, stable read/list queries are routed through repositories, and all services share the same SQLite context. Earlier references to `NexaStore` as the current aggregate owner describe the pre-split baseline and are historical.
 
 ```mermaid
 flowchart TD

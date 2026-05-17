@@ -1,4 +1,60 @@
-# NexaChat Project Progress
+﻿# NexaChat Project Progress
+
+## 2026-05-17 Main-Process Architecture Service Split
+
+Execution baseline:
+
+- Real project root confirmed with `git rev-parse --show-toplevel`: `D:/NexaChat`.
+- Branch/upstream confirmed as `main` / `origin/main`.
+- Baseline commit: `decac4733686051dfcd6d17e3c48445b062c1e35`.
+- Required package scripts exist: `typecheck`, `test`, `build`, `test:ui-smoke`, and `test:electron-smoke`.
+- `using-superpowers` is installed and was read; singular `using-superpower` is not installed in this Codex skills set.
+- Pre-existing dirty files were recorded before architecture edits: `src/renderer/modules/ModelsPage.tsx`, `src/renderer/styles/components.css`, `src/renderer/styles/pages.css`, `src/shared/i18n.ts`, and `tests/ui-smoke.spec.ts`. They were treated as existing Provider/Model UI work and not overwritten by the service split.
+
+Architecture split delivered:
+
+- Replaced `src/main/services/store.ts` with a thin compatibility export over `serviceRegistry`.
+- Added `src/main/services/serviceRegistry.ts` as the composition root.
+- Added `src/main/services/serviceContext.ts` as the shared database context, bootstrap/helper, redaction/secret/audit utility, and compatibility type surface.
+- Added real domain services: `ChatService`, `ProviderService`, `ModelService`, `GatewayService`, `KnowledgeService`, `DataService`, `SettingsService`, `SecurityService`, `AuditService`, plus existing product domains `ToolService`, `ObservabilityService`, and `DashboardService`.
+- Provider deletion now lives in `ProviderService` and preserves the existing soft-delete/model-disable/default-clearing/audit behavior.
+- Provider model discovery now lives in `ModelService` and continues to use the main-process OpenAI-compatible `/v1/models` adapter path.
+- Chat conversation/message/send/retry/regenerate/cancel/export logic now lives in `ChatService`.
+- Gateway key lifecycle, scopes, quota, rate limit, logs, usage-linked request coordination, and OpenAI-compatible endpoint behavior now live in `GatewayService`.
+- Knowledge text-like import, chunking, lexical retrieval preview, rebuild/delete, traces, and citations now live in `KnowledgeService`.
+- Data import/export/snapshot/backup/restore-preflight/rollback behavior now lives in `DataService`.
+- Settings, Security, and Audit behavior now live in their corresponding services.
+- Moved the OpenAI-compatible protocol adapter to `src/main/adapters/openAiCompatibleAdapter.ts`; the old `src/main/services/openAiCompatibleAdapter.ts` path is now only a compatibility re-export.
+- Added `src/shared/contracts/*` re-export files for Chat, Provider, Model, Gateway, Knowledge, Data, Settings, Security, Audit, and IPC contracts without importing main or renderer code.
+- Added repository classes plus `repositoryContext.ts`; stable list/read queries now route through repositories sharing the one `DatabaseSync` instance.
+
+Boundaries preserved:
+
+- No SQLite schema change was made.
+- Renderer remains preload-only and does not access SQLite, fs, Node APIs, Provider secrets, or Gateway keys.
+- IPC channel names and preload API names remain compatible.
+- `/` remains `/chat/conversations`.
+- The current 7 first-level modules remain Chat, Models, Knowledge Base, Tools, Gateway, Data, Settings.
+- `/v1/responses` remains reserved / 501.
+- Knowledge Base was not overstated as PDF / Office / OCR / external vector DB capable.
+- Tools / Agent / MCP was not overstated as arbitrary MCP executor or release-grade Agent sandbox.
+
+Verification so far:
+
+- `npm.cmd run typecheck`: passed after service/repository/contracts split.
+- `npm.cmd run test`: passed, 22 files / 80 tests after service/repository/contracts split.
+- Final `npm.cmd run typecheck`: passed.
+- Final `npm.cmd run test`: passed, 22 files / 80 tests.
+- Final `npm.cmd run build`: passed.
+- Final `npm.cmd run test:ui-smoke`: passed, 7 Playwright tests.
+- Final `npm.cmd run test:electron-smoke`: passed, Electron shell rendered.
+- Final `git diff --check`: passed with LF/CRLF conversion warnings only.
+
+Known follow-up:
+
+- Repository extraction is intentionally incremental. Stable read/list paths are in repositories; transaction-heavy multi-table writes, audit hash-chain writes, encrypted backup/decrypt logic, and secret flows remain in owning services/context for behavior safety and future focused tests.
+- Several generated service files still carry broad duplicated imports copied from the old store. They are type-safe and can be mechanically trimmed later.
+- Final commit hash is recorded after `git commit` and push because the committed report cannot contain its own SHA.
 
 ## 2026-05-17 Agent Feedback Full Fix Round
 
@@ -71,7 +127,7 @@ Report:
 - Current source facts were aligned in active docs: NexaChat is chat-first, the real first-level modules are Chat / Models / Knowledge Base / Tools / Gateway / Data / Settings, and `/` currently resolves to `/chat/conversations`.
 - Clarified that Workspace/Dashboard and older 8-module references are historical context unless a file explicitly marks them as current.
 - Clarified that simple home is a later target, not a completed capability.
-- Clarified that `NexaStore` remains the current centralized aggregate service and service splitting is a target route.
+- Historical 2026-05-16 finding: at that time `NexaStore` remained the centralized aggregate service and service splitting was a target route. This is now superseded by the 2026-05-17 service split above.
 - Clarified Knowledge Base boundaries: current support is text-like import, parsing, chunking, lexical embedding, retrieval preview, rebuild/delete, and citations; PDF, Office, OCR, and external vector databases remain future capabilities.
 - Clarified Gateway boundaries: `/v1/models`, `/v1/chat/completions`, and `/v1/embeddings` are current; `/v1/responses` is reserved and returns 501.
 - Clarified Tools/Agent/MCP boundaries: current support covers MCP registration, permissions, agent definitions, dry-run preview, fixture tool execution, approval requests, execution steps, and trace events; arbitrary real MCP execution, arbitrary code execution, and release-grade Agent sandbox are future capabilities.
@@ -82,41 +138,22 @@ Historical context note: entries below this section may mention Workspace, Dashb
 
 ## 2026-05-16 Chat-first UI Rebuild Closure
 
-本轮目标:
+鏈疆鐩爣:
 
-- 将 NexaChat 从后台验收面板式 UI 重建为聊天优先的本地 AI 工具。
-- 默认入口从工作台/首页迁移到聊天: `/` 现在解析到 `/chat/conversations`。
-- 一级导航收敛为 7 个入口: 聊天、模型、知识库、工具、网关、数据、设置。
-- 保留现有业务能力和数据链路，不重写 Electron main、preload、SQLite Store、IPC、Provider、Gateway、Knowledge、Tools、Data、Settings 核心契约。
+- 灏?NexaChat 浠庡悗鍙伴獙鏀堕潰鏉垮紡 UI 閲嶅缓涓鸿亰澶╀紭鍏堢殑鏈湴 AI 宸ュ叿銆?- 榛樿鍏ュ彛浠庡伐浣滃彴/棣栭〉杩佺Щ鍒拌亰澶? `/` 鐜板湪瑙ｆ瀽鍒?`/chat/conversations`銆?- 涓€绾у鑸敹鏁涗负 7 涓叆鍙? 鑱婂ぉ銆佹ā鍨嬨€佺煡璇嗗簱銆佸伐鍏枫€佺綉鍏炽€佹暟鎹€佽缃€?- 淇濈暀鐜版湁涓氬姟鑳藉姏鍜屾暟鎹摼璺紝涓嶉噸鍐?Electron main銆乸reload銆丼QLite Store銆両PC銆丳rovider銆丟ateway銆並nowledge銆乀ools銆丏ata銆丼ettings 鏍稿績濂戠害銆?
+鍒犻櫎鍜屾浛鎹㈢殑鏃?UI:
 
-删除和替换的旧 UI:
+- 鍒犻櫎 `src/renderer/modules/DashboardPage.tsx`锛屽苟浠?`modulePageRegistry` 绉婚櫎 workspace/dashboard 椤甸潰娉ㄥ唽銆?- 浠?`ModuleId` 涓?`navModules` 绉婚櫎 `workspace` 涓€绾фā鍧楋紝鏃?`/dashboard/...` 鍜?`/workspace/...` 璺敱鐜板湪鍥炶惤鍒拌亰澶╅粯璁ら〉銆?- 绉婚櫎 AppFrame 閲岀殑鍘氶噸 `module-switcher`銆乫eature list銆佹ā鍧楃姸鎬佺伅鍜?stage 鏍囩灞曠ず銆?- 渚ц竟鏍忔敼涓虹獎 rail锛屼簩绾у姛鑳借繘鍏ラ《閮ㄨ交閲?tabs锛屼笉鍐嶅湪宸︿晶鍫嗙姸鎬併€佽鏄庡拰瀹炵幇鏍囩銆?
+鏂板鍜岄噸鏋勭殑 UI 鍩虹:
 
-- 删除 `src/renderer/modules/DashboardPage.tsx`，并从 `modulePageRegistry` 移除 workspace/dashboard 页面注册。
-- 从 `ModuleId` 与 `navModules` 移除 `workspace` 一级模块，旧 `/dashboard/...` 和 `/workspace/...` 路由现在回落到聊天默认页。
-- 移除 AppFrame 里的厚重 `module-switcher`、feature list、模块状态灯和 stage 标签展示。
-- 侧边栏改为窄 rail，二级功能进入顶部轻量 tabs，不再在左侧堆状态、说明和实现标签。
+- 閲嶅缓娣辫壊浼樺厛 design tokens: 缁熶竴棰滆壊銆佸瓧浣撱€侀棿璺濄€佸渾瑙掋€侀槾褰卞拰 rail 瀹藉害 token銆?- 閲嶅啓 Shell 甯冨眬: `module-rail` + `work-surface` + `command-bar` + `top-tabs`銆?- 閲嶅仛 ChatPage 涓虹湡瀹炶亰澶╀富鐣岄潰: 宸︿晶浼氳瘽鍒楄〃銆佹悳绱€佹柊寤鸿亰澶╋紱涓棿娑堟伅娴併€佹ā鍨嬮€夋嫨銆佷笂涓嬫枃绛栫暐銆佸簳閮ㄨ緭鍏ユ锛涘彸渚т笂涓嬫枃/瀵规瘮闈㈡澘榛樿鍏抽棴銆?- 淇濈暀骞跺鐢ㄧ幇鏈夊叡浜粍浠? `ChatInput`銆乣MessageBubble`銆乣PageHeader`銆乣ConfigList`銆乣ConfigDetail`銆乣StatusPillLite` 绛夛紝鏈柊澧炵浜屽涓氬姟閾捐矾銆?
+淇濈暀鐨勪笟鍔￠摼璺?
 
-新增和重构的 UI 基础:
+- Chat 缁х画閫氳繃 `api.createConversation`銆乣api.sendMessage`銆乣retryMessage`銆乣regenerateMessage`銆乣cancelMessage`銆乣compareModels`銆乣updateConversationFlags` 宸ヤ綔銆?- Model/Provider 缁х画璇诲彇 `snapshot.providers` / `snapshot.models`锛屽苟閫氳繃 `createProvider`銆乣createModel`銆乣testProvider` 宸ヤ綔銆?- Gateway Key 缁х画浣跨敤缁熶竴鏂板绾? `createGatewayKey(input)`銆乣updateGatewayKey(input)`銆乣rotateGatewayKey(input)`銆乣revokeGatewayKey(id)`锛屽垪琛ㄦ潵鑷?`snapshot.gatewayKeys`銆?- Knowledge銆乀ools/MCP銆丏ata銆丼ettings 椤甸潰缁х画鎺ョ幇鏈?AppApi/IPC/Store/mockApi 濂戠害锛屾病鏈夊埗閫犵浜屽 mockApi銆乬ateway contract 鎴栫姸鎬佺鐞嗐€?
+鏂囨鍜岃兘鍔涜竟鐣?
 
-- 重建深色优先 design tokens: 统一颜色、字体、间距、圆角、阴影和 rail 宽度 token。
-- 重写 Shell 布局: `module-rail` + `work-surface` + `command-bar` + `top-tabs`。
-- 重做 ChatPage 为真实聊天主界面: 左侧会话列表、搜索、新建聊天；中间消息流、模型选择、上下文策略、底部输入框；右侧上下文/对比面板默认关闭。
-- 保留并复用现有共享组件: `ChatInput`、`MessageBubble`、`PageHeader`、`ConfigList`、`ConfigDetail`、`StatusPillLite` 等，未新增第二套业务链路。
-
-保留的业务链路:
-
-- Chat 继续通过 `api.createConversation`、`api.sendMessage`、`retryMessage`、`regenerateMessage`、`cancelMessage`、`compareModels`、`updateConversationFlags` 工作。
-- Model/Provider 继续读取 `snapshot.providers` / `snapshot.models`，并通过 `createProvider`、`createModel`、`testProvider` 工作。
-- Gateway Key 继续使用统一新契约: `createGatewayKey(input)`、`updateGatewayKey(input)`、`rotateGatewayKey(input)`、`revokeGatewayKey(id)`，列表来自 `snapshot.gatewayKeys`。
-- Knowledge、Tools/MCP、Data、Settings 页面继续接现有 AppApi/IPC/Store/mockApi 契约，没有制造第二套 mockApi、gateway contract 或状态管理。
-
-文案和能力边界:
-
-- 用户可见文案仍集中在 `src/shared/i18n.ts`。
-- 将可见的“环境受限 / 预留 / Round 12 / 未实现”类开发验收口吻改为“能力有限 / 稍后开放 / 数据移动准备状态”等用户语气。
-- 保留 `snapshot.dashboard` 和 `workspace` 作为内部 Store 聚合/本地工作区数据结构，不把它作为默认 UI 入口或一级导航暴露。
-
-验证结果:
+- 鐢ㄦ埛鍙鏂囨浠嶉泦涓湪 `src/shared/i18n.ts`銆?- 灏嗗彲瑙佺殑鈥滅幆澧冨彈闄?/ 棰勭暀 / Round 12 / 鏈疄鐜扳€濈被寮€鍙戦獙鏀跺彛鍚绘敼涓衡€滆兘鍔涙湁闄?/ 绋嶅悗寮€鏀?/ 鏁版嵁绉诲姩鍑嗗鐘舵€佲€濈瓑鐢ㄦ埛璇皵銆?- 淇濈暀 `snapshot.dashboard` 鍜?`workspace` 浣滀负鍐呴儴 Store 鑱氬悎/鏈湴宸ヤ綔鍖烘暟鎹粨鏋勶紝涓嶆妸瀹冧綔涓洪粯璁?UI 鍏ュ彛鎴栦竴绾у鑸毚闇层€?
+楠岃瘉缁撴灉:
 
 - `npm.cmd run test`: passed, 19 files / 63 tests.
 - `npm.cmd run build`: passed.
@@ -126,40 +163,24 @@ Historical context note: entries below this section may mention Workspace, Dashb
 - `npm.cmd run test:package-smoke`: passed.
 - `npm.cmd run test:installer-smoke`: passed.
 - `npm.cmd run shortcut:package`: passed.
-- `npm.cmd run test:shortcut-readback:packaged`: passed for `C:\Users\至亲\Desktop\NexaChat.lnk`.
+- `npm.cmd run test:shortcut-readback:packaged`: passed for `C:\Users\鑷充翰\Desktop\NexaChat.lnk`.
 - `git diff --check`: passed with LF/CRLF conversion warnings only.
 
-已知风险和后续任务:
+宸茬煡椋庨櫓鍜屽悗缁换鍔?
 
-- `snapshot.dashboard` 命名仍存在于数据聚合层，这是内部兼容字段，不是 UI 默认入口；后续如需重命名必须做跨 IPC、Store、mock、tests 的完整合同迁移。
-- Data 和 Settings 页已统一到新 shell/list-detail 视觉体系，但还可以继续降低表格式密度。
-- 真实上游 Provider、完整 RAG/vector/OCR、可执行 MCP/Agent sandbox 仍需按能力边界继续推进；本轮 UI 不伪装这些能力已经完整完成。
-
+- `snapshot.dashboard` 鍛藉悕浠嶅瓨鍦ㄤ簬鏁版嵁鑱氬悎灞傦紝杩欐槸鍐呴儴鍏煎瀛楁锛屼笉鏄?UI 榛樿鍏ュ彛锛涘悗缁闇€閲嶅懡鍚嶅繀椤诲仛璺?IPC銆丼tore銆乵ock銆乼ests 鐨勫畬鏁村悎鍚岃縼绉汇€?- Data 鍜?Settings 椤靛凡缁熶竴鍒版柊 shell/list-detail 瑙嗚浣撶郴锛屼絾杩樺彲浠ョ户缁檷浣庤〃鏍煎紡瀵嗗害銆?- 鐪熷疄涓婃父 Provider銆佸畬鏁?RAG/vector/OCR銆佸彲鎵ц MCP/Agent sandbox 浠嶉渶鎸夎兘鍔涜竟鐣岀户缁帹杩涳紱鏈疆 UI 涓嶄吉瑁呰繖浜涜兘鍔涘凡缁忓畬鏁村畬鎴愩€?
 ## 2026-05-16 Product UI Redesign Actual Closure
 
-本轮实际重做原因:
+鏈疆瀹為檯閲嶅仛鍘熷洜:
 
-- 当前 UI 的主要问题不是颜色或圆角细节，而是整体方向太像后台管理系统、太像功能面板集合，首页缺少产品入口感，聊天页没有核心 AI 工作台质感，模型、网关、知识库、工具页的主任务流不够清晰。
-- 本轮目标是保留现有功能契约、路由、IPC、Store、SQLite、Provider、Gateway、Knowledge、Agent 数据链路，同时把 NexaChat 重做成更像成熟本地优先、多模型桌面 AI 工作台的产品 UI。
+- 褰撳墠 UI 鐨勪富瑕侀棶棰樹笉鏄鑹叉垨鍦嗚缁嗚妭锛岃€屾槸鏁翠綋鏂瑰悜澶儚鍚庡彴绠＄悊绯荤粺銆佸お鍍忓姛鑳介潰鏉块泦鍚堬紝棣栭〉缂哄皯浜у搧鍏ュ彛鎰燂紝鑱婂ぉ椤垫病鏈夋牳蹇?AI 宸ヤ綔鍙拌川鎰燂紝妯″瀷銆佺綉鍏炽€佺煡璇嗗簱銆佸伐鍏烽〉鐨勪富浠诲姟娴佷笉澶熸竻鏅般€?- 鏈疆鐩爣鏄繚鐣欑幇鏈夊姛鑳藉绾︺€佽矾鐢便€両PC銆丼tore銆丼QLite銆丳rovider銆丟ateway銆並nowledge銆丄gent 鏁版嵁閾捐矾锛屽悓鏃舵妸 NexaChat 閲嶅仛鎴愭洿鍍忔垚鐔熸湰鍦颁紭鍏堛€佸妯″瀷妗岄潰 AI 宸ヤ綔鍙扮殑浜у搧 UI銆?
+鎶€鑳藉拰璁捐缁撹:
 
-技能和设计结论:
+- 宸插厛浣跨敤 `using-superpowers`锛涘崟鏁?`using-superpower` 璺緞涓嶅瓨鍦紝宸茬‘璁ゃ€?- 宸蹭娇鐢?`impeccable` 浣滀负 UI 璁捐銆佸疄鐜板拰楠屾敹鍓嶇疆銆傞」鐩病鏈?`PRODUCT.md` / `DESIGN.md`锛屾墍浠ユ寜 `product` register 鎵ц: 璁捐鏈嶅姟浜庝换鍔℃祦锛屼紭鍏堟闈㈠簲鐢ㄦ晥鐜囥€佸厠鍒惰壊褰┿€佺ǔ瀹氱粍浠惰瘝姹囥€佷綆鍣煶鐘舵€佽〃杈俱€佹竻鏅扮┖鎬?绂佺敤鎬?閿欒鎬侊紝涓嶄娇鐢?Liquid Glass銆侀噸姣涚幓鐠冦€佸ぇ闈㈢Н娓愬彉銆佽惀閿€椤电粨鏋勬垨瑁呴グ鍔ㄧ敾銆?- 璁捐鍘熷垯: 鍗曚竴渚ц竟鏍忓鑸€侀《閮ㄤ綆鍣煶涓婁笅鏂囥€侀〉闈㈡湁涓讳换鍔￠敋鐐广€佹ā鍧椾箣闂存湁涓嶅悓淇℃伅缁撴瀯銆佸崱鐗囧彧鐢ㄤ簬鐪熸闇€瑕佹瀹氱殑瀵硅薄锛屾墍鏈夋湭瀹屾垚鑳藉姏蹇呴』鏄剧ず涓烘湭閰嶇疆銆佹湭鍚敤銆佸緟瀹炵幇鎴?dry-run銆?
+鏈閲嶅仛鑼冨洿:
 
-- 已先使用 `using-superpowers`；单数 `using-superpower` 路径不存在，已确认。
-- 已使用 `impeccable` 作为 UI 设计、实现和验收前置。项目没有 `PRODUCT.md` / `DESIGN.md`，所以按 `product` register 执行: 设计服务于任务流，优先桌面应用效率、克制色彩、稳定组件词汇、低噪音状态表达、清晰空态/禁用态/错误态，不使用 Liquid Glass、重毛玻璃、大面积渐变、营销页结构或装饰动画。
-- 设计原则: 单一侧边栏导航、顶部低噪音上下文、页面有主任务锚点、模块之间有不同信息结构、卡片只用于真正需要框定的对象，所有未完成能力必须显示为未配置、未启用、待实现或 dry-run。
-
-本次重做范围:
-
-- 全局 Shell: 重新整理 AppShell、侧边栏、顶部上下文、右侧上下文面板、页面容器和浅色/深色/系统主题 token。
-- 首页: 改为工作台入口，突出系统可用性、默认模型、网关状态、最近活动和下一步动作，不再是四块普通卡片堆叠。
-- 聊天页: 保留三栏契约，但改为会话列表、消息主区、上下文指标和突出输入区的 AI 工作台结构。
-- 模型页: Provider 接入状态、模型数量、默认模型、健康状态和测试调用前置，不再只是表单加表格。
-- 网关页: 重做为开发者控制台式结构，突出本地兼容网关状态、监听地址、Key、模型路由、请求/用量和错误状态。
-- 知识库页: 突出导入、解析、分块、索引、检索链路，并把 lexical fallback / embedding 等能力状态表达清楚。
-- Agent / 工具页: 区分 MCP 注册、权限、approval、dry-run 和真实执行边界，不再把所有操作揉成按钮堆。
-- 组件体系: 新增并复用 `PageHeader`、`PageSection`、`Toolbar`、`ActionCard`、`MetricTile`、`SidePanel`、`ChatInput`、`MessageBubble`、`ProviderCard`、`GatewayStatusCard` 等基础组件。
-
-修改文件:
+- 鍏ㄥ眬 Shell: 閲嶆柊鏁寸悊 AppShell銆佷晶杈规爮銆侀《閮ㄤ笂涓嬫枃銆佸彸渚т笂涓嬫枃闈㈡澘銆侀〉闈㈠鍣ㄥ拰娴呰壊/娣辫壊/绯荤粺涓婚 token銆?- 棣栭〉: 鏀逛负宸ヤ綔鍙板叆鍙ｏ紝绐佸嚭绯荤粺鍙敤鎬с€侀粯璁ゆā鍨嬨€佺綉鍏崇姸鎬併€佹渶杩戞椿鍔ㄥ拰涓嬩竴姝ュ姩浣滐紝涓嶅啀鏄洓鍧楁櫘閫氬崱鐗囧爢鍙犮€?- 鑱婂ぉ椤? 淇濈暀涓夋爮濂戠害锛屼絾鏀逛负浼氳瘽鍒楄〃銆佹秷鎭富鍖恒€佷笂涓嬫枃鎸囨爣鍜岀獊鍑鸿緭鍏ュ尯鐨?AI 宸ヤ綔鍙扮粨鏋勩€?- 妯″瀷椤? Provider 鎺ュ叆鐘舵€併€佹ā鍨嬫暟閲忋€侀粯璁ゆā鍨嬨€佸仴搴风姸鎬佸拰娴嬭瘯璋冪敤鍓嶇疆锛屼笉鍐嶅彧鏄〃鍗曞姞琛ㄦ牸銆?- 缃戝叧椤? 閲嶅仛涓哄紑鍙戣€呮帶鍒跺彴寮忕粨鏋勶紝绐佸嚭鏈湴鍏煎缃戝叧鐘舵€併€佺洃鍚湴鍧€銆並ey銆佹ā鍨嬭矾鐢便€佽姹?鐢ㄩ噺鍜岄敊璇姸鎬併€?- 鐭ヨ瘑搴撻〉: 绐佸嚭瀵煎叆銆佽В鏋愩€佸垎鍧椼€佺储寮曘€佹绱㈤摼璺紝骞舵妸 lexical fallback / embedding 绛夎兘鍔涚姸鎬佽〃杈炬竻妤氥€?- Agent / 宸ュ叿椤? 鍖哄垎 MCP 娉ㄥ唽銆佹潈闄愩€乤pproval銆乨ry-run 鍜岀湡瀹炴墽琛岃竟鐣岋紝涓嶅啀鎶婃墍鏈夋搷浣滄弶鎴愭寜閽爢銆?- 缁勪欢浣撶郴: 鏂板骞跺鐢?`PageHeader`銆乣PageSection`銆乣Toolbar`銆乣ActionCard`銆乣MetricTile`銆乣SidePanel`銆乣ChatInput`銆乣MessageBubble`銆乣ProviderCard`銆乣GatewayStatusCard` 绛夊熀纭€缁勪欢銆?
+淇敼鏂囦欢:
 
 - `src/renderer/AppShell.tsx`
 - `src/renderer/components/ModulePageFrame.tsx`
@@ -175,28 +196,16 @@ Historical context note: entries below this section may mention Workspace, Dashb
 - `tests/ui-smoke.spec.ts`
 - `PROJECT_PROGRESS.md`
 
-保留的功能契约:
+淇濈暀鐨勫姛鑳藉绾?
 
-- 未重写主进程、数据库、IPC、Provider、Gateway、Knowledge、Agent 执行服务。
-- 保留 `src/shared/navigation.ts` 作为唯一导航/路由注册源，保留现有一级模块和二级页面关系。
-- 保留聊天发送、模型选择、Provider 测试、Gateway 开关和 Key 管理、知识库导入/重建/删除、MCP 权限、Agent dry-run、数据导入/备份/恢复/回滚、设置和审计链路。
-- 保留浅色、深色、系统主题切换，以及现有 i18n/状态数据来源。
+- 鏈噸鍐欎富杩涚▼銆佹暟鎹簱銆両PC銆丳rovider銆丟ateway銆並nowledge銆丄gent 鎵ц鏈嶅姟銆?- 淇濈暀 `src/shared/navigation.ts` 浣滀负鍞竴瀵艰埅/璺敱娉ㄥ唽婧愶紝淇濈暀鐜版湁涓€绾фā鍧楀拰浜岀骇椤甸潰鍏崇郴銆?- 淇濈暀鑱婂ぉ鍙戦€併€佹ā鍨嬮€夋嫨銆丳rovider 娴嬭瘯銆丟ateway 寮€鍏冲拰 Key 绠＄悊銆佺煡璇嗗簱瀵煎叆/閲嶅缓/鍒犻櫎銆丮CP 鏉冮檺銆丄gent dry-run銆佹暟鎹鍏?澶囦唤/鎭㈠/鍥炴粴銆佽缃拰瀹¤閾捐矾銆?- 淇濈暀娴呰壊銆佹繁鑹层€佺郴缁熶富棰樺垏鎹紝浠ュ強鐜版湁 i18n/鐘舵€佹暟鎹潵婧愩€?
+鍒犻櫎鎴栨浛鎹㈢殑鏃?UI 缁撴瀯:
 
-删除或替换的旧 UI 结构:
+- 娌℃湁鎭㈠ `.module-tabs` 鎴?`.module-subnav-panel` 妯悜涓诲鑸€?- 娌℃湁鏂板鍙岄噸瀵艰埅锛屼篃娌℃湁瑁搁湶鍐呴儴璺敱璺緞銆?- 鏃у紡瀵嗛泦闈㈡澘銆佹櫘閫氬崱鐗囧爢鍙犮€佽〃鏍间紭鍏堝竷灞€琚浛鎹负椤甸潰涓讳换鍔＄粨鏋勩€?- 瑁呴グ鎬ф笎鍙樺拰鐜荤拑鏁堟灉娌℃湁杩涘叆鏈€缁?CSS锛涜儗鏅敼涓?token 椹卞姩鐨勯潰灞傚拰杞婚噺鐘舵€佽壊銆?- 澶氬閲嶅鐨勫崱鐗囥€佸窘鏍囥€佽緭鍏ュ拰娑堟伅鏍峰紡琚泦涓埌鍏变韩缁勪欢銆?
+缁撴瀯閲嶇粍杈圭晫:
 
-- 没有恢复 `.module-tabs` 或 `.module-subnav-panel` 横向主导航。
-- 没有新增双重导航，也没有裸露内部路由路径。
-- 旧式密集面板、普通卡片堆叠、表格优先布局被替换为页面主任务结构。
-- 装饰性渐变和玻璃效果没有进入最终 CSS；背景改为 token 驱动的面层和轻量状态色。
-- 多套重复的卡片、徽标、输入和消息样式被集中到共享组件。
-
-结构重组边界:
-
-- 结构重组: Shell、首页、聊天页、模型页、网关页、知识库页、Tools/MCP 页。
-- 视觉重做但功能链路保持: 数据页、设置页、右侧上下文面板、表格和状态组件。
-- 未触碰业务层: 主进程、SQLite schema、Provider/Gateway 服务、Knowledge/Agent 运行时。
-
-测试结果:
+- 缁撴瀯閲嶇粍: Shell銆侀椤点€佽亰澶╅〉銆佹ā鍨嬮〉銆佺綉鍏抽〉銆佺煡璇嗗簱椤点€乀ools/MCP 椤点€?- 瑙嗚閲嶅仛浣嗗姛鑳介摼璺繚鎸? 鏁版嵁椤点€佽缃〉銆佸彸渚т笂涓嬫枃闈㈡澘銆佽〃鏍煎拰鐘舵€佺粍浠躲€?- 鏈Е纰颁笟鍔″眰: 涓昏繘绋嬨€丼QLite schema銆丳rovider/Gateway 鏈嶅姟銆並nowledge/Agent 杩愯鏃躲€?
+娴嬭瘯缁撴灉:
 
 - `npm.cmd run typecheck`: passed.
 - `npm.cmd run test`: passed, 19 files / 58 tests.
@@ -211,27 +220,18 @@ Historical context note: entries below this section may mention Workspace, Dashb
 - `npm.cmd run test:shortcut-readback:packaged`: passed.
 - `git diff --check`: passed with LF/CRLF conversion warnings only.
 
-桌面入口:
+妗岄潰鍏ュ彛:
 
-- 已重新生成 release 包和 installer script。
-- 已重新关联桌面快捷方式到 packaged 入口。
-- 已通过 COM readback 验证 TargetPath、Arguments、WorkingDirectory、IconLocation 与 packaged 入口预期一致。
+- 宸查噸鏂扮敓鎴?release 鍖呭拰 installer script銆?- 宸查噸鏂板叧鑱旀闈㈠揩鎹锋柟寮忓埌 packaged 鍏ュ彛銆?- 宸查€氳繃 COM readback 楠岃瘉 TargetPath銆丄rguments銆乄orkingDirectory銆両conLocation 涓?packaged 鍏ュ彛棰勬湡涓€鑷淬€?
+鍓╀綑闂:
 
-剩余问题:
+- `DataPage`銆乣SettingsPage` 浠嶄富瑕佹部鐢ㄦ棫甯冨眬璇嶆眹锛屽姛鑳介摼璺ǔ瀹氫絾杩樻病鏈夎揪鍒伴椤点€佽亰澶┿€佹ā鍨嬨€佺綉鍏炽€佺煡璇嗗簱銆佸伐鍏烽〉鐨勪骇鍝佺骇缁撴瀯瀵嗗害銆?- i18n 瀛楀吀涓粛鏈夊巻鍙?mojibake 鏂囨湰锛屾湰杞病鏈夋墿澶у埌鍏ㄩ噺鏂囨淇銆?- 鐪熸鐨勪笂娓?Provider 杞彂銆佸畬鏁?RAG/vector/OCR銆佺湡瀹?MCP 鎵ц銆丄gent sandbox 鎵ц浠嶆槸瑙勫垝鎴栫幆澧冨彈闄愯兘鍔涳紝UI 宸叉寜鏈厤缃?寰呭疄鐜?dry-run 琛ㄨ揪锛屼笉浼瀹屾垚銆?
+涓嬩竴杞?UI 鎵撶（寤鸿:
 
-- `DataPage`、`SettingsPage` 仍主要沿用旧布局词汇，功能链路稳定但还没有达到首页、聊天、模型、网关、知识库、工具页的产品级结构密度。
-- i18n 字典中仍有历史 mojibake 文本，本轮没有扩大到全量文案修复。
-- 真正的上游 Provider 转发、完整 RAG/vector/OCR、真实 MCP 执行、Agent sandbox 执行仍是规划或环境受限能力，UI 已按未配置/待实现/dry-run 表达，不伪装完成。
-
-下一轮 UI 打磨建议:
-
-- 继续做 Data / Settings / Observability 的产品化结构重组，把导入、备份、恢复、安全、审计、反馈、评测从表格优先改为主任务流优先。
-- 为 ProviderCard、GatewayStatusCard、MessageBubble、ChatInput 增加更细的空态、错误态和 loading/skeleton 状态回归。
-- 做一次真实截图视觉验收记录，覆盖浅色、深色、系统主题、1040 宽桌面下的首页和聊天页。
-
+- 缁х画鍋?Data / Settings / Observability 鐨勪骇鍝佸寲缁撴瀯閲嶇粍锛屾妸瀵煎叆銆佸浠姐€佹仮澶嶃€佸畨鍏ㄣ€佸璁°€佸弽棣堛€佽瘎娴嬩粠琛ㄦ牸浼樺厛鏀逛负涓讳换鍔℃祦浼樺厛銆?- 涓?ProviderCard銆丟atewayStatusCard銆丮essageBubble銆丆hatInput 澧炲姞鏇寸粏鐨勭┖鎬併€侀敊璇€佸拰 loading/skeleton 鐘舵€佸洖褰掋€?- 鍋氫竴娆＄湡瀹炴埅鍥捐瑙夐獙鏀惰褰曪紝瑕嗙洊娴呰壊銆佹繁鑹层€佺郴缁熶富棰樸€?040 瀹芥闈笅鐨勯椤靛拰鑱婂ぉ椤点€?
 ## 2026-05-16 UI Full Redesign Implementation Closure
 
-This round executed `docs/build-plans/00-modular-refactor-master-plan/ui-full-redesign-plan.md` as a source-code UI rebuild and closeout pass. The real repository root was confirmed with `git rev-parse --show-toplevel`: `D:/NexaChat`. All files and generated verification artifacts stayed under the repository root except the intentional Windows desktop shortcut update at `C:\Users\至亲\Desktop\NexaChat.lnk`.
+This round executed `docs/build-plans/00-modular-refactor-master-plan/ui-full-redesign-plan.md` as a source-code UI rebuild and closeout pass. The real repository root was confirmed with `git rev-parse --show-toplevel`: `D:/NexaChat`. All files and generated verification artifacts stayed under the repository root except the intentional Windows desktop shortcut update at `C:\Users\鑷充翰\Desktop\NexaChat.lnk`.
 
 Goal:
 
@@ -315,7 +315,7 @@ Verification:
 
 Desktop shortcut result:
 
-- `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\release\win-unpacked\NexaChat.exe`.
+- `C:\Users\鑷充翰\Desktop\NexaChat.lnk` targets `D:\NexaChat\release\win-unpacked\NexaChat.exe`.
 - Arguments are empty.
 - Working directory is `D:\NexaChat\release\win-unpacked`.
 - IconLocation resolves to `D:\NexaChat\assets\app-icon.ico,0`.
@@ -390,7 +390,7 @@ Verification:
 
 Desktop shortcut status:
 
-- `C:\Users\鑷充翰\Desktop\NexaChat.lnk` targets `D:\NexaChat\release\win-unpacked\NexaChat.exe`.
+- `C:\Users\閼峰厖缈癨Desktop\NexaChat.lnk` targets `D:\NexaChat\release\win-unpacked\NexaChat.exe`.
 - Arguments are empty.
 - Working directory is `D:\NexaChat\release\win-unpacked`.
 - IconLocation resolves to `D:\NexaChat\assets\app-icon.ico,0`.
@@ -440,7 +440,7 @@ Verification:
 
 Desktop shortcut status:
 
-- `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\release\win-unpacked\NexaChat.exe`.
+- `C:\Users\鑷充翰\Desktop\NexaChat.lnk` targets `D:\NexaChat\release\win-unpacked\NexaChat.exe`.
 - Arguments are empty.
 - Working directory is `D:\NexaChat\release\win-unpacked`.
 - IconLocation resolves to `D:\NexaChat\assets\app-icon.ico,0`.
@@ -488,7 +488,7 @@ Verification:
 
 Desktop shortcut status:
 
-- `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"` as the app argument, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`.
+- `C:\Users\鑷充翰\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"` as the app argument, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`.
 - No shortcut was modified in Round 13.
 
 Git:
@@ -533,7 +533,7 @@ Verification:
 
 Desktop shortcut status:
 
-- `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"` as the app argument, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`.
+- `C:\Users\鑷充翰\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"` as the app argument, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`.
 - No shortcut was modified in Round 0.
 
 Git:
@@ -572,7 +572,7 @@ Verification:
 
 Desktop shortcut status:
 
-- `C:\Users\至亲\Desktop\NexaChat.lnk` remains valid for the local Electron launch model and was not modified.
+- `C:\Users\鑷充翰\Desktop\NexaChat.lnk` remains valid for the local Electron launch model and was not modified.
 
 Git:
 
@@ -607,7 +607,7 @@ Verification:
 
 Desktop shortcut status:
 
-- `C:\Users\至亲\Desktop\NexaChat.lnk` remains valid for the local Electron launch model and was not modified.
+- `C:\Users\鑷充翰\Desktop\NexaChat.lnk` remains valid for the local Electron launch model and was not modified.
 
 Git:
 
@@ -636,7 +636,7 @@ Completed in this round:
 
 Desktop shortcut status:
 
-- `C:\Users\至亲\Desktop\NexaChat.lnk` currently points to `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"` as the app argument, uses `D:\NexaChat` as working directory, and uses `D:\NexaChat\assets\app-icon.ico,0`.
+- `C:\Users\鑷充翰\Desktop\NexaChat.lnk` currently points to `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"` as the app argument, uses `D:\NexaChat` as working directory, and uses `D:\NexaChat\assets\app-icon.ico,0`.
 - No shortcut was modified in this docs-only round.
 - Future rounds that change runtime code, UI, build output, packaging, or launch entry must revalidate this shortcut and record the result. If a packaged executable is introduced later, shortcut migration must be treated as a high-priority release task after packaged launch smoke passes.
 
@@ -681,7 +681,7 @@ Verification on 2026-05-14:
 - `npm.cmd run test:electron-smoke`: passed.
 - `npm.cmd run verify`: passed.
 - `git diff --check`: passed with CRLF conversion warnings only.
-- Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`.
+- Desktop shortcut check: `C:\Users\鑷充翰\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`.
 
 Round 3 delivery commit: `7a89160d0c83733b80176cda7643cc401e2dcdd2`, pushed and confirmed on `origin/main`. Round 4 remains responsible for i18n dictionary migration and Round 5 for runtime system-theme resolution.
 
@@ -714,7 +714,7 @@ Verification on 2026-05-15:
 - `npm.cmd run test:ui-smoke`: passed, 10 Playwright tests.
 - `npm.cmd run test:electron-smoke`: passed.
 - `git diff --check`: passed with LF/CRLF warnings only.
-- Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`.
+- Desktop shortcut check: `C:\Users\鑷充翰\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`.
 
 Round 4 delivery commit: `4e32be97af796c0b008393ed77b7dab5b67af25f`. Push returned success (`36c6d8c..4e32be9 main -> main`); follow-up `git ls-remote` confirmation was blocked by GitHub HTTPS connectivity from the current host. Round 5 owns full light/dark/system theme resolution and visual regression coverage.
 
@@ -751,7 +751,7 @@ Verification on 2026-05-15:
 
 Desktop shortcut status:
 
-- `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`.
+- `C:\Users\鑷充翰\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`.
 - No shortcut was modified in Round 5.
 
 Git:
@@ -794,7 +794,7 @@ Verification on 2026-05-15:
 
 Desktop shortcut status:
 
-- `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`.
+- `C:\Users\鑷充翰\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"`, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`.
 - No shortcut was modified in Round 6.
 
 Git:
@@ -837,7 +837,7 @@ Verification completed:
 
 Desktop shortcut:
 
-- `C:\Users\至亲\Desktop\NexaChat.lnk` exists and still points to `D:\NexaChat\node_modules\electron\dist\electron.exe`.
+- `C:\Users\鑷充翰\Desktop\NexaChat.lnk` exists and still points to `D:\NexaChat\node_modules\electron\dist\electron.exe`.
 - Arguments remain `"D:\NexaChat"`.
 - Working directory remains `D:\NexaChat`.
 - Icon remains `D:\NexaChat\assets\app-icon.ico,0`.
@@ -886,7 +886,7 @@ Verification completed:
 
 Desktop shortcut:
 
-- `C:\Users\至亲\Desktop\NexaChat.lnk` exists and still points to `D:\NexaChat\node_modules\electron\dist\electron.exe`.
+- `C:\Users\鑷充翰\Desktop\NexaChat.lnk` exists and still points to `D:\NexaChat\node_modules\electron\dist\electron.exe`.
 - Arguments remain `"D:\NexaChat"`.
 - Working directory remains `D:\NexaChat`.
 - Icon remains `D:\NexaChat\assets\app-icon.ico,0`.
@@ -935,7 +935,7 @@ Verification completed:
 
 Desktop shortcut:
 
-- `C:\Users\至亲\Desktop\NexaChat.lnk` exists and still points to `D:\NexaChat\node_modules\electron\dist\electron.exe`.
+- `C:\Users\鑷充翰\Desktop\NexaChat.lnk` exists and still points to `D:\NexaChat\node_modules\electron\dist\electron.exe`.
 - Arguments remain `"D:\NexaChat"`.
 - Working directory remains `D:\NexaChat`.
 - Icon remains `D:\NexaChat\assets\app-icon.ico,0`.
@@ -983,7 +983,7 @@ Verification completed:
 
 Desktop shortcut:
 
-- `C:\Users\至亲\Desktop\NexaChat.lnk` exists and still points to `D:\NexaChat\node_modules\electron\dist\electron.exe`.
+- `C:\Users\鑷充翰\Desktop\NexaChat.lnk` exists and still points to `D:\NexaChat\node_modules\electron\dist\electron.exe`.
 - Arguments remain `"D:\NexaChat"`.
 - Working directory remains `D:\NexaChat`.
 - Icon remains `D:\NexaChat\assets\app-icon.ico,0`.
@@ -1034,7 +1034,7 @@ Verification completed:
 
 Desktop shortcut:
 
-- `C:\Users\至亲\Desktop\NexaChat.lnk` exists and still points to `D:\NexaChat\node_modules\electron\dist\electron.exe`.
+- `C:\Users\鑷充翰\Desktop\NexaChat.lnk` exists and still points to `D:\NexaChat\node_modules\electron\dist\electron.exe`.
 - Arguments remain `"D:\NexaChat"`.
 - Working directory remains `D:\NexaChat`.
 - Icon remains `D:\NexaChat\assets\app-icon.ico,0`.
@@ -1086,7 +1086,7 @@ Verification completed:
 
 Desktop shortcut:
 
-- `C:\Users\至亲\Desktop\NexaChat.lnk` exists and still points to `D:\NexaChat\node_modules\electron\dist\electron.exe`.
+- `C:\Users\鑷充翰\Desktop\NexaChat.lnk` exists and still points to `D:\NexaChat\node_modules\electron\dist\electron.exe`.
 - Arguments remain `"D:\NexaChat"`.
 - Working directory remains `D:\NexaChat`.
 - Icon remains `D:\NexaChat\assets\app-icon.ico,0`.
@@ -1106,13 +1106,13 @@ Parallel execution lanes:
 
 - Group A: audited and updated navigation IA, route aliases, sidebar active state, expansion/collapse, and local expansion persistence.
 - Group B: rebuilt AppShell, topbar, global visual tokens, spacing, surfaces, responsive grids, and no-horizontal-overflow rules.
-- Group C: rewrote the workspace overview into four product areas: 当前概览, 核心指标, 操作入口, 最近活动.
+- Group C: rewrote the workspace overview into four product areas: 褰撳墠姒傝, 鏍稿績鎸囨爣, 鎿嶄綔鍏ュ彛, 鏈€杩戞椿鍔?
 - Group D: updated UI smoke and Electron smoke coverage, ran verification, captured responsive screenshots, rechecked the desktop shortcut, and prepared Git closure.
 
 Key UI changes:
 
 - Sidebar now renders only product/module/function names. It no longer displays `tab.route`, `/workspace/...`, or other internal app routes.
-- Sidebar first-level modules remain the required eight: 工作台, 对话, 模型, 知识库, 工具与 Agent, 本地网关, 数据配置, 设置与安全.
+- Sidebar first-level modules remain the required eight: 宸ヤ綔鍙? 瀵硅瘽, 妯″瀷, 鐭ヨ瘑搴? 宸ュ叿涓?Agent, 鏈湴缃戝叧, 鏁版嵁閰嶇疆, 璁剧疆涓庡畨鍏?
 - Sidebar child entries are driven from `src/shared/navigation.ts`, show route-aware active state, use stable icons/stage dots, and persist expanded module IDs in `localStorage`.
 - Topbar now keeps the current workspace, default model, gateway status, chat entry, Provider entry, Model entry, and log shortcut without clipping at 1280/1440/1920 widths.
 - Workbench overview now uses real `AppSnapshot` data and links to real feature pages for chat, Provider, Model, Gateway Key, import, and logs.
@@ -1131,7 +1131,7 @@ Verification on 2026-05-14:
 - `lint`: no script exists in `package.json`.
 - `smoke`: no generic `smoke` script exists in `package.json`; `test:ui-smoke` and `test:electron-smoke` are the project equivalents.
 - Responsive visual audit: passed at 1280, 1440, and 1920 widths with screenshots under ignored `test-results/ui-shell-redesign/`; no console errors, no route leak, and no horizontal overflow in `.app-shell`, `.topbar`, `.content-grid`, `.workbench-overview`, or `.sidebar`.
-- Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"` as the app argument, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`.
+- Desktop shortcut check: `C:\Users\鑷充翰\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"` as the app argument, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico,0`.
 
 ## 2026-05-14 UI Navigation Refactor
 
@@ -1149,7 +1149,7 @@ Key changes:
 Follow-up visibility fix after review:
 
 - Reworked `ModuleSubNav` from a thin horizontal tab row into a visible module-level secondary navigation panel.
-- Added the "二级导航" summary, current subpage name/description, larger subpage cards, clearer active indicator, and permission/stage cues.
+- Added the "浜岀骇瀵艰埅" summary, current subpage name/description, larger subpage cards, clearer active indicator, and permission/stage cues.
 - Historical note: this older secondary navigation panel direction was superseded by the 2026-05-16 Product UI Redesign Actual Closure, which keeps sidebar child navigation as the only second-level navigation surface.
 - Ran a local visual smoke screenshot check for `/gateway/keys`, confirming the new panel is visible in the running renderer.
 
@@ -1162,7 +1162,7 @@ Current verified results:
 - `npm.cmd run verify`: passed.
 - `npm.cmd run test:electron-smoke`: passed; Electron shell rendered.
 - `lint`: no script exists in `package.json`.
-- Desktop shortcut check: `C:\Users\至亲\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"` as the app argument, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico`. No project shortcut creation script exists under `scripts/`, so no shortcut was regenerated.
+- Desktop shortcut check: `C:\Users\鑷充翰\Desktop\NexaChat.lnk` targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, passes `"D:\NexaChat"` as the app argument, uses `D:\NexaChat` as working directory, and points to `D:\NexaChat\assets\app-icon.ico`. No project shortcut creation script exists under `scripts/`, so no shortcut was regenerated.
 
 ## 2026-05-14 Operation Logic And Navigation Refactor
 
@@ -1170,21 +1170,21 @@ This round rebuilt NexaChat's operation logic and navigation architecture for th
 
 New first-level sidebar structure:
 
-- 工作台: `/workspace/overview`, `/workspace/activity`, `/workspace/health`.
-- 对话: `/chat/conversations`, `/chat/playground`, `/chat/context`.
-- 模型: `/models/providers`, `/models/catalog`, `/models/router`.
-- 知识库: `/knowledge/files`, `/knowledge/chunks`, `/knowledge/retrieval`.
-- 工具与 Agent: `/tools/mcp`, `/tools/agents`, `/tools/runs`.
-- 本地网关: `/gateway/overview`, `/gateway/keys`, `/gateway/logs`, `/gateway/docs`.
-- 数据配置: `/data/import`, `/data/snapshots`, `/data/diagnostics`, `/data/cleanup`.
-- 设置与安全: `/settings/preferences`, `/settings/security`, `/settings/audit`, `/settings/about`.
+- 宸ヤ綔鍙? `/workspace/overview`, `/workspace/activity`, `/workspace/health`.
+- 瀵硅瘽: `/chat/conversations`, `/chat/playground`, `/chat/context`.
+- 妯″瀷: `/models/providers`, `/models/catalog`, `/models/router`.
+- 鐭ヨ瘑搴? `/knowledge/files`, `/knowledge/chunks`, `/knowledge/retrieval`.
+- 宸ュ叿涓?Agent: `/tools/mcp`, `/tools/agents`, `/tools/runs`.
+- 鏈湴缃戝叧: `/gateway/overview`, `/gateway/keys`, `/gateway/logs`, `/gateway/docs`.
+- 鏁版嵁閰嶇疆: `/data/import`, `/data/snapshots`, `/data/diagnostics`, `/data/cleanup`.
+- 璁剧疆涓庡畨鍏? `/settings/preferences`, `/settings/security`, `/settings/audit`, `/settings/about`.
 
 What changed:
 
 - Replaced the flat/ambiguous sidebar with expandable module groups and route-highlighted child entries.
 - Moved from `dashboard` to `workspace` as the canonical workbench module while preserving legacy route aliases.
 - Rewrote module page boundaries so each route owns one primary job instead of mixing configuration, logs, future placeholders, and execution controls.
-- Kept Provider API keys under 模型, Gateway API keys under 本地网关, Knowledge records under 知识库, Agent dry-run under 工具与 Agent, and UI/security preferences under 设置与安全.
+- Kept Provider API keys under 妯″瀷, Gateway API keys under 鏈湴缃戝叧, Knowledge records under 鐭ヨ瘑搴? Agent dry-run under 宸ュ叿涓?Agent, and UI/security preferences under 璁剧疆涓庡畨鍏?
 - Removed planned/reserved items from the main action path; environment-limited surfaces now explain the missing dependency without exposing fake execution buttons.
 - Updated `EmptyState` so it only renders an action when a real handler exists.
 - Updated unit, Playwright UI smoke, and Electron smoke checks to assert the new IA and routing contract.
@@ -1219,7 +1219,7 @@ Verification on 2026-05-14:
 
 Desktop shortcut result:
 
-- `C:\Users\至亲\Desktop\NexaChat.lnk` is valid for the current project. It targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, uses arguments `"D:\NexaChat"`, working directory `D:\NexaChat`, and icon `D:\NexaChat\assets\app-icon.ico,0`.
+- `C:\Users\鑷充翰\Desktop\NexaChat.lnk` is valid for the current project. It targets `D:\NexaChat\node_modules\electron\dist\electron.exe`, uses arguments `"D:\NexaChat"`, working directory `D:\NexaChat`, and icon `D:\NexaChat\assets\app-icon.ico,0`.
 
 Git result:
 
@@ -1241,7 +1241,7 @@ The user required agent assistance with at least three agents running and at lea
 
 - Electron + React + TypeScript + Vite app skeleton.
 - One-window desktop shell with default size 1280 x 820 and minimum 1040 x 680.
-- Eight-module UI: 工作台, 对话, 模型, 知识库, 工具与 Agent, 本地网关, 数据配置, 设置与安全.
+- Eight-module UI: 宸ヤ綔鍙? 瀵硅瘽, 妯″瀷, 鐭ヨ瘑搴? 宸ュ叿涓?Agent, 鏈湴缃戝叧, 鏁版嵁閰嶇疆, 璁剧疆涓庡畨鍏?
 - Config-driven navigation and second-level module tabs with honest feature-stage labels.
 - Main-process SQLite schema and store for core local data.
 - Safe preload IPC bridge.
@@ -1323,7 +1323,7 @@ New UI architecture:
 
 - `AppFrame` now owns the compact desktop shell: narrow module rail, module switcher, main work surface, and command bar.
 - Core reusable primitives now live around `ConfigList`, `ConfigDetail`, `ToolSection`, `StatusDot`, `StatusPillLite`, `InlineNotice`, `CommandButton`, `DataRows`, `ActivityList`, `ChatInput`, and `MessageBubble`.
-- Pages are rebuilt around “current configuration + executable action + status feedback” instead of admin grids.
+- Pages are rebuilt around 鈥渃urrent configuration + executable action + status feedback鈥?instead of admin grids.
 
 Rebuilt page scope:
 
@@ -1422,7 +1422,7 @@ Verification results:
 - `npm.cmd run test`: passed, 19 files / 63 tests.
 - `npm.cmd run build`: passed.
 - `npm.cmd run test:electron-smoke`: passed.
-- `npm.cmd run test:shortcut-readback:packaged`: passed; `C:\Users\至亲\Desktop\NexaChat.lnk` still points to the packaged NexaChat entry.
+- `npm.cmd run test:shortcut-readback:packaged`: passed; `C:\Users\鑷充翰\Desktop\NexaChat.lnk` still points to the packaged NexaChat entry.
 - `lint`, `test:ui`, `smoke`, and `electron:smoke` scripts do not exist in `package.json`, so they were not run.
 
 Known notes:
@@ -1441,7 +1441,7 @@ Scope completed:
 - The plan is based on the current source state and the user's selected direction: chat-first, simple home, ordinary + advanced mode, Gateway as a core module, Agent as an experimental module, and cleanup around the chat mainline first.
 - The plan records the current factual baseline as 7 first-level modules: Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings.
 - The plan records the current root route fact: `/` resolves to `/chat/conversations`.
-- The plan explicitly treats `NexaStore` in `src/main/services/store.ts` as the current centralized aggregate service, with `chat-service`, `router-service`, `security-service`, and related services documented only as future extraction targets.
+- Historical planning note: the 2026-05-16 plan treated `NexaStore` as the then-current aggregate and service names as future extraction targets. This is now superseded by the 2026-05-17 service split.
 - The plan does not claim PDF, Office, OCR, external vector DB, arbitrary MCP execution, Agent sandbox, signed installer hardening, or `safeStorage` fallback strong encryption as current completed capability.
 
 Next recommended execution:
@@ -1451,22 +1451,20 @@ Next recommended execution:
 
 ## 2026-05-16 Architecture Mainline Implementation Round
 
-本轮目标:
+鏈疆鐩爣:
 
-- 按 `docs/build-plans/00-modular-refactor-master-plan/architecture-mainline-iteration-plan.md` 推进 Phase 0-3，并补充 Phase 4 验证、Phase 5 留痕、Phase 6 Git 收尾。
-- 将源码、路由、UI、Gateway 契约、Store 拆分准备、测试和文档继续收敛到 chat-first 主线。
-
-实际项目根目录:
+- 鎸?`docs/build-plans/00-modular-refactor-master-plan/architecture-mainline-iteration-plan.md` 鎺ㄨ繘 Phase 0-3锛屽苟琛ュ厖 Phase 4 楠岃瘉銆丳hase 5 鐣欑棔銆丳hase 6 Git 鏀跺熬銆?- 灏嗘簮鐮併€佽矾鐢便€乁I銆丟ateway 濂戠害銆丼tore 鎷嗗垎鍑嗗銆佹祴璇曞拰鏂囨。缁х画鏀舵暃鍒?chat-first 涓荤嚎銆?
+瀹為檯椤圭洰鏍圭洰褰?
 
 - `git rev-parse --show-toplevel`: `D:/NexaChat`.
 
-当前分支和起始 commit:
+褰撳墠鍒嗘敮鍜岃捣濮?commit:
 
 - Branch: `main`.
 - Start commit: `f555185 docs: align architecture documentation with chat-first mainline`.
 - User-provided background commit was `8ba7b9e316c92864088d97752a689d6fa2313c85`; the local branch had already advanced to `f555185` before this round began.
 
-修改文件列表:
+淇敼鏂囦欢鍒楄〃:
 
 - `src/shared/gatewayRuntime.ts`
 - `src/shared/types.ts`
@@ -1500,26 +1498,26 @@ Next recommended execution:
 - `task_plan.md`
 - `PROJECT_PROGRESS.md`
 
-完成的 Phase:
+瀹屾垚鐨?Phase:
 
-- Phase 0: Active docs were updated to 7 modules, chat-first, `/ -> /chat/conversations`, Gateway core, Tools/Agent/MCP experimental, Knowledge text-like only, and `NexaStore` aggregate current state. Historical docs received current relevance notes instead of being deleted.
+- Phase 0: Active docs were updated to 7 modules, chat-first, `/ -> /chat/conversations`, Gateway core, Tools/Agent/MCP experimental, Knowledge text-like only, and the then-current `NexaStore` aggregate state. This line is historical and is superseded by the 2026-05-17 service split.
 - Phase 1: Kept `/` routed to `/chat/conversations`; implemented a Chat-first lightweight task entry inside Chat with quick actions for new chat, model selection, knowledge Q&A, Gateway status, config import, and preferences. This is not a standalone simple home route.
 - Phase 2: Separated Gateway available endpoints from reserved endpoints, persisted `advancedMode` in shared UI preferences, gated Chat technical context panel behind advanced mode, and kept 7-module navigation tests.
 - Phase 3: Added pure `STORE_BOUNDARY_MAP` metadata and `docs/architecture/store-facade-boundaries.md` to prepare future service extraction without changing schema behavior or IPC contracts.
 
-没完成的 Phase 和原因:
+娌″畬鎴愮殑 Phase 鍜屽師鍥?
 
 - A standalone simple home route was not implemented because the safer current step is a Chat lightweight entry while preserving `/ -> /chat/conversations`. It should only be added later with explicit route, UI smoke, Electron smoke, README, and progress updates.
-- Full service extraction from `NexaStore` was not performed because the plan calls for low-risk preparation first and forbids a high-risk big-bang rewrite.
+- Historical note: full service extraction from `NexaStore` was not performed in that 2026-05-16 preparation round; it was completed later by the 2026-05-17 service split.
 
-真实能力边界:
+鐪熷疄鑳藉姏杈圭晫:
 
 - Current Gateway available endpoints are `/v1/models`, `/v1/chat/completions`, and `/v1/embeddings`; `/v1/responses` remains reserved / 501.
 - Knowledge Base remains text-like import, parsing, chunking, lexical embedding, retrieval preview, rebuild/delete, and citations. PDF, Office, OCR, external vector DB, rerank, and full RAG evaluation are future work.
 - Tools / Agent / MCP remains registration, permissions, agent definitions, dry-run, fixture execution, approvals, execution steps, and trace events. Arbitrary MCP executor, arbitrary code execution, and release-grade Agent sandbox are future work.
-- `NexaStore` remains the current aggregate service.
+- Historical note: `NexaStore` remained the aggregate service in that earlier round; current `store.ts` is now a thin compatibility facade.
 
-运行过的验证命令和结果:
+杩愯杩囩殑楠岃瘉鍛戒护鍜岀粨鏋?
 
 - `npm.cmd run typecheck`: passed.
 - `npm.cmd run test -- tests/app.test.tsx tests/gateway-runtime.test.ts tests/store-boundaries.test.ts`: passed, 3 files / 15 tests.
@@ -1533,13 +1531,13 @@ Next recommended execution:
 - `npm.cmd run verify:release`: passed, including typecheck, full unit tests, build, UI smoke, Electron smoke, package release, package smoke, installer smoke, packaged shortcut readback, scanner suite, docs scan, and `git diff --check`.
 - `git diff --check`: passed with LF/CRLF conversion warnings only.
 
-已知风险:
+宸茬煡椋庨櫓:
 
 - Historical docs and old progress entries still contain legacy terms by design; they now need current relevance notes when they are likely to mislead.
 - `ui_preferences` migration is additive, but existing user databases still depend on runtime migration order staying intact.
 - Chat quick actions are intentionally lightweight; they do not replace a future standalone simple home.
 
-后续建议:
+鍚庣画寤鸿:
 
 - If standalone simple home remains desired, implement it as a separate chat-first route decision with source, tests, docs, and smoke coverage in one round.
 - Continue service extraction by moving pure validation/mappers/query helpers first, while keeping IPC contracts stable.

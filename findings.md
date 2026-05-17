@@ -1,5 +1,14 @@
 # NexaChat Build Findings
 
+## Main-Process Architecture Service Split Findings
+
+- The safest full split path for this repo was service-mixin composition over one shared `ServiceContext`, because it preserves the existing aggregate `store` surface for IPC/preload while moving public domain behavior out of `store.ts`.
+- `store.ts` can now stay as a compatibility import target without owning business logic. Real methods live in service files and do not call back into `store.ts`.
+- Repository extraction is safest as an incremental read/list migration first. Moving all write SQL at once would create transaction and behavior-equivalence risk for Chat send, Provider delete, Gateway auth quota/rate, Data restore/rollback, encrypted backup, and audit hash-chain writes.
+- The OpenAI-compatible adapter belongs under `src/main/adapters`; keeping a compatibility re-export at the old services path avoids breaking historical imports while new service imports target the adapter layer.
+- Shared contracts can be introduced as re-export slices over current `src/shared/types.ts` and runtime authority files. This creates clearer imports without inventing new protocol shapes or duplicating contracts.
+- Existing docs that say `NexaStore` is the current centralized aggregate are now stale current-tense facts and should be updated in active docs. Historical records can remain when clearly marked as history.
+
 ## Full App Round 0 Findings
 
 - `using-superpowers` is available and was read; `using-superpower` is not available as a skill path.

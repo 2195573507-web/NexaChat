@@ -588,6 +588,37 @@
   align-items: flex-start;
 }
 
+.provider-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.provider-row-main,
+.provider-row-status,
+.provider-row-actions {
+  min-width: 0;
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.provider-row-main {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.provider-row-main > span:first-child {
+  min-width: min(260px, 100%);
+}
+
+.provider-row-status {
+  justify-content: flex-end;
+}
+
+.provider-row-actions {
+  justify-content: flex-end;
+}
+
 .font-kaiti .message-content p,
 .font-kaiti .chat-composer textarea {
   font-family: var(--font-message-writing);
@@ -636,6 +667,22 @@
 
   .composer-context select {
     max-width: none;
+  }
+
+  .field-action-row {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .field-action-row > button,
+  .provider-row-actions > button {
+    width: 100%;
+  }
+
+  .provider-row-main,
+  .provider-row-status,
+  .provider-row-actions {
+    justify-content: flex-start;
   }
 }
 

@@ -1,10 +1,10 @@
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+﻿import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   ProviderRuntimeError,
   invokeOpenAiCompatibleChat,
   testOpenAiCompatibleProvider,
-} from '../src/main/services/openAiCompatibleAdapter';
+} from '../src/main/adapters/openAiCompatibleAdapter';
 import {
   PROVIDER_RUNTIME_ERROR_CODES,
   PROVIDER_RUNTIME_POLICY,

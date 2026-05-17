@@ -113,34 +113,33 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
         />
         <div className="tool-layout">
         <ConfigList title={t('models.create.title')} description={activeTab.description}>
-          <ToolSection
-            title={t('models.modelName')}
-            description={t('models.modelName.help')}
-            actions={<CommandButton icon={<DownloadCloud size={14} />} disabled={!selectedProviderId || modelFetchState === 'loading'} onClick={() => onAction(t('models.toast.fetched'), async () => {
-              setModelFetchState('loading');
-              setModelFetchError('');
-              try {
-                const options = await api.fetchProviderModels(selectedProviderId);
-                setModelOptions(options);
-                setModelFetchState('ready');
-                const firstNewModel = options.find((option) => !existingModelNames.has(option.id)) ?? options[0];
-                if (firstNewModel) setModelName(firstNewModel.id);
-              } catch (error) {
-                setModelOptions([]);
-                setModelFetchState('error');
-                setModelFetchError(error instanceof Error ? error.message : String(error));
-                throw error;
-              }
-            })}>{t('models.fetchModels')}</CommandButton>}
-          >
+          <ToolSection title={t('models.modelName')} description={t('models.modelName.help')}>
             <div className="form-stack">
-            <Field label={t('models.columns.provider')}>
-                <select value={selectedProviderId} onChange={(event) => setSelectedProviderId(event.target.value)}>
-                  {snapshot.providers.map((provider) => (
-                  <option value={provider.id} key={provider.id}>{provider.name}</option>
-                  ))}
-                </select>
-              </Field>
+              <div className="field-action-row">
+                <Field label={t('models.columns.provider')}>
+                  <select value={selectedProviderId} onChange={(event) => setSelectedProviderId(event.target.value)}>
+                    {snapshot.providers.map((provider) => (
+                      <option value={provider.id} key={provider.id}>{provider.name}</option>
+                    ))}
+                  </select>
+                </Field>
+                <CommandButton icon={<DownloadCloud size={14} />} disabled={!selectedProviderId || modelFetchState === 'loading'} onClick={() => onAction(t('models.toast.fetched'), async () => {
+                  setModelFetchState('loading');
+                  setModelFetchError('');
+                  try {
+                    const options = await api.fetchProviderModels(selectedProviderId);
+                    setModelOptions(options);
+                    setModelFetchState('ready');
+                    const firstNewModel = options.find((option) => !existingModelNames.has(option.id)) ?? options[0];
+                    if (firstNewModel) setModelName(firstNewModel.id);
+                  } catch (error) {
+                    setModelOptions([]);
+                    setModelFetchState('error');
+                    setModelFetchError(error instanceof Error ? error.message : String(error));
+                    throw error;
+                  }
+                })}>{t('models.fetchModels')}</CommandButton>
+              </div>
               {selectableModelOptions.length > 0 ? (
                 <Field label={t('models.availableModels')}>
                   <select value={modelName} onChange={(event) => setModelName(event.target.value)}>
@@ -336,14 +335,19 @@ function ProviderRow({
   const { t } = useI18n();
   const confirming = pendingDeleteProviderId === provider.id;
   return (
-    <div className={`config-row ${isDefault ? 'is-active' : ''}`}>
-      <span>
-        <strong>{provider.name}</strong>
-        <small>{providerTypeLabel(provider.type, t)} / {provider.baseUrl || t('common.notConfigured')}</small>
-      </span>
-      <span className="row-actions">
-        <StatusPillLite label={provider.secretRef ? t('common.saved') : t('common.notConfigured')} state={provider.secretRef ? 'ready' : 'warning'} />
-        <StatusPillLite label={statusLabel(provider.healthStatus, t)} state={healthState(provider.healthStatus)} />
+    <div className={`config-row provider-row ${isDefault ? 'is-active' : ''}`}>
+      <div className="provider-row-main">
+        <span>
+          <strong>{provider.name}</strong>
+          <small>{providerTypeLabel(provider.type, t)} / {provider.baseUrl || t('common.notConfigured')}</small>
+        </span>
+        <span className="provider-row-status">
+          <StatusPillLite label={provider.secretRef ? t('common.saved') : t('common.notConfigured')} state={provider.secretRef ? 'ready' : 'warning'} />
+          <StatusPillLite label={statusLabel(provider.healthStatus, t)} state={healthState(provider.healthStatus)} />
+        </span>
+      </div>
+      <span className="provider-row-actions" aria-label={`${provider.name} ${t('chat.message.actions.aria')}`}>
+        <CommandButton icon={<DownloadCloud size={14} />} onClick={() => onAction(t('models.toast.fetched'), () => api.fetchProviderModels(provider.id))}>{t('models.fetchModels')}</CommandButton>
         <CommandButton icon={<Activity size={14} />} onClick={() => onAction(t('models.toast.tested'), () => api.testProvider(provider.id))}>{t('models.testConnection')}</CommandButton>
         <CommandButton
           variant={confirming ? 'danger' : 'default'}

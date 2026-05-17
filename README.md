@@ -3,7 +3,7 @@
 NexaChat is a chat-first, local-first, multi-model AI desktop workbench built with Electron, React, TypeScript, Vite, and SQLite.
 
 Desktop app name: NexaChat  
-Current status: Round 0-15 implementation history exists, but the active architecture line is the chat-first 7-module mainline documented in `docs/build-plans/00-modular-refactor-master-plan/architecture-mainline-iteration-plan.md`.
+Current status: Round 0-15 implementation history exists, and the active architecture line is now the chat-first 7-module service split documented in `docs/build-plans/00-modular-refactor-master-plan/architecture-service-split-completion-report.md`.
 
 ## Current Architecture Facts
 
@@ -14,7 +14,7 @@ Current status: Round 0-15 implementation history exists, but the active archite
 - Ordinary mode organizes work by user tasks. Advanced mode persists in UI preferences and reveals technical details without creating a second implementation path.
 - Gateway is an independent core module, not an internal-only implementation detail.
 - Agent, Tools, and MCP are experimental capabilities and must not be described as unrestricted execution.
-- `NexaStore` is still the current centralized aggregate service in `src/main/services/store.ts`; service splitting is a target route, not the current source fact.
+- `src/main/services/store.ts` is now a thin compatibility export over `serviceRegistry`; domain logic lives in main-process services such as `ChatService`, `ProviderService`, `ModelService`, `GatewayService`, `KnowledgeService`, `DataService`, `SecurityService`, `AuditService`, and `SettingsService`.
 
 ## Current Real Capabilities
 
@@ -23,7 +23,7 @@ Current status: Round 0-15 implementation history exists, but the active archite
 - Chat-first entry with quick actions for new chat, model selection, knowledge Q&A, Gateway status, config import, and preferences while keeping `/` routed to `/chat/conversations`.
 - Unified authorities for navigation, IPC, API contracts, i18n, theme tokens, Provider runtime, Gateway runtime, Knowledge runtime, execution runtime, security, data mobility, observability, desktop entry, and quality gates.
 - Live Chinese/English switching, dark/light/system theme switching, compact flat desktop-tool styling, and UI smoke coverage for route leakage and horizontal overflow.
-- Main-process SQLite schema and local Store for providers, models, conversations, message chunks, request logs, usage, Gateway keys/logs, knowledge files/chunks/lexical embeddings, execution runs, audit logs, backups, observability records, and UI preferences.
+- Main-process SQLite schema plus service/repository boundaries for providers, models, conversations, message chunks, request logs, usage, Gateway keys/logs, knowledge files/chunks/lexical embeddings, execution runs, audit logs, backups, observability records, and UI preferences.
 - Safe preload IPC bridge with centralized channel authority and permission enforcement; the renderer does not access SQLite or raw secrets directly.
 - OpenAI-compatible Provider adapter chain for Provider test, Chat, Gateway chat completions, retry, timeout, cancellation, request logs, usage, and audit surfaces.
 - Local OpenAI-compatible Gateway with `/v1/models`, `/v1/chat/completions`, and `/v1/embeddings`. `/v1/responses` is reserved and returns 501 in this build.
@@ -46,7 +46,7 @@ Current status: Round 0-15 implementation history exists, but the active archite
 - `/v1/responses` is not complete; it is reserved and should be documented as 501 behavior.
 - Tools/Agent/MCP does not execute arbitrary real MCP tools, arbitrary code, or a release-grade Agent sandbox.
 - Release-grade signed installer security and broad external sandbox guarantees are not current facts.
-- Future service names such as ChatService, ModelService, GatewayService, KnowledgeService, ToolService, DataService, SecurityService, and ObservabilityService are extraction targets, while `NexaStore` remains the current aggregate source.
+- Repository extraction is intentionally incremental: stable list/read queries are in repository classes, while high-risk multi-table writes and transaction-sensitive helpers remain in the owning service/context until they can be moved under focused tests.
 
 ## Release Gate
 
@@ -93,6 +93,7 @@ npm.cmd run test:desktop-entry
 - Round execution matrix: `docs/implementation/full-app-round-execution-matrix.md`
 - Master build plan: `docs/build-plans/00-master-build-plan.md`
 - Active execution plan: `task_plan.md`
+- Service split completion report: `docs/build-plans/00-modular-refactor-master-plan/architecture-service-split-completion-report.md`
 - Build findings: `findings.md`
 - Progress log: `progress.md`
 - UI/UX master plan: `docs/design/00-ui-ux-master-plan.md`

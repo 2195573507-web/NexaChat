@@ -1,5 +1,21 @@
 # NexaChat Build Progress
 
+## 2026-05-17 Main-Process Architecture Service Split
+
+- Reconfirmed project root as `D:/NexaChat`, branch `main`, upstream `origin/main`, and baseline commit `decac4733686051dfcd6d17e3c48445b062c1e35`.
+- Rechecked requested skills: `using-superpowers` exists and was read; singular `using-superpower` is not installed.
+- Recorded the pre-existing dirty Provider/Model UI files before architecture edits and avoided overwriting them.
+- Added the required execution plan at `docs/build-plans/00-modular-refactor-master-plan/architecture-service-split-execution-plan.md`.
+- Split `src/main/services/store.ts` into a thin compatibility export over `serviceRegistry`.
+- Added `serviceRegistry.ts`, `serviceContext.ts`, and real domain services for Chat, Provider, Model, Gateway, Knowledge, Data, Settings, Security, Audit, Tool, Observability, and Dashboard.
+- Moved the OpenAI-compatible adapter into `src/main/adapters/openAiCompatibleAdapter.ts` and kept the old services path as a compatibility re-export.
+- Added shared contract re-export files under `src/shared/contracts/`.
+- Added repository classes plus `repositoryContext.ts`; stable list/read queries now route through repositories that share the same database connection.
+- Updated `docs/architecture/store-facade-boundaries.md`, README files, `task_plan.md`, `PROJECT_PROGRESS.md`, and added `architecture-service-split-completion-report.md`.
+- Ran `npm.cmd run typecheck`: passed.
+- Ran `npm.cmd run test`: passed, 22 files / 80 tests.
+- Final build/smoke/diff verification, commit, and push remain pending in this section until closeout.
+
 ## 2026-05-14 Full App Round 0 Execution
 
 - Confirmed real project root with `git rev-parse --show-toplevel`: `D:/NexaChat`.

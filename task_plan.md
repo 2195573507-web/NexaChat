@@ -13,7 +13,7 @@ Current architecture facts:
 - Ordinary mode should follow user tasks; advanced mode should reveal technical details without creating a second implementation path.
 - Gateway is an independent core module.
 - Agent / Tools / MCP are experimental until real execution, protocol hardening, sandboxing, approval, and audit boundaries are complete.
-- `NexaStore` is still the centralized aggregate service. Service splitting is a target route, not the current source fact.
+- `src/main/services/store.ts` is now a thin compatibility facade over `serviceRegistry`; domain logic is owned by main-process services.
 
 ## Scope Source
 
@@ -72,6 +72,7 @@ At least three agents were launched concurrently before implementation work cont
 - Full App Round 15 Test system/quality gates/release convergence: complete as implementation, verification, closeout, push, and remote confirmation; `npm.cmd run verify:release` passed; delivery commit `938d017ceede16475369a537227b86be7096b9cc`; closeout commit `4715788e416f97b79328413c3821287cfcafce0b`.
 - Architecture mainline implementation round: complete on 2026-05-16. Scope included Chat lightweight task entry, persisted advanced mode, Gateway available/reserved endpoint separation, Store facade boundary metadata, docs cleanup, tests, commit, and push. Delivery commit `cb4a81f1debadeb7a966ea7844e56ea6805ec14a` was pushed and confirmed on `origin/main`. A standalone simple home is still future unless later implemented as a separate source/test/docs change.
 - 2026-05-17 dialog-scope long-run iteration: implementation and documentation are in progress. Scope is limited to Provider deletion, model list auto-fetch, Gateway token usage trend, Chat renderer-side progressive reveal, localization soft-coding, tests, docs, commit, and push. It must not be treated as real backend streaming or fake Gateway token data.
+- 2026-05-17 main-process service split: implementation is in progress. Scope is limited to splitting current Store business logic into real domain services, preserving IPC/preload/renderer compatibility, keeping the 7-module chat-first mainline, and documenting repository extraction honestly.
 - Phase 1: complete.
 - Phase 2: complete.
 - Phase 3: complete.
@@ -87,7 +88,7 @@ At least three agents were launched concurrently before implementation work cont
 
 - Initialized Electron + React + TypeScript + Vite.
 - Implemented shared navigation metadata. Current source facts have since moved to exactly 7 first-level modules: Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings.
-- Implemented SQLite schema and main-process store for core local data.
+- Implemented SQLite schema, service registry, domain services, and repository/context boundaries for core local data.
 - Implemented Provider, Model, Router, Chat, request log, usage, audit, gateway key, Knowledge file, MCP registry, Agent definition, snapshot, diagnostics, and UI preferences actions.
 - Implemented safe preload IPC bridge.
 - Implemented local gateway endpoints `/v1/models`, `/v1/chat/completions`, `/v1/embeddings`, and reserved `/v1/responses`; `/v1/chat/completions` now reuses the real Provider adapter chain instead of local response generation.
@@ -96,6 +97,7 @@ At least three agents were launched concurrently before implementation work cont
 - Implemented the Round 12 data mobility model with versioned manifests, conflict records, encrypted backup records, restore preflight, migration records, rollback records, redacted export packages, and structured Data UI pages.
 - Implemented renderer shell, chat, model center, knowledge, tools/MCP/Agent, gateway, data config, and settings/security pages. Dashboard/Workspace are historical planning contexts, not current first-level modules.
 - Implemented browser fallback API for Vite/Playwright tests.
+- Implemented the main-process service split: `store.ts` is now a compatibility export, `serviceRegistry.ts` composes services, `serviceContext.ts` owns shared database context/helpers, stable list queries are routed through repositories, and high-risk transaction writes remain in owning services/context until focused repository tests are added.
 - Added Vitest and Playwright smoke tests.
 - Completed Iteration 01 core-flow closure: workspace/default model status, chat route trace, Provider key input and actionable test failures, gateway one-time key display/revoke, knowledge retry/failure states, MCP permission approval, Agent dry-run preview, request/usage/gateway/audit logs, import manifest validation and restore preview.
 - Completed Iteration 01 UI closure: tighter desktop-tool layout, default-model-aware topbar, unified status badges, table long-text handling, earlier right-rail collapse, chat responsive constraints, and 1040 x 680 overflow smoke coverage.

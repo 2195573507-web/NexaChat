@@ -4,7 +4,9 @@ Date: 2026-05-17
 
 Project root confirmed by `git rev-parse --show-toplevel`: `D:/NexaChat`.
 
-Scope: project problem detection, file-structure optimization audit, and low-risk documentation cleanup only. This report does not migrate source structure, remove tracked files, or rewrite runtime behavior.
+Scope: project problem detection, file-structure optimization audit, and low-risk documentation cleanup only. This report did not migrate source structure, remove tracked files, or rewrite runtime behavior.
+
+Current relevance note, 2026-05-17: this audit is a historical pre-service-split baseline. The current service split is recorded in `architecture-service-split-completion-report.md`; `src/main/services/store.ts` is now a thin compatibility export over `serviceRegistry`, not the current business aggregate.
 
 ## 1. Current Project Structure Summary
 
@@ -36,7 +38,7 @@ Important root files and directories:
 
 Size and responsibility hotspots:
 
-- `src/main/services/store.ts`: 4192 lines; current aggregate owner for providers, models, chat, Gateway keys/logs, knowledge, execution, data mobility, security, observability, audit, and secrets.
+- Historical pre-split fact: `src/main/services/store.ts` was 4192 lines and was the aggregate owner for providers, models, chat, Gateway keys/logs, knowledge, execution, data mobility, security, observability, audit, and secrets. Current fact: `store.ts` is now a thin compatibility export.
 - `src/shared/i18n.ts`: 2180 lines; bilingual dictionary and translation helper authority.
 - `src/renderer/mockApi.ts`: 2073 lines; browser/test behavior mirror of the preload API.
 - `PROJECT_PROGRESS.md`: 1561 lines; long-running ledger mixing current state and historical closure notes.
@@ -55,7 +57,7 @@ Ignored generated directories currently present:
 - Tools / Agent / MCP are experimental modules.
 - Knowledge Base currently supports text-like import, parsing, chunking, lexical embedding, retrieval preview, rebuild/delete, and citations. It does not currently support PDF, Office, OCR, or external vector databases.
 - `/v1/responses` is reserved and returns 501. It must not be documented as completed.
-- `NexaStore` is still the current centralized aggregate service. Service splitting is a planned extraction path, not a completed source fact.
+- Historical pre-split fact: `NexaStore` was the centralized aggregate service during this audit. Current fact: the service split has since landed and `store.ts` is only a compatibility facade.
 - Workspace/Dashboard are historical planning contexts, not current first-level modules or current entry points.
 
 ## 3. Issue List
