@@ -1,5 +1,14 @@
 # NexaChat Build Progress
 
+## 2026-05-17 App Fluidity and Motion Repair Loop
+
+- Continued from the already-committed audit document at `f03c77b90ed5663245faa53d139c9809a815bc1d`.
+- Reconfirmed real project root with `git rev-parse --show-toplevel`: `D:/NexaChat`.
+- Reconfirmed branch/upstream as `main` tracking `origin/main`; startup working tree was clean after the audit commit.
+- Rechecked required skill names: `using-superpower` is unavailable and `using-superpowers` is available.
+- Loaded long-run/planning/UI skill guidance and project memory. User-provided acceptance criteria are treated as the implementation design, so no extra design-approval stop is introduced.
+- Phase 1 scope started: motion tokens, reduced-motion wiring, local async pending, typed IPC events, streaming/pagination/task-progress follow-up phases.
+
 ## 2026-05-17 Main-Process Architecture Service Split
 
 - Reconfirmed project root as `D:/NexaChat`, branch `main`, upstream `origin/main`, and baseline commit `decac4733686051dfcd6d17e3c48445b062c1e35`.

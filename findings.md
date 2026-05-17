@@ -1,5 +1,13 @@
 # NexaChat Build Findings
 
+## App Fluidity and Motion Repair Findings
+
+- The audit document was committed before source work as `docs: add app fluidity and motion audit`; current implementation starts from `f03c77b90ed5663245faa53d139c9809a815bc1d`.
+- Current `App.tsx` still owns one global `AppSnapshot` and `runAction()` refreshes the whole snapshot after every action. The safest migration is to add explicit refresh policies first, then route module APIs and local patches through that contract.
+- `AppFrame` receives the full snapshot mainly for shell summary, preferences, provider/model labels, and gateway status. It can be narrowed after module query APIs exist.
+- `ChatPage` currently uses renderer-side progressive reveal from a completed response. Real IPC events must be added without removing `api.sendMessage()` fallback.
+- `progressiveReveal.ts`, CSS, and Chat autoscroll currently do not honor reduced-motion preferences. This is the first low-risk behavior slice.
+
 ## Main-Process Architecture Service Split Findings
 
 - The safest full split path for this repo was service-mixin composition over one shared `ServiceContext`, because it preserves the existing aggregate `store` surface for IPC/preload while moving public domain behavior out of `store.ts`.

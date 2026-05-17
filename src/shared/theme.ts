@@ -30,6 +30,13 @@ export const THEME_TOKEN_CATEGORIES = {
   spacing: ['--space-1', '--space-2', '--space-3', '--space-4', '--space-5', '--space-6'],
   shadow: ['--shadow-focus', '--shadow-panel'],
   layout: ['--rail-width'],
+  motion: [
+    '--motion-fast',
+    '--motion-base',
+    '--motion-slow',
+    '--ease-out-standard',
+    '--ease-in-standard',
+  ],
   typography: [
     '--font-sans',
     '--font-ui',

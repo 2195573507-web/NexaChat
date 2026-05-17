@@ -137,10 +137,11 @@ export function AppFrame({
 
   return (
     <div
-      className={`app-frame ${themeClass} density-${snapshot.uiPreferences.density} font-${snapshot.uiPreferences.fontMode} ${snapshot.uiPreferences.advancedMode ? 'mode-advanced' : 'mode-ordinary'}`}
+      className={`app-frame ${themeClass} density-${snapshot.uiPreferences.density} font-${snapshot.uiPreferences.fontMode} ${snapshot.uiPreferences.advancedMode ? 'mode-advanced' : 'mode-ordinary'} ${snapshot.uiPreferences.reducedMotion ? 'motion-reduced' : 'motion-normal'}`}
       data-theme-mode={snapshot.uiPreferences.theme}
       data-resolved-theme={resolvedTheme}
       data-user-mode={snapshot.uiPreferences.advancedMode ? 'advanced' : 'ordinary'}
+      data-motion-mode={snapshot.uiPreferences.reducedMotion ? 'reduced' : 'normal'}
     >
       <aside className="module-rail" aria-label={t('shell.sidebar.aria')}>
         <div className="brand-lockup">

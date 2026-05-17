@@ -3,6 +3,10 @@ export interface ProgressiveRevealFrame {
   delayMs: number;
 }
 
+export interface ProgressiveRevealOptions {
+  reducedMotion?: boolean;
+}
+
 const SENTENCE_PATTERN = /[^.!?\u3002\uff01\uff1f]+[.!?\u3002\uff01\uff1f]?\s*/g;
 
 export function splitProgressiveSegments(value: string): string[] {
@@ -18,19 +22,22 @@ export function splitProgressiveSegments(value: string): string[] {
   return sentences.length > 0 ? sentences : [normalized];
 }
 
-export function buildProgressiveRevealFrames(value: string): ProgressiveRevealFrame[] {
+export function buildProgressiveRevealFrames(value: string, options: ProgressiveRevealOptions = {}): ProgressiveRevealFrame[] {
   const segments = splitProgressiveSegments(value);
   let visibleContent = '';
   return segments.map((segment) => {
     visibleContent += segment;
     return {
       visibleContent,
-      delayMs: getProgressiveDelayMs(segment),
+      delayMs: getProgressiveDelayMs(segment, options),
     };
   });
 }
 
-export function getProgressiveDelayMs(segment: string): number {
+export function getProgressiveDelayMs(segment: string, options: ProgressiveRevealOptions = {}): number {
+  if (options.reducedMotion) {
+    return 0;
+  }
   const length = segment.trim().length;
   return Math.min(140, Math.max(28, length * 3));
 }

@@ -49,6 +49,11 @@
   --space-5: 20px;
   --space-6: 24px;
   --rail-width: 78px;
+  --motion-fast: 90ms;
+  --motion-base: 150ms;
+  --motion-slow: 240ms;
+  --ease-out-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-standard: cubic-bezier(0.32, 0, 0.67, 0);
   font-family: var(--font-ui);
   color: var(--color-text);
   background: var(--color-bg);

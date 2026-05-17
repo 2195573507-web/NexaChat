@@ -95,6 +95,7 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
 
   const defaultModel = getDefaultModel(snapshot);
   const advancedMode = snapshot.uiPreferences.advancedMode;
+  const reducedMotion = snapshot.uiPreferences.reducedMotion;
   const selectedModel = snapshot.models.find((model) => model.id === selectedModelId) ?? defaultModel;
   const activeConversation = snapshot.conversations.find((conversation) => conversation.id === activeConversationId) ?? snapshot.conversations[0];
   const messages = getConversationMessages(snapshot.messages, activeConversation?.id);
@@ -170,7 +171,7 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
   };
 
   const revealResponse = async (requestLogId: string, response: ChatResponse) => {
-    const frames = buildProgressiveRevealFrames(response.assistantMessage.content);
+    const frames = buildProgressiveRevealFrames(response.assistantMessage.content, { reducedMotion });
     for (const frame of frames) {
       if (canceledRequestIds.current.has(requestLogId)) {
         return;
@@ -208,11 +209,11 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
       return;
     }
     if (typeof timeline.scrollTo === 'function') {
-      timeline.scrollTo({ top: timeline.scrollHeight, behavior: 'smooth' });
+      timeline.scrollTo({ top: timeline.scrollHeight, behavior: reducedMotion ? 'auto' : 'smooth' });
       return;
     }
     timeline.scrollTop = timeline.scrollHeight;
-  }, [visibleMessages.length, generationInActiveConversation?.visibleContent, generationInActiveConversation?.phase]);
+  }, [visibleMessages.length, generationInActiveConversation?.visibleContent, generationInActiveConversation?.phase, reducedMotion]);
 
   return (
     <TabPanel moduleId="chat" tab={activeTab} className="chat-first-page">

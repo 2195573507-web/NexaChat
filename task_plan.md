@@ -53,6 +53,7 @@ At least three agents were launched concurrently before implementation work cont
 
 ## Current Status
 
+- 2026-05-17 App fluidity and motion repair loop: in progress. Scope is driven by `docs/build-plans/00-modular-refactor-master-plan/app-fluidity-and-motion-audit.md` and must cover P0/P1/P2 with source, tests, docs, staged commits, final verification, push, and remote confirmation.
 - Phase 0 documentation fact cleanup: complete on 2026-05-16. This phase modified documentation only and did not change business source, routes, UI, database, tests, or package configuration.
 - Full App Round 0 health check and authority inventory: complete.
 - Full App Round 1 architecture boundary reorganization: complete as implementation, verification, commit, and push.
@@ -114,11 +115,9 @@ Historical context note: references above to eight modules, Workspace, Dashboard
 
 ## Next Task Direction
 
-1. Phase 1: Standalone simple home design only if it remains chat-first and receives source, tests, and docs in the same round. The current implemented entry is Chat quick actions, not a separate home route.
-2. Phase 2: Provider / Model real invocation chain polish and recovery.
-3. Phase 3: Gateway hardening and external compatibility.
-4. Phase 4: Knowledge Base / RAG expansion beyond the current text-like lexical path.
-5. Phase 5: Tools / Agent / MCP progression from experimental fixture/dry-run flows to real capability after security boundaries are ready.
+1. Current active loop: complete App fluidity and motion repairs from the audit without changing the chat-first 7-module mainline.
+2. Keep Chat streaming fallback, pagination export correctness, IPC cleanup, background-task progress, and reduced-motion behavior as hard acceptance boundaries.
+3. After this loop, revisit standalone simple home only if it remains chat-first and receives source, tests, and docs in the same round. The current implemented entry is Chat quick actions, not a separate home route.
 
 ## Completion Gates
 

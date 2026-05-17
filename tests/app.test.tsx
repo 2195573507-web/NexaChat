@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../src/renderer/App';
 import { createMockApi } from '../src/renderer/mockApi';
 import { modulePageRegistry } from '../src/renderer/modules/modulePageRegistry';
@@ -347,6 +347,45 @@ describe('NexaChat renderer', () => {
     openFeature(chat, chat.tabs.find((tab) => tab.id === 'conversations')!);
     fireEvent.click(screen.getByRole('button', { name: translate('zh-CN', 'chat.context.title') }));
     expect(document.querySelector('.chat-detail-panel')).toBeInTheDocument();
+  });
+
+  it('applies reduced motion shell state and disables smooth chat autoscroll', async () => {
+    const baseApi = createMockApi();
+    window.nexachat = {
+      ...baseApi,
+      async getSnapshot() {
+        const snapshot = await baseApi.getSnapshot();
+        return {
+          ...snapshot,
+          uiPreferences: {
+            ...snapshot.uiPreferences,
+            reducedMotion: true,
+          },
+        };
+      },
+    };
+    const scrollTo = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+      configurable: true,
+      value: scrollTo,
+    });
+
+    await renderApp();
+
+    expect(document.querySelector('.app-frame')).toHaveClass('motion-reduced');
+    expect(document.querySelector('.app-frame')).toHaveAttribute('data-motion-mode', 'reduced');
+
+    fireEvent.change(screen.getByPlaceholderText(translate('zh-CN', 'chat.composer.placeholder')), { target: { value: 'reduced motion send' } });
+    fireEvent.click(screen.getByRole('button', { name: translate('zh-CN', 'chat.send') }));
+
+    await waitFor(() => {
+      expect(screen.getByText('reduced motion send')).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(scrollTo).toHaveBeenCalled();
+    });
+    expect(scrollTo.mock.calls.some(([options]) => options?.behavior === 'smooth')).toBe(false);
+    expect(scrollTo.mock.calls.some(([options]) => options?.behavior === 'auto')).toBe(true);
   });
 
   it('surfaces cross-module feedback boundaries without pretending reserved features are done', async () => {

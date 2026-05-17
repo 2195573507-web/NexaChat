@@ -70,6 +70,19 @@ describe('theme token authority', () => {
     }
   });
 
+  it('defines motion tokens and uses them for component transitions', () => {
+    const css = stylesCss();
+
+    for (const token of ['--motion-fast', '--motion-base', '--motion-slow', '--ease-out-standard', '--ease-in-standard']) {
+      expect(THEME_TOKEN_NAMES).toContain(token);
+      expect(css).toContain(token);
+    }
+    expect(css).toContain('prefers-reduced-motion: reduce');
+    expect(css).toContain('.motion-reduced');
+    expect(css).toContain('transition:');
+    expect(css).not.toContain('150ms ease-out');
+  });
+
   it('does not leave renderer CSS tokens undeclared in the shared registry', () => {
     const cssTokens = Array.from(new Set(stylesCss().match(/--[a-z0-9-]+(?=\s*:)/g) ?? []));
 

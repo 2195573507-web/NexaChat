@@ -18,4 +18,12 @@ describe('renderer-side progressive reveal', () => {
     expect(getProgressiveDelayMs('x')).toBe(28);
     expect(getProgressiveDelayMs('x'.repeat(200))).toBe(140);
   });
+
+  it('removes progressive reveal delay when reduced motion is enabled', () => {
+    const frames = buildProgressiveRevealFrames('First sentence. Second sentence.', { reducedMotion: true });
+
+    expect(getProgressiveDelayMs('x'.repeat(200), { reducedMotion: true })).toBe(0);
+    expect(frames.length).toBeGreaterThan(0);
+    expect(frames.every((frame) => frame.delayMs === 0)).toBe(true);
+  });
 });
