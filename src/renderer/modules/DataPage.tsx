@@ -5,6 +5,7 @@ import { FORM_DEFAULTS } from '../../shared/uiCopy';
 import { ActivityList, CommandButton, ConfigDetail, ConfigList, CopyableCommand, DataRows, EmptyBlock, Field, InlineNotice, PageHeader, StatusPillLite, ToolSection } from '../components/AppFrame';
 import { useI18n } from '../i18n';
 import { formatDate, healthState, statusLabel, TabPanel, type TabPageProps } from './shared';
+import { useLocalPending } from './useLocalPending';
 
 export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
   const { t } = useI18n();
@@ -13,6 +14,7 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
   const [restorePassphrase, setRestorePassphrase] = useState<string>(FORM_DEFAULTS.restorePassphrase);
   const [applyImportPhrase, setApplyImportPhrase] = useState<string>('');
   const [rollbackPhrase, setRollbackPhrase] = useState<string>(FORM_DEFAULTS.rollbackPhrase);
+  const pending = useLocalPending();
   const latestReadyImport = snapshot.importExportResults.find((result) => result.action === 'import' && result.status === 'ready');
   const latestBackup = snapshot.dataBackups[0];
   const rollback = snapshot.rollbackRecords.find((record) => record.state === 'available') ?? snapshot.rollbackRecords[0];
@@ -28,7 +30,7 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
           title={t('data.backup.title')}
           description={activeTab.featureBoundary}
           status={<StatusPillLite label={latestBackup?.profile ?? t('common.none')} state={latestBackup ? 'ready' : 'muted'} />}
-          actions={<CommandButton variant="primary" icon={<Archive size={15} />} disabled={!backupPassphraseValid} disabledReason={t('data.backup.passphrase.required')} onClick={() => onAction(t('data.toast.backupCreated'), () => api.createEncryptedBackup({ profile: 'encrypted-full', passphrase: backupPassphrase }))}>{t('data.backup.create')}</CommandButton>}
+          actions={<CommandButton variant="primary" icon={<Archive size={15} />} disabled={!backupPassphraseValid || pending.isPending('data.backup')} disabledReason={t('data.backup.passphrase.required')} onClick={() => onAction(t('data.toast.backupCreated'), () => pending.runPending('data.backup', () => api.createEncryptedBackup({ profile: 'encrypted-full', passphrase: backupPassphrase })))}>{pending.isPending('data.backup') ? t('app.status.busy') : t('data.backup.create')}</CommandButton>}
         />
         <div className="tool-layout">
         <ConfigList title={t('data.backup.title')} description={activeTab.featureBoundary}>
@@ -38,6 +40,8 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
                 <input value={backupPassphrase} onChange={(event) => setBackupPassphrase(event.target.value)} type="password" />
               </Field>
               <InlineNotice tone={backupPassphraseValid ? 'info' : 'warning'} title={t('data.backup.passphrase')} detail={backupPassphraseValid ? t('data.backup.passphrase.help') : t('data.backup.passphrase.required')} />
+              {pending.isPending('data.backup') ? <InlineNotice tone="info" title={t('app.status.busy')} detail={t('data.backup.create')} /> : null}
+              {pending.errorFor('data.backup') ? <InlineNotice tone="warning" title={t('app.action.failed')} detail={pending.errorFor('data.backup')} /> : null}
             </div>
           </ToolSection>
           <ActivityList
@@ -50,7 +54,7 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
           />
         </ConfigList>
         <ConfigDetail title={t('data.export.create')} description={t('nav.data.backup.boundary')}>
-          <CommandButton icon={<DatabaseBackup size={15} />} onClick={() => onAction(t('data.toast.exportCreated'), () => api.exportDataPackage({ profile: 'metadata-redacted' }))}>{t('data.export.create')}</CommandButton>
+          <CommandButton icon={<DatabaseBackup size={15} />} disabled={pending.isPending('data.export')} onClick={() => onAction(t('data.toast.exportCreated'), () => pending.runPending('data.export', () => api.exportDataPackage({ profile: 'metadata-redacted' })))}>{pending.isPending('data.export') ? t('app.status.busy') : t('data.export.create')}</CommandButton>
           <DataRows rows={[
             { label: t('data.backup.records'), value: latestBackup?.profile ?? t('common.none') },
             { label: t('data.backup.passphrase'), value: latestBackup?.encrypted ? t('common.yes') : t('common.no') },
@@ -69,7 +73,7 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
           title={t('data.restore.title')}
           description={activeTab.featureBoundary}
           status={<StatusPillLite label={latestBackup ? t('common.available') : t('common.none')} state={latestBackup ? 'ready' : 'warning'} />}
-          actions={<CommandButton variant="primary" icon={<FileCheck size={15} />} disabled={!latestBackup || !restorePassphraseValid} disabledReason={!latestBackup ? t('data.restore.noBackup') : t('data.restore.passphrase.required')} onClick={() => onAction(t('data.toast.restoreCreated'), () => api.createRestorePreflight({ backupId: latestBackup?.id, passphrase: restorePassphrase }))}>{t('data.restore.preflight')}</CommandButton>}
+          actions={<CommandButton variant="primary" icon={<FileCheck size={15} />} disabled={!latestBackup || !restorePassphraseValid || pending.isPending('data.restorePreflight')} disabledReason={!latestBackup ? t('data.restore.noBackup') : t('data.restore.passphrase.required')} onClick={() => onAction(t('data.toast.restoreCreated'), () => pending.runPending('data.restorePreflight', () => api.createRestorePreflight({ backupId: latestBackup?.id, passphrase: restorePassphrase })))}>{pending.isPending('data.restorePreflight') ? t('app.status.busy') : t('data.restore.preflight')}</CommandButton>}
         />
         <div className="tool-layout">
         <ConfigList title={t('data.restore.title')} description={activeTab.featureBoundary}>
@@ -79,6 +83,8 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
                 <input value={restorePassphrase} onChange={(event) => setRestorePassphrase(event.target.value)} type="password" />
               </Field>
               <InlineNotice tone={restorePassphraseValid ? 'info' : 'warning'} title={t('data.restore.passphrase')} detail={restorePassphraseValid ? t('data.restore.passphrase.help') : t('data.restore.passphrase.required')} />
+              {pending.isPending('data.restorePreflight') ? <InlineNotice tone="info" title={t('app.status.busy')} detail={t('data.restore.preflight')} /> : null}
+              {pending.errorFor('data.restorePreflight') ? <InlineNotice tone="warning" title={t('app.action.failed')} detail={pending.errorFor('data.restorePreflight')} /> : null}
             </div>
           </ToolSection>
           <JobList snapshot={snapshot} />
@@ -100,7 +106,7 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
           title={t('data.rollback.title')}
           description={activeTab.featureBoundary}
           status={<StatusPillLite label={rollback?.state ? statusLabel(rollback.state, t) : t('common.none')} state={rollback?.state === 'available' ? 'warning' : 'muted'} />}
-          actions={<CommandButton variant="danger" icon={<RotateCcw size={15} />} disabled={!rollback || rollbackPhrase !== DATA_CONFIRMATION_PHRASES.rollback} onClick={() => onAction(t('data.toast.rollbackApplied'), () => api.applyDataRollback({ rollbackId: rollback?.id ?? '', confirmationPhrase: rollbackPhrase }))}>{t('data.rollback.apply')}</CommandButton>}
+          actions={<CommandButton variant="danger" icon={<RotateCcw size={15} />} disabled={!rollback || rollbackPhrase !== DATA_CONFIRMATION_PHRASES.rollback || pending.isPending('data.rollback')} onClick={() => onAction(t('data.toast.rollbackApplied'), () => pending.runPending('data.rollback', () => api.applyDataRollback({ rollbackId: rollback?.id ?? '', confirmationPhrase: rollbackPhrase })))}>{pending.isPending('data.rollback') ? t('app.status.busy') : t('data.rollback.apply')}</CommandButton>}
         />
         <div className="tool-layout">
         <ConfigList title={t('data.rollback.title')} description={activeTab.featureBoundary}>
@@ -131,7 +137,7 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
           title={activeTab.label}
           description={activeTab.featureBoundary}
           status={<StatusPillLite label={t('stage.environment-limited')} state="warning" />}
-          actions={<CommandButton variant="primary" icon={<ShieldAlert size={15} />} onClick={() => onAction(t('data.toast.diagnosticsExported'), () => api.exportDiagnostics())}>{t('data.diagnostics.export')}</CommandButton>}
+          actions={<CommandButton variant="primary" icon={<ShieldAlert size={15} />} disabled={pending.isPending('data.diagnostics')} onClick={() => onAction(t('data.toast.diagnosticsExported'), () => pending.runPending('data.diagnostics', () => api.exportDiagnostics()))}>{pending.isPending('data.diagnostics') ? t('app.status.busy') : t('data.diagnostics.export')}</CommandButton>}
         />
         <div className="tool-layout">
         <ConfigList title={activeTab.label} description={activeTab.featureBoundary}>
@@ -152,7 +158,7 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
         title={t('data.import.title')}
         description={activeTab.featureBoundary}
         status={<StatusPillLite label={latestReadyImport ? t('common.available') : t('common.queued')} state={latestReadyImport ? 'ready' : 'muted'} />}
-        actions={<CommandButton variant="primary" icon={<FileCheck size={15} />} disabled={!manifestText.trim()} onClick={() => onAction(t('data.toast.importPreflighted'), () => api.validateImportManifest(manifestText))}>{t('data.import.preflight')}</CommandButton>}
+        actions={<CommandButton variant="primary" icon={<FileCheck size={15} />} disabled={!manifestText.trim() || pending.isPending('data.importPreflight')} onClick={() => onAction(t('data.toast.importPreflighted'), () => pending.runPending('data.importPreflight', () => api.validateImportManifest(manifestText)))}>{pending.isPending('data.importPreflight') ? t('app.status.busy') : t('data.import.preflight')}</CommandButton>}
       />
       <div className="tool-layout">
       <ConfigList title={t('data.import.title')} description={activeTab.featureBoundary}>
@@ -169,10 +175,11 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
             </Field>
             <InlineNotice tone={applyImportPhraseValid ? 'info' : 'warning'} title={t('data.import.confirmTitle')} detail={t('data.import.errors.confirmation')} />
             <span className="row-actions">
-              <CommandButton icon={<DatabaseBackup size={15} />} disabled={!latestReadyImport || !applyImportPhraseValid} disabledReason={!latestReadyImport ? t('data.import.errors.readyOnly') : t('data.import.errors.confirmation')} onClick={() => onAction(t('data.toast.importApplied'), () => api.applyImportPlan(latestReadyImport?.id ?? '', { mode: 'apply-metadata', confirmationPhrase: applyImportPhrase }))}>
-                {t('data.import.apply')}
+              <CommandButton icon={<DatabaseBackup size={15} />} disabled={!latestReadyImport || !applyImportPhraseValid || pending.isPending('data.importApply')} disabledReason={!latestReadyImport ? t('data.import.errors.readyOnly') : t('data.import.errors.confirmation')} onClick={() => onAction(t('data.toast.importApplied'), () => pending.runPending('data.importApply', () => api.applyImportPlan(latestReadyImport?.id ?? '', { mode: 'apply-metadata', confirmationPhrase: applyImportPhrase })))}>
+                {pending.isPending('data.importApply') ? t('app.status.busy') : t('data.import.apply')}
               </CommandButton>
             </span>
+            {['data.importPreflight', 'data.importApply'].map((key) => pending.isPending(key) ? <InlineNotice key={key} tone="info" title={t('app.status.busy')} detail={key} /> : pending.errorFor(key) ? <InlineNotice key={key} tone="warning" title={t('app.action.failed')} detail={pending.errorFor(key)} /> : null)}
           </div>
         </ToolSection>
         <JobList snapshot={snapshot} />

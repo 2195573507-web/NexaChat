@@ -208,27 +208,42 @@ export function ChatService<TBase extends ServiceConstructor<ServiceContext>>(Ba
     }
     const conversation = input.conversationId ? this.requireConversation(input.conversationId) : this.createConversation();
     const responses: ChatResponse[] = [];
-    for (const modelId of uniqueModelIds) {
-      const response = await this.sendMessage({
-        conversationId: conversation.id,
-        content: input.content,
-        modelId,
-        contextStrategy: input.contextStrategy ?? 'recent_n',
-        metadata: {
-          action: 'compare',
-          compareGroupSize: uniqueModelIds.length,
-          compareModelIds: uniqueModelIds,
-        },
-      });
-      responses.push(response);
+    const failures: Array<{ modelId: string; error: string }> = [];
+    const queue = [...uniqueModelIds];
+    const runNext = async () => {
+      const modelId = queue.shift();
+      if (!modelId) {
+        return;
+      }
+      try {
+        const response = await this.sendMessage({
+          conversationId: conversation.id,
+          content: input.content,
+          modelId,
+          contextStrategy: input.contextStrategy ?? 'recent_n',
+          metadata: {
+            action: 'compare',
+            compareGroupSize: uniqueModelIds.length,
+            compareModelIds: uniqueModelIds,
+          },
+        });
+        responses.push(response);
+      } catch (error) {
+        failures.push({ modelId, error: error instanceof Error ? error.message : String(error) });
+      }
+      await runNext();
+    };
+    await Promise.all(Array.from({ length: Math.min(2, queue.length) }, () => runNext()));
+    if (responses.length === 0) {
+      throw new Error(failures[0]?.error ?? t('chat.errors.compareNeedsModels'));
     }
     this.audit('chat.compare.completed', 'conversation', conversation.id, {
       modelIds: uniqueModelIds,
       requestLogIds: responses.map((response) => response.requestLog.id),
+      failures,
     });
-    return { conversation: this.requireConversation(conversation.id), responses };
+    return { conversation: this.requireConversation(conversation.id), responses, failures };
   }
-
 
   exportConversation(input: ExportConversationInput): ConversationExport {
     this.requirePermission(SECURITY_ACTION_PERMISSIONS.chatExport, 'conversation', input.conversationId);

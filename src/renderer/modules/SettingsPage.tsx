@@ -5,6 +5,7 @@ import { OBSERVABILITY_EXPORT_SCOPES, OBSERVABILITY_FEEDBACK_LABELS, OBSERVABILI
 import { ActivityList, CommandButton, ConfigDetail, ConfigList, DataRows, Field, InlineNotice, PageHeader, SettingRow, StatusPillLite, ToggleRow, ToolSection } from '../components/AppFrame';
 import { useI18n } from '../i18n';
 import { formatDate, healthState, statusLabel, TabPanel, type TabPageProps } from './shared';
+import { useLocalPending } from './useLocalPending';
 
 export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
   const { t } = useI18n();
@@ -13,6 +14,7 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
   const [feedbackLabel, setFeedbackLabel] = useState<ObservabilityFeedbackLabel>('bug');
   const [feedbackNotes, setFeedbackNotes] = useState(t('observability.feedback.defaultNote'));
   const [privacy, setPrivacy] = useState<ObservabilityPrivacySettings>(snapshot.observability.privacy);
+  const pending = useLocalPending();
   const feedbackEdited = feedbackNotes.trim().length > 0 && feedbackNotes.trim() !== t('observability.feedback.defaultNote');
 
   useEffect(() => setPrefs(snapshot.uiPreferences), [snapshot.uiPreferences]);
@@ -26,7 +28,7 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
           title={t('settings.security.title')}
           description={activeTab.featureBoundary}
           status={<StatusPillLite label={statusLabel(snapshot.security.activeSession.state, t)} state={snapshot.security.deniedCount > 0 ? 'warning' : 'ready'} />}
-          actions={<CommandButton icon={<ShieldCheck size={15} />} onClick={() => onAction(t('settings.audit.integrity'), () => api.verifyAuditIntegrity())}>{t('settings.audit.verify')}</CommandButton>}
+          actions={<CommandButton icon={<ShieldCheck size={15} />} disabled={pending.isPending('audit.verify')} onClick={() => onAction(t('settings.audit.integrity'), () => pending.runPending('audit.verify', () => api.verifyAuditIntegrity()))}>{pending.isPending('audit.verify') ? t('app.status.busy') : t('settings.audit.verify')}</CommandButton>}
         />
         <div className="tool-layout">
         <ConfigList title={t('settings.security.title')} description={activeTab.featureBoundary}>
@@ -47,7 +49,8 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
         </ConfigList>
         <ConfigDetail title={t('settings.security.auditIntegrity')} description={t('nav.settings.security.boundary')}>
           <InlineNotice tone="info" title={t('settings.security.permissionsMatrix')} detail={t('settings.security.permissionsMatrix.detail')} />
-          <CommandButton icon={<ShieldCheck size={15} />} onClick={() => onAction(t('settings.audit.integrity'), () => api.verifyAuditIntegrity())}>{t('settings.audit.verify')}</CommandButton>
+          <CommandButton icon={<ShieldCheck size={15} />} disabled={pending.isPending('audit.verify')} onClick={() => onAction(t('settings.audit.integrity'), () => pending.runPending('audit.verify', () => api.verifyAuditIntegrity()))}>{pending.isPending('audit.verify') ? t('app.status.busy') : t('settings.audit.verify')}</CommandButton>
+          {pending.errorFor('audit.verify') ? <InlineNotice tone="warning" title={t('app.action.failed')} detail={pending.errorFor('audit.verify')} /> : null}
         </ConfigDetail>
         </div>
       </TabPanel>
@@ -74,8 +77,10 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
               <input value={auditQuery} onChange={(event) => setAuditQuery(event.target.value)} aria-label={t('settings.audit.search')} />
             </Field>
             <span className="row-actions">
-              <CommandButton icon={<Activity size={15} />} onClick={() => onAction(t('settings.audit.integrity'), () => api.verifyAuditIntegrity())}>{t('settings.audit.verify')}</CommandButton>
+              <CommandButton icon={<Activity size={15} />} disabled={pending.isPending('audit.verify')} onClick={() => onAction(t('settings.audit.integrity'), () => pending.runPending('audit.verify', () => api.verifyAuditIntegrity()))}>{pending.isPending('audit.verify') ? t('app.status.busy') : t('settings.audit.verify')}</CommandButton>
             </span>
+            {pending.isPending('audit.verify') ? <InlineNotice tone="info" title={t('app.status.busy')} detail={t('settings.audit.verify')} /> : null}
+            {pending.errorFor('audit.verify') ? <InlineNotice tone="warning" title={t('app.action.failed')} detail={pending.errorFor('audit.verify')} /> : null}
           </div>
           <ActivityList empty={t('app.recent.empty')} items={visibleLogs.slice(0, 14).map((log) => ({ title: log.action, meta: `${log.actor} / ${formatDate(log.createdAt, t)}`, state: healthState(log.integrityState) }))} />
         </ConfigList>
@@ -100,7 +105,7 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
           title={t('observability.feedback.title')}
           description={activeTab.featureBoundary}
           status={<StatusPillLite label={snapshot.feedbackItems.length} state="info" />}
-          actions={<CommandButton variant="primary" icon={<Save size={15} />} disabled={!feedbackEdited} disabledReason={t('observability.feedback.editRequired')} onClick={() => onAction(t('observability.feedback.created'), () => api.createFeedback({ label: feedbackLabel, notes: feedbackNotes }))}>{t('observability.feedback.create')}</CommandButton>}
+          actions={<CommandButton variant="primary" icon={<Save size={15} />} disabled={!feedbackEdited || pending.isPending('feedback.create')} disabledReason={t('observability.feedback.editRequired')} onClick={() => onAction(t('observability.feedback.created'), () => pending.runPending('feedback.create', () => api.createFeedback({ label: feedbackLabel, notes: feedbackNotes })))}>{pending.isPending('feedback.create') ? t('app.status.busy') : t('observability.feedback.create')}</CommandButton>}
         />
         <div className="tool-layout">
         <ConfigList title={t('observability.feedback.title')} description={activeTab.featureBoundary}>
@@ -135,7 +140,7 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
           title={t('observability.eval.title')}
           description={activeTab.featureBoundary}
           status={<StatusPillLite label={snapshot.evalResults.length} state="info" />}
-          actions={<CommandButton icon={<Activity size={15} />} onClick={snapshot.evalSets[0] ? () => onAction(t('observability.eval.started'), () => api.runEvaluation({ evalSetId: snapshot.evalSets[0].id })) : undefined}>{t('observability.eval.run')}</CommandButton>}
+          actions={<CommandButton icon={<Activity size={15} />} disabled={pending.isPending(`eval.run.${snapshot.evalSets[0]?.id ?? 'none'}`)} onClick={snapshot.evalSets[0] ? () => onAction(t('observability.eval.started'), () => pending.runPending(`eval.run.${snapshot.evalSets[0].id}`, () => api.runEvaluation({ evalSetId: snapshot.evalSets[0].id }))) : undefined}>{pending.isPending(`eval.run.${snapshot.evalSets[0]?.id ?? 'none'}`) ? t('app.status.busy') : t('observability.eval.run')}</CommandButton>}
         />
         <div className="tool-layout">
         <ConfigList title={t('observability.eval.title')} description={activeTab.featureBoundary}>
@@ -143,7 +148,7 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
             {snapshot.evalSets.map((set) => (
               <div className="config-row" key={set.id}>
                 <span><strong>{set.name}</strong><small>{set.description ?? set.prompt}</small></span>
-                <CommandButton icon={<Activity size={14} />} onClick={() => onAction(t('observability.eval.started'), () => api.runEvaluation({ evalSetId: set.id }))}>{t('observability.eval.run')}</CommandButton>
+                <CommandButton icon={<Activity size={14} />} disabled={pending.isPending(`eval.run.${set.id}`)} onClick={() => onAction(t('observability.eval.started'), () => pending.runPending(`eval.run.${set.id}`, () => api.runEvaluation({ evalSetId: set.id })))}>{pending.isPending(`eval.run.${set.id}`) ? t('app.status.busy') : t('observability.eval.run')}</CommandButton>
               </div>
             ))}
           </div>
@@ -168,7 +173,7 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
           title={t('observability.privacy.title')}
           description={activeTab.featureBoundary}
           status={<StatusPillLite label={privacy.retentionPolicy} state="info" />}
-          actions={<CommandButton variant="primary" icon={<Save size={15} />} onClick={() => onAction(t('observability.privacy.saved'), () => api.saveObservabilityPrivacy(privacy))}>{t('observability.privacy.save')}</CommandButton>}
+          actions={<CommandButton variant="primary" icon={<Save size={15} />} disabled={pending.isPending('privacy.save')} onClick={() => onAction(t('observability.privacy.saved'), () => pending.runPending('privacy.save', () => api.saveObservabilityPrivacy(privacy)))}>{pending.isPending('privacy.save') ? t('app.status.busy') : t('observability.privacy.save')}</CommandButton>}
         />
         <div className="tool-layout">
         <ConfigList title={t('observability.privacy.title')} description={activeTab.featureBoundary}>
@@ -183,7 +188,7 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
           <ToggleRow title={t('observability.privacy.includePromptSnippets')} checked={privacy.includePromptSnippets} onChange={(checked) => setPrivacy({ ...privacy, includePromptSnippets: checked })} />
           <ToggleRow title={t('observability.privacy.includeLocalPaths')} checked={privacy.includeLocalPaths} onChange={(checked) => setPrivacy({ ...privacy, includeLocalPaths: checked })} />
           <span className="row-actions">
-            <CommandButton icon={<Download size={15} />} onClick={() => onAction(t('observability.export.created'), () => api.exportObservability())}>{t('observability.export.button')}</CommandButton>
+            <CommandButton icon={<Download size={15} />} disabled={pending.isPending('observability.export')} onClick={() => onAction(t('observability.export.created'), () => pending.runPending('observability.export', () => api.exportObservability()))}>{pending.isPending('observability.export') ? t('app.status.busy') : t('observability.export.button')}</CommandButton>
           </span>
         </ConfigList>
         <ConfigDetail title={t('observability.privacy.localOnly')} description={t('nav.settings.observability.boundary')}>
@@ -231,7 +236,7 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
         title={t('settings.preferences.title')}
         description={activeTab.featureBoundary}
         status={<StatusPillLite label={prefs.theme} state="info" />}
-        actions={<CommandButton variant="primary" icon={<Save size={15} />} onClick={() => onAction(t('settings.preferences.saved'), () => api.saveUiPreferences(prefs))}>{t('settings.preferences.save')}</CommandButton>}
+        actions={<CommandButton variant="primary" icon={<Save size={15} />} disabled={pending.isPending('settings.preferences.save')} onClick={() => onAction(t('settings.preferences.saved'), () => pending.runPending('settings.preferences.save', () => api.saveUiPreferences(prefs)))}>{pending.isPending('settings.preferences.save') ? t('app.status.busy') : t('settings.preferences.save')}</CommandButton>}
       />
       <div className="tool-layout">
       <ConfigList title={t('settings.preferences.title')} description={activeTab.featureBoundary}>

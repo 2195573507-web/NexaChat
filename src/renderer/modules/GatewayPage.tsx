@@ -7,12 +7,14 @@ import { GATEWAY_DOCS, FORM_DEFAULTS } from '../../shared/uiCopy';
 import { ActivityList, CommandButton, ConfigDetail, ConfigList, CopyableCommand, DataRows, EmptyBlock, Field, InlineNotice, PageHeader, StatusPillLite, ToolSection } from '../components/AppFrame';
 import { useI18n } from '../i18n';
 import { formatDate, getDefaultModel, healthState, statusLabel, TabPanel, type TabPageProps } from './shared';
+import { useLocalPending } from './useLocalPending';
 
 export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
   const { t } = useI18n();
   const defaultModel = getDefaultModel(snapshot);
   const [keyName, setKeyName] = useState<string>(FORM_DEFAULTS.gatewayKeyName);
   const [oneTimeKey, setOneTimeKey] = useState<string | null>(null);
+  const pending = useLocalPending();
   const endpointBase = `${snapshot.dashboard.gatewayStatus.bindHost}:${snapshot.dashboard.gatewayStatus.port}`;
   const gatewayStatus = snapshot.dashboard.gatewayStatus;
   const chatCommand = `curl http://${endpointBase}${GATEWAY_ENDPOINT.chatCompletions} -H "Authorization: Bearer ${GATEWAY_DOCS.bearerPlaceholder}" -H "Content-Type: application/json" -d "{\\"model\\":\\"${defaultModel?.modelNameSnapshot ?? GATEWAY_DOCS.sampleModelPlaceholder}\\",\\"messages\\":[{\\"role\\":\\"user\\",\\"content\\":\\"${GATEWAY_DOCS.sampleUserMessage}\\"}]}"`;
@@ -56,6 +58,7 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
                 key={key.id}
                 api={api}
                 gatewayKey={key}
+                pending={pending}
                 onAction={onAction}
                 onRotated={setOneTimeKey}
               />
@@ -159,11 +162,13 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
         title={t('gateway.overview.title')}
         description={activeTab.featureBoundary}
         status={<StatusPillLite label={gatewayStatus.running ? t('shell.gateway.running') : t('shell.gateway.stopped')} state={gatewayStatus.running ? 'ready' : gatewayStatus.listenerState === 'error' ? 'danger' : 'muted'} />}
-        actions={<CommandButton variant={gatewayStatus.running ? 'danger' : 'primary'} icon={gatewayStatus.running ? <Power size={15} /> : <Play size={15} />} onClick={() => onAction(gatewayStatus.running ? t('gateway.toast.stopped') : t('gateway.toast.started'), () => api.toggleGateway(!gatewayStatus.enabled))}>{gatewayStatus.running ? t('gateway.stop') : t('gateway.start')}</CommandButton>}
+        actions={<CommandButton variant={gatewayStatus.running ? 'danger' : 'primary'} icon={gatewayStatus.running ? <Power size={15} /> : <Play size={15} />} disabled={pending.isPending('gateway.toggle')} onClick={() => onAction(gatewayStatus.running ? t('gateway.toast.stopped') : t('gateway.toast.started'), () => pending.runPending('gateway.toggle', () => api.toggleGateway(!gatewayStatus.enabled)))}>{pending.isPending('gateway.toggle') ? t('app.status.busy') : gatewayStatus.running ? t('gateway.stop') : t('gateway.start')}</CommandButton>}
       />
       <div className="tool-layout">
       <ConfigList title={t('gateway.overview.title')} description={activeTab.featureBoundary}>
         <section className="gateway-console">
+          {pending.isPending('gateway.toggle') ? <InlineNotice tone="info" title={t('app.status.busy')} detail={gatewayStatus.running ? t('gateway.stop') : t('gateway.start')} /> : null}
+          {pending.errorFor('gateway.toggle') ? <InlineNotice tone="warning" title={t('app.action.failed')} detail={pending.errorFor('gateway.toggle')} /> : null}
           <div className="gateway-status-block">
             <span className="eyebrow">{t('nav.gateway.overview.label')}</span>
             <strong>{gatewayStatus.running ? t('shell.gateway.running') : t('shell.gateway.stopped')}</strong>
@@ -282,11 +287,13 @@ function chartY(value: number, maxValue: number): number {
 
 function GatewayKeyRow({
   gatewayKey,
+  pending,
   api,
   onAction,
   onRotated,
 }: {
   gatewayKey: GatewayApiKey;
+  pending: ReturnType<typeof useLocalPending>;
   api: TabPageProps['api'];
   onAction: TabPageProps['onAction'];
   onRotated: (key: string) => void;
@@ -297,6 +304,10 @@ function GatewayKeyRow({
   const quotaValue = quotaLimit.trim() ? Math.max(1, Number.parseInt(quotaLimit, 10)) : null;
   const rateValue = rateLimit.trim() ? Math.max(1, Number.parseInt(rateLimit, 10)) : null;
   const validPolicy = (quotaValue === null || Number.isFinite(quotaValue)) && (rateValue === null || Number.isFinite(rateValue));
+  const policyKey = `gateway.key.policy.${gatewayKey.id}`;
+  const toggleKey = `gateway.key.toggle.${gatewayKey.id}`;
+  const rotateKey = `gateway.key.rotate.${gatewayKey.id}`;
+  const revokeKey = `gateway.key.revoke.${gatewayKey.id}`;
 
   const savePolicy = () => api.updateGatewayKey({
     gatewayKeyId: gatewayKey.id,
@@ -325,16 +336,17 @@ function GatewayKeyRow({
           <span>{t('gateway.rateLimit')}</span>
           <input aria-label={`${t('gateway.rateLimit')} ${gatewayKey.name}`} type="number" min={1} value={rateLimit} onChange={(event) => setRateLimit(event.target.value)} />
         </label>
-        <CommandButton icon={<Save size={14} />} disabled={!validPolicy} onClick={() => onAction(t('gateway.toast.policyUpdated'), savePolicy)}>{t('common.saved')}</CommandButton>
-        <CommandButton onClick={() => onAction(gatewayKey.state === 'disabled' ? t('gateway.toast.enabled') : t('gateway.toast.disabled'), toggleDisabled)}>
-          {gatewayKey.state === 'disabled' ? t('gateway.enableKey') : t('gateway.disableKey')}
+        <CommandButton icon={<Save size={14} />} disabled={!validPolicy || pending.isPending(policyKey)} onClick={() => onAction(t('gateway.toast.policyUpdated'), () => pending.runPending(policyKey, savePolicy))}>{pending.isPending(policyKey) ? t('app.status.busy') : t('common.saved')}</CommandButton>
+        <CommandButton disabled={pending.isPending(toggleKey)} onClick={() => onAction(gatewayKey.state === 'disabled' ? t('gateway.toast.enabled') : t('gateway.toast.disabled'), () => pending.runPending(toggleKey, toggleDisabled))}>
+          {pending.isPending(toggleKey) ? t('app.status.busy') : gatewayKey.state === 'disabled' ? t('gateway.enableKey') : t('gateway.disableKey')}
         </CommandButton>
-        <CommandButton icon={<RotateCcw size={14} />} onClick={() => onAction(t('gateway.toast.rotated'), async () => {
+        <CommandButton icon={<RotateCcw size={14} />} disabled={pending.isPending(rotateKey)} onClick={() => onAction(t('gateway.toast.rotated'), () => pending.runPending(rotateKey, async () => {
           const rotated = await api.rotateGatewayKey({ gatewayKeyId: gatewayKey.id });
           onRotated(rotated.key);
-        })}>{t('gateway.rotate')}</CommandButton>
-        <CommandButton variant="danger" icon={<ShieldAlert size={14} />} onClick={() => onAction(t('gateway.toast.revoked'), () => api.revokeGatewayKey(gatewayKey.id))}>{t('gateway.revoke')}</CommandButton>
+        }))}>{pending.isPending(rotateKey) ? t('app.status.busy') : t('gateway.rotate')}</CommandButton>
+        <CommandButton variant="danger" icon={<ShieldAlert size={14} />} disabled={pending.isPending(revokeKey)} onClick={() => onAction(t('gateway.toast.revoked'), () => pending.runPending(revokeKey, () => api.revokeGatewayKey(gatewayKey.id)))}>{pending.isPending(revokeKey) ? t('app.status.busy') : t('gateway.revoke')}</CommandButton>
       </span>
+      {[policyKey, toggleKey, rotateKey, revokeKey].map((key) => pending.errorFor(key) ? <InlineNotice key={key} tone="warning" title={t('app.action.failed')} detail={pending.errorFor(key)} /> : null)}
     </div>
   );
 }

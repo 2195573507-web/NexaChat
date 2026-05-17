@@ -394,6 +394,10 @@ export interface ChatResponse {
 export interface CompareModelsResponse {
   conversation: Conversation;
   responses: ChatResponse[];
+  failures?: Array<{
+    modelId: string;
+    error: string;
+  }>;
 }
 
 export interface RouteDecision {

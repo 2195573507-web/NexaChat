@@ -1471,17 +1471,32 @@ export function createMockApi(): AppApi {
         ? findById(state.conversations, input.conversationId, 'Conversation')
         : await api.createConversation(input.content.slice(0, 32) || t('chat.seed.newConversation'));
       const responses: ChatResponse[] = [];
-      for (const modelId of modelIds) {
-        responses.push(await api.sendMessage({
-          conversationId: conversation.id,
-          content: input.content,
-          modelId,
-          contextStrategy: input.contextStrategy ?? 'recent_n',
-          metadata: { action: 'compare', compareModelIds: modelIds },
-        }));
+      const failures: Array<{ modelId: string; error: string }> = [];
+      const queue = [...modelIds];
+      const runNext = async () => {
+        const modelId = queue.shift();
+        if (!modelId) {
+          return;
+        }
+        try {
+          responses.push(await api.sendMessage({
+            conversationId: conversation.id,
+            content: input.content,
+            modelId,
+            contextStrategy: input.contextStrategy ?? 'recent_n',
+            metadata: { action: 'compare', compareModelIds: modelIds },
+          }));
+        } catch (error) {
+          failures.push({ modelId, error: error instanceof Error ? error.message : String(error) });
+        }
+        await runNext();
+      };
+      await Promise.all(Array.from({ length: Math.min(2, queue.length) }, () => runNext()));
+      if (responses.length === 0) {
+        throw new Error(failures[0]?.error ?? t('chat.errors.compareNeedsModels'));
       }
-      pushAudit('chat.compareModels', 'conversation', conversation.id, { modelIds });
-      const result: CompareModelsResponse = { conversation, responses };
+      pushAudit('chat.compareModels', 'conversation', conversation.id, { modelIds, failures });
+      const result: CompareModelsResponse = { conversation, responses, failures };
       return clone(result);
     },
 
@@ -1491,7 +1506,7 @@ export function createMockApi(): AppApi {
       const redacted = input.redacted !== false;
       const content = input.format === 'json'
         ? JSON.stringify({ conversation, messages, redacted, source: 'browser-mock' }, null, 2)
-        : [`# ${conversation.title}`, '', ...messages.flatMap((message) => [`## ${message.role} · ${message.status}`, message.content, ''])].join('\n');
+        : [`# ${conversation.title}`, '', ...messages.flatMap((message) => [`## ${message.role} 路 ${message.status}`, message.content, ''])].join('\n');
       const created: ConversationExport = {
         id: createId('conversation_export'),
         conversationId: conversation.id,
@@ -1527,7 +1542,6 @@ export function createMockApi(): AppApi {
         createdAt: timestamp,
         updatedAt: timestamp,
       };
-
       state.conversations.unshift(conversation);
       touchWorkspace();
       pushAudit('chat.createConversation', 'conversation', conversation.id);

@@ -336,6 +336,158 @@ describe('NexaChat renderer', () => {
     expect(activePanel()).not.toHaveTextContent('Local Mock Provider');
   });
 
+  it('shows provider row-local pending without locking the whole model page', async () => {
+    const baseApi = createMockApi();
+    const pending = deferred<Awaited<ReturnType<AppApi['testProvider']>>>();
+    window.nexachat = {
+      ...baseApi,
+      testProvider() {
+        return pending.promise;
+      },
+    };
+    await renderApp();
+
+    const models = navModules.find((module) => module.id === 'models')!;
+    openFeature(models, models.tabs.find((tab) => tab.id === 'providers')!);
+    fireEvent.click(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'models.testConnection') }));
+
+    expect(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'app.status.busy') })).toBeDisabled();
+    expect(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'models.fetchModels') })).not.toBeDisabled();
+
+    const provider = (await baseApi.getSnapshot()).providers[0];
+    pending.resolve(provider);
+    await waitFor(() => {
+      expect(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'models.testConnection') })).not.toBeDisabled();
+    });
+  });
+
+  it('shows gateway toggle pending near the gateway control', async () => {
+    const baseApi = createMockApi();
+    const pending = deferred<Awaited<ReturnType<AppApi['toggleGateway']>>>();
+    window.nexachat = {
+      ...baseApi,
+      toggleGateway() {
+        return pending.promise;
+      },
+    };
+    await renderApp();
+
+    const gateway = navModules.find((module) => module.id === 'gateway')!;
+    openFeature(gateway, gateway.tabs.find((tab) => tab.id === 'overview')!);
+    const gatewayButtonLabel = activePanel().textContent?.includes(translate('zh-CN', 'shell.gateway.running'))
+      ? translate('zh-CN', 'gateway.stop')
+      : translate('zh-CN', 'gateway.start');
+    fireEvent.click(within(activePanel()).getByRole('button', { name: gatewayButtonLabel }));
+
+    expect(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'app.status.busy') })).toBeDisabled();
+    expect(activePanel()).toHaveTextContent(gatewayButtonLabel);
+
+    pending.resolve((await baseApi.getSnapshot()).dashboard.gatewayStatus);
+    await waitFor(() => {
+      expect(within(activePanel()).queryByRole('button', { name: translate('zh-CN', 'app.status.busy') })).not.toBeInTheDocument();
+    });
+  });
+
+  it('shows knowledge import and data backup pending next to their controls', async () => {
+    const baseApi = createMockApi();
+    const knowledgePending = deferred<Awaited<ReturnType<AppApi['createKnowledgeFile']>>>();
+    const backupPending = deferred<Awaited<ReturnType<AppApi['createEncryptedBackup']>>>();
+    window.nexachat = {
+      ...baseApi,
+      createKnowledgeFile() {
+        return knowledgePending.promise;
+      },
+      createEncryptedBackup() {
+        return backupPending.promise;
+      },
+    };
+    await renderApp();
+
+    const knowledge = navModules.find((module) => module.id === 'knowledge')!;
+    openFeature(knowledge, knowledge.tabs.find((tab) => tab.id === 'files')!);
+    fireEvent.change(within(activePanel()).getByLabelText(translate('zh-CN', 'knowledge.import.name')), { target: { value: 'pending.md' } });
+    fireEvent.change(within(activePanel()).getByLabelText(translate('zh-CN', 'knowledge.import.content')), { target: { value: 'pending content' } });
+    fireEvent.click(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'knowledge.import.create') }));
+    await waitFor(() => {
+      expect(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'app.status.busy') })).toBeDisabled();
+    });
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'app.status.busy'));
+
+    knowledgePending.resolve((await baseApi.createKnowledgeFile({ name: 'pending.md', type: 'text/markdown', content: 'pending content' })));
+    await waitFor(() => {
+      expect(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'knowledge.import.create') })).not.toBeDisabled();
+    });
+
+    const data = navModules.find((module) => module.id === 'data')!;
+    openFeature(data, data.tabs.find((tab) => tab.id === 'backup')!);
+    fireEvent.change(within(activePanel()).getByLabelText(translate('zh-CN', 'data.backup.passphrase')), { target: { value: 'mock-passphrase' } });
+    fireEvent.click(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'data.backup.create') }));
+    await waitFor(() => {
+      expect(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'app.status.busy') })).toBeDisabled();
+    });
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'data.backup.create'));
+
+    backupPending.resolve(await baseApi.createEncryptedBackup({ profile: 'encrypted-full', passphrase: 'mock-passphrase' }));
+    await waitFor(() => {
+      expect(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'data.backup.create') })).not.toBeDisabled();
+    });
+  });
+
+  it('maps compare model partial failures without blocking successful models', async () => {
+    const baseApi = createMockApi();
+    const initialSnapshot = await baseApi.getSnapshot();
+    await baseApi.createModel({
+      providerId: initialSnapshot.providers[0].id,
+      name: 'nexachat-second',
+      displayName: 'NexaChat Second',
+    });
+    const snapshot = await baseApi.getSnapshot();
+    const [firstModel, secondModel] = snapshot.models;
+    window.nexachat = {
+      ...baseApi,
+      async compareModels(input) {
+        const response = await baseApi.sendMessage({
+          conversationId: input.conversationId,
+          content: input.content,
+          modelId: firstModel.id,
+          contextStrategy: input.contextStrategy,
+        });
+        return {
+          conversation: response.conversation,
+          responses: [response],
+          failures: [{ modelId: secondModel.id, error: 'upstream failed' }],
+        };
+      },
+    };
+    await renderApp();
+
+    const settings = navModules.find((module) => module.id === 'settings')!;
+    openFeature(settings, settings.tabs.find((tab) => tab.id === 'preferences')!);
+    fireEvent.click(within(activePanel()).getByLabelText(translate('zh-CN', 'settings.preferences.advancedMode')));
+    fireEvent.click(screen.getByRole('button', { name: translate('zh-CN', 'settings.preferences.save') }));
+    await waitFor(() => {
+      expect(document.querySelector('.app-frame')).toHaveAttribute('data-user-mode', 'advanced');
+    });
+
+    const chat = navModules.find((module) => module.id === 'chat')!;
+    openFeature(chat, chat.tabs.find((tab) => tab.id === 'conversations')!);
+    fireEvent.click(screen.getByRole('button', { name: translate('zh-CN', 'chat.context.title') }));
+
+    fireEvent.change(screen.getByPlaceholderText(translate('zh-CN', 'chat.composer.placeholder')), { target: { value: 'compare partial' } });
+    const compareList = document.querySelector('.compare-model-list') as HTMLElement;
+    const compareCheckboxes = within(compareList).getAllByRole('checkbox');
+    for (const checkbox of compareCheckboxes.slice(0, 2)) {
+      fireEvent.click(checkbox);
+    }
+    fireEvent.click(screen.getByRole('button', { name: translate('zh-CN', 'chat.compare.run') }));
+
+    await waitFor(() => {
+      expect(screen.getByText(`${firstModel.displayName} / completed`)).toBeInTheDocument();
+      expect(screen.getByText(`${secondModel.displayName} / failed`)).toBeInTheDocument();
+    });
+    expect(screen.getByText('upstream failed')).toBeInTheDocument();
+  });
+
   it('renders gateway token usage trend from real usage records and keeps empty state honest', async () => {
     const baseApi = createMockApi();
     window.nexachat = {

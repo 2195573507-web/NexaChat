@@ -6,6 +6,7 @@ import { FORM_DEFAULTS } from '../../shared/uiCopy';
 import { ActivityList, CommandButton, ConfigDetail, ConfigList, DataRows, EmptyBlock, Field, InlineNotice, PageHeader, StatusPillLite, ToolSection } from '../components/AppFrame';
 import { useI18n } from '../i18n';
 import { formatDate, healthState, statusLabel, TabPanel, type TabPageProps } from './shared';
+import { useLocalPending } from './useLocalPending';
 
 export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPageProps) {
   const { t } = useI18n();
@@ -14,6 +15,7 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
   const [query, setQuery] = useState<string>(FORM_DEFAULTS.knowledgeRetrievalQuery);
   const [retrieval, setRetrieval] = useState<KnowledgeRetrievalResult | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const pending = useLocalPending();
   const activeFiles = snapshot.knowledgeFiles.filter((file) => !file.deletedAt);
   const indexedFiles = activeFiles.filter((file) => file.indexStatus === 'indexed');
   const totals = useMemo(() => ({
@@ -65,10 +67,10 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
           title={t('knowledge.retrieval.title')}
           description={activeTab.featureBoundary}
           status={<StatusPillLite label={indexedFiles.length > 0 ? t('common.indexed') : t('common.notConfigured')} state={indexedFiles.length > 0 ? 'ready' : 'warning'} />}
-          actions={<CommandButton variant="primary" icon={<Search size={15} />} disabled={!query.trim() || indexedFiles.length === 0} disabledReason={indexedFiles.length === 0 ? t('knowledge.retrieval.dependency') : undefined} onClick={() => onAction(t('knowledge.toast.retrieved'), async () => {
+          actions={<CommandButton variant="primary" icon={<Search size={15} />} disabled={!query.trim() || indexedFiles.length === 0 || pending.isPending('knowledge.retrieve')} disabledReason={indexedFiles.length === 0 ? t('knowledge.retrieval.dependency') : undefined} onClick={() => onAction(t('knowledge.toast.retrieved'), () => pending.runPending('knowledge.retrieve', async () => {
             const result = await api.previewKnowledgeRetrieval({ query, topK: KNOWLEDGE_RUNTIME_POLICY.defaultTopK, strategy: 'lexical' });
             setRetrieval(result);
-          })}>{t('knowledge.retrieval.run')}</CommandButton>}
+          }))}>{pending.isPending('knowledge.retrieve') ? t('app.status.busy') : t('knowledge.retrieval.run')}</CommandButton>}
         />
         <div className="tool-layout">
         <ConfigList title={t('knowledge.retrieval.title')} description={activeTab.featureBoundary}>
@@ -79,6 +81,8 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
               </Field>
             </div>
           </ToolSection>
+          {pending.isPending('knowledge.retrieve') ? <InlineNotice tone="info" title={t('app.status.busy')} detail={t('knowledge.retrieval.run')} /> : null}
+          {pending.errorFor('knowledge.retrieve') ? <InlineNotice tone="warning" title={t('app.action.failed')} detail={pending.errorFor('knowledge.retrieve')} /> : null}
           <ActivityList
             empty={t('shared.empty.reason')}
             items={latest.map((citation) => ({
@@ -105,7 +109,7 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
         title={t('knowledge.files.title')}
         description={activeTab.featureBoundary}
         status={<StatusPillLite label={indexedFiles.length > 0 ? t('common.indexed') : t('common.notConfigured')} state={indexedFiles.length > 0 ? 'ready' : 'warning'} />}
-        actions={<CommandButton variant="primary" icon={<FilePlus size={15} />} disabled={!importName.trim() || !importContent.trim()} onClick={() => onAction(t('knowledge.toast.created'), () => api.createKnowledgeFile({ name: importName.trim(), type: 'text/markdown', content: importContent }))}>{t('knowledge.import.create')}</CommandButton>}
+        actions={<CommandButton variant="primary" icon={<FilePlus size={15} />} disabled={!importName.trim() || !importContent.trim() || pending.isPending('knowledge.import')} onClick={() => onAction(t('knowledge.toast.created'), () => pending.runPending('knowledge.import', () => api.createKnowledgeFile({ name: importName.trim(), type: 'text/markdown', content: importContent })))}>{pending.isPending('knowledge.import') ? t('app.status.busy') : t('knowledge.import.create')}</CommandButton>}
       />
       <div className="tool-layout">
       <ConfigList title={t('knowledge.files.title')} description={activeTab.featureBoundary}>
@@ -139,12 +143,14 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
               <textarea value={importContent} onChange={(event) => setImportContent(event.target.value)} aria-label={t('knowledge.import.content')} />
             </Field>
             <InlineNotice tone="warning" title={t('common.unsupported')} detail={t('knowledge.import.unsupportedNote')} />
+            {pending.isPending('knowledge.import') ? <InlineNotice tone="info" title={t('app.status.busy')} detail={t('knowledge.index.title')} /> : null}
+            {pending.errorFor('knowledge.import') ? <InlineNotice tone="warning" title={t('app.action.failed')} detail={pending.errorFor('knowledge.import')} /> : null}
           </div>
         </ToolSection>
 
         <div className="config-items">
           {activeFiles.length > 0 ? activeFiles.map((file) => (
-            <KnowledgeFileRow key={file.id} file={file} pendingDeleteId={pendingDeleteId} setPendingDeleteId={setPendingDeleteId} api={api} onAction={onAction} />
+            <KnowledgeFileRow key={file.id} file={file} pendingDeleteId={pendingDeleteId} setPendingDeleteId={setPendingDeleteId} pending={pending} api={api} onAction={onAction} />
           )) : <EmptyBlock title={t('shared.empty.title')} detail={t('knowledge.files.note')} />}
         </div>
       </ConfigList>
@@ -169,16 +175,20 @@ function KnowledgeFileRow({
   file,
   pendingDeleteId,
   setPendingDeleteId,
+  pending,
   api,
   onAction,
 }: {
   file: KnowledgeFile;
   pendingDeleteId: string | null;
   setPendingDeleteId: (id: string | null) => void;
+  pending: ReturnType<typeof useLocalPending>;
   api: TabPageProps['api'];
   onAction: TabPageProps['onAction'];
 }) {
   const { t } = useI18n();
+  const rebuildKey = `knowledge.rebuild.${file.id}`;
+  const deleteKey = `knowledge.delete.${file.id}`;
   return (
     <div className="config-row">
       <span>
@@ -188,15 +198,16 @@ function KnowledgeFileRow({
       </span>
       <span className="row-actions">
         <StatusPillLite label={statusLabel(file.indexStatus, t)} state={healthState(file.indexStatus)} />
-        <CommandButton icon={<RefreshCw size={14} />} onClick={() => onAction(t('knowledge.toast.rebuilt'), () => api.rebuildKnowledgeFile({ fileId: file.id }))}>{t('knowledge.rebuild')}</CommandButton>
-        <CommandButton variant={pendingDeleteId === file.id ? 'danger' : 'default'} icon={<Trash2 size={14} />} onClick={() => {
+        <CommandButton icon={<RefreshCw size={14} />} disabled={pending.isPending(rebuildKey)} onClick={() => onAction(t('knowledge.toast.rebuilt'), () => pending.runPending(rebuildKey, () => api.rebuildKnowledgeFile({ fileId: file.id })))}>{pending.isPending(rebuildKey) ? t('app.status.busy') : t('knowledge.rebuild')}</CommandButton>
+        <CommandButton variant={pendingDeleteId === file.id ? 'danger' : 'default'} icon={<Trash2 size={14} />} disabled={pending.isPending(deleteKey)} onClick={() => {
           if (pendingDeleteId !== file.id) {
             setPendingDeleteId(file.id);
             return;
           }
-          onAction(t('knowledge.toast.deleted'), () => api.deleteKnowledgeFile({ fileId: file.id }));
-        }}>{t('knowledge.delete')}</CommandButton>
+          onAction(t('knowledge.toast.deleted'), () => pending.runPending(deleteKey, () => api.deleteKnowledgeFile({ fileId: file.id })));
+        }}>{pending.isPending(deleteKey) ? t('app.status.busy') : t('knowledge.delete')}</CommandButton>
       </span>
+      {[rebuildKey, deleteKey].map((key) => pending.errorFor(key) ? <InlineNotice key={key} tone="warning" title={t('app.action.failed')} detail={pending.errorFor(key)} /> : null)}
     </div>
   );
 }

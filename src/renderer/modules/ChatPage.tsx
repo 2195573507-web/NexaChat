@@ -64,6 +64,15 @@ type LocalGenerationState = {
   source: 'ipc-stream' | 'send-message-fallback';
 };
 
+type CompareModelStatus = 'queued' | 'sending' | 'streaming' | 'completed' | 'failed' | 'canceled';
+
+type CompareModelState = {
+  modelId: string;
+  label: string;
+  status: CompareModelStatus;
+  error?: string;
+};
+
 function createClientRequestId() {
   return `req_ui_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -89,6 +98,7 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
   const [contextStrategy, setContextStrategy] = useState<ContextStrategy>(snapshot.conversations[0]?.summary ? 'summary_recent_n' : 'recent_n');
   const [selectedModelId, setSelectedModelId] = useState(getDefaultModel(snapshot)?.id ?? '');
   const [compareModelIds, setCompareModelIds] = useState<string[]>([]);
+  const [compareStates, setCompareStates] = useState<CompareModelState[]>([]);
   const [detailOpen, setDetailOpen] = useState(false);
   const [generation, setGeneration] = useState<LocalGenerationState | null>(null);
   const timelineRef = useRef<HTMLDivElement | null>(null);
@@ -281,6 +291,31 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
     canceledRequestIds.current.add(generation.requestLogId);
     setGeneration({ ...generation, phase: 'canceled', error: t('chat.cancelled.message') });
     onAction(t('chat.toast.cancelled'), () => api.cancelMessage({ requestLogId: generation.response?.requestLog.id ?? generation.requestLogId }));
+  };
+
+  const runCompareModels = async () => {
+    const modelStates = compareModelIds.map((modelId) => ({
+      modelId,
+      label: snapshot.models.find((model) => model.id === modelId)?.displayName ?? modelId,
+      status: 'queued' as CompareModelStatus,
+    }));
+    setCompareStates(modelStates);
+    setCompareStates((current) => current.map((item) => ({ ...item, status: 'sending' })));
+    const result = await api.compareModels({
+      conversationId: activeConversation?.id,
+      content: draft,
+      modelIds: compareModelIds,
+      contextStrategy,
+    });
+    const completedModelIds = new Set(result.responses.map((response) => response.assistantMessage.modelId).filter(Boolean));
+    const failures = new Map((result.failures ?? []).map((failure) => [failure.modelId, failure.error]));
+    setCompareStates((current) => current.map((item) => {
+      const error = failures.get(item.modelId);
+      if (error) {
+        return { ...item, status: 'failed', error };
+      }
+      return completedModelIds.has(item.modelId) ? { ...item, status: 'completed' } : { ...item, status: 'canceled' };
+    }));
   };
 
   const updateAutoScrollPreference = () => {
@@ -484,10 +519,22 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
                 variant="default"
                 icon={<GitCompareArrows size={15} />}
                 disabled={!draft.trim() || compareModelIds.length < 2}
-                onClick={() => onAction(t('chat.toast.compare'), () => api.compareModels({ conversationId: activeConversation?.id, content: draft, modelIds: compareModelIds, contextStrategy }))}
+                onClick={() => onAction(t('chat.toast.compare'), runCompareModels)}
               >
                 {t('chat.compare.run')}
               </CommandButton>
+              {compareStates.length > 0 ? (
+                <div className="compare-progress-list">
+                  {compareStates.map((item) => (
+                    <InlineNotice
+                      key={item.modelId}
+                      tone={item.status === 'failed' ? 'warning' : item.status === 'completed' ? 'success' : 'info'}
+                      title={`${item.label} / ${item.status}`}
+                      detail={item.error}
+                    />
+                  ))}
+                </div>
+              ) : null}
             </section>
           </aside>
         ) : null}

@@ -12,6 +12,10 @@
 - Added typed IPC event channels for Chat stream and task progress, controlled preload `subscribe`/unsubscribe, browser mock event parity, Chat streaming event emission, renderer optimistic user bubble, assistant stream chunk updates, late-chunk cancel filtering, and Audit verify task progress events.
 - Ran `npm.cmd run typecheck`: passed after typed IPC and Chat streaming event changes.
 - Ran `npm.cmd run test -- tests/app.test.tsx tests/ipc-contract.test.ts`: passed, 2 files / 22 tests.
+- Added renderer-local pending state for Provider test/fetch/delete, Model fetch, Gateway toggle/key actions, Knowledge import/rebuild/delete/retrieval, Data import/export/backup/restore/rollback/diagnostics, Settings audit/feedback/eval/privacy/preferences, and Chat compare.
+- Updated compare models to use the single main-process `compareModels` contract with limited concurrency and partial failure isolation, while the renderer maps returned successes/failures to per-model status instead of fanning out through a second UI-only send path.
+- Ran `npm.cmd run typecheck`: passed after local pending and compare updates.
+- Ran `npm.cmd run test -- tests/app.test.tsx tests/ipc-contract.test.ts`: passed, 2 files / 26 tests.
 
 ## 2026-05-17 Main-Process Architecture Service Split
 

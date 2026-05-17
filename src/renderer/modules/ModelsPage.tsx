@@ -14,6 +14,7 @@ import {
   TabPanel,
   type TabPageProps,
 } from './shared';
+import { useLocalPending } from './useLocalPending';
 
 export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
   const { t } = useI18n();
@@ -27,6 +28,7 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
   const [modelFetchState, setModelFetchState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [modelFetchError, setModelFetchError] = useState('');
   const [pendingDeleteProviderId, setPendingDeleteProviderId] = useState<string | null>(null);
+  const pending = useLocalPending();
   const defaultModel = getDefaultModel(snapshot);
   const defaultProvider = getDefaultProvider(snapshot);
   const selectedProvider = snapshot.providers.find((provider) => provider.id === selectedProviderId) ?? snapshot.providers[0];
@@ -123,7 +125,7 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
                     ))}
                   </select>
                 </Field>
-                <CommandButton icon={<DownloadCloud size={14} />} disabled={!selectedProviderId || modelFetchState === 'loading'} onClick={() => onAction(t('models.toast.fetched'), async () => {
+                <CommandButton icon={<DownloadCloud size={14} />} disabled={!selectedProviderId || modelFetchState === 'loading' || pending.isPending(`models.fetch.${selectedProviderId}`)} onClick={() => onAction(t('models.toast.fetched'), () => pending.runPending(`models.fetch.${selectedProviderId}`, async () => {
                   setModelFetchState('loading');
                   setModelFetchError('');
                   try {
@@ -138,8 +140,10 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
                     setModelFetchError(error instanceof Error ? error.message : String(error));
                     throw error;
                   }
-                })}>{t('models.fetchModels')}</CommandButton>
+                }))}>{t('models.fetchModels')}</CommandButton>
               </div>
+              {pending.isPending(`models.fetch.${selectedProviderId}`) ? <InlineNotice tone="info" title={t('app.status.busy')} detail={t('models.fetch.loading')} /> : null}
+              {pending.errorFor(`models.fetch.${selectedProviderId}`) ? <InlineNotice tone="warning" title={t('models.fetch.failed')} detail={pending.errorFor(`models.fetch.${selectedProviderId}`)} /> : null}
               {selectableModelOptions.length > 0 ? (
                 <Field label={t('models.availableModels')}>
                   <select value={modelName} onChange={(event) => setModelName(event.target.value)}>
@@ -268,6 +272,7 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
               isDefault={provider.id === defaultProvider?.id}
               pendingDeleteProviderId={pendingDeleteProviderId}
               setPendingDeleteProviderId={setPendingDeleteProviderId}
+              pending={pending}
               api={api}
               onAction={onAction}
             />
@@ -321,6 +326,7 @@ function ProviderRow({
   isDefault,
   pendingDeleteProviderId,
   setPendingDeleteProviderId,
+  pending,
   api,
   onAction,
 }: {
@@ -329,11 +335,15 @@ function ProviderRow({
   isDefault: boolean;
   pendingDeleteProviderId: string | null;
   setPendingDeleteProviderId: (id: string | null) => void;
+  pending: ReturnType<typeof useLocalPending>;
   api: TabPageProps['api'];
   onAction: TabPageProps['onAction'];
 }) {
   const { t } = useI18n();
   const confirming = pendingDeleteProviderId === provider.id;
+  const fetchKey = `provider.fetch.${provider.id}`;
+  const testKey = `provider.test.${provider.id}`;
+  const deleteKey = `provider.delete.${provider.id}`;
   return (
     <div className={`config-row provider-row ${isDefault ? 'is-active' : ''}`}>
       <div className="provider-row-main">
@@ -347,20 +357,21 @@ function ProviderRow({
         </span>
       </div>
       <span className="provider-row-actions" aria-label={`${provider.name} ${t('chat.message.actions.aria')}`}>
-        <CommandButton icon={<DownloadCloud size={14} />} onClick={() => onAction(t('models.toast.fetched'), () => api.fetchProviderModels(provider.id))}>{t('models.fetchModels')}</CommandButton>
-        <CommandButton icon={<Activity size={14} />} onClick={() => onAction(t('models.toast.tested'), () => api.testProvider(provider.id))}>{t('models.testConnection')}</CommandButton>
+        <CommandButton icon={<DownloadCloud size={14} />} disabled={pending.isPending(fetchKey)} onClick={() => onAction(t('models.toast.fetched'), () => pending.runPending(fetchKey, () => api.fetchProviderModels(provider.id)))}>{pending.isPending(fetchKey) ? t('app.status.busy') : t('models.fetchModels')}</CommandButton>
+        <CommandButton icon={<Activity size={14} />} disabled={pending.isPending(testKey)} onClick={() => onAction(t('models.toast.tested'), () => pending.runPending(testKey, () => api.testProvider(provider.id)))}>{pending.isPending(testKey) ? t('app.status.busy') : t('models.testConnection')}</CommandButton>
         <CommandButton
           variant={confirming ? 'danger' : 'default'}
           icon={<Trash2 size={14} />}
+          disabled={pending.isPending(deleteKey)}
           onClick={() => {
             if (!confirming) {
               setPendingDeleteProviderId(provider.id);
               return;
             }
-            onAction(t('models.toast.deleted'), () => api.deleteProvider(provider.id));
+            onAction(t('models.toast.deleted'), () => pending.runPending(deleteKey, () => api.deleteProvider(provider.id)));
           }}
         >
-          {confirming ? t('models.delete.confirm') : t('models.deleteProvider')}
+          {pending.isPending(deleteKey) ? t('app.status.busy') : confirming ? t('models.delete.confirm') : t('models.deleteProvider')}
         </CommandButton>
         {confirming ? (
           <CommandButton variant="ghost" onClick={() => setPendingDeleteProviderId(null)}>{t('models.delete.cancel')}</CommandButton>
@@ -373,6 +384,7 @@ function ProviderRow({
           detail={t('models.delete.warningDetail', { models: relatedModelCount })}
         />
       ) : null}
+      {[fetchKey, testKey, deleteKey].map((key) => pending.errorFor(key) ? <InlineNotice key={key} tone="warning" title={t('app.action.failed')} detail={pending.errorFor(key)} /> : null)}
     </div>
   );
 }
