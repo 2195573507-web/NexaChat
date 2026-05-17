@@ -1,5 +1,82 @@
 ﻿# NexaChat Project Progress
 
+## 2026-05-17 App Fluidity And Motion Repair Loop
+
+Execution baseline:
+
+- Real project root confirmed with `git rev-parse --show-toplevel`: `D:/NexaChat`.
+- Branch/upstream confirmed as `main` / `origin/main`.
+- Start HEAD for this repair loop: `1813d12f4a52ef04c20fc93cfc42493c20d71e18`.
+- `using-superpowers` was read. Singular `using-superpower` is not installed in this Codex environment.
+- Required package scripts checked in `package.json`: `typecheck`, `test`, `build`, `test:ui-smoke`, and `test:electron-smoke` exist. No `lint`, `format`, `coverage`, `perf`, or `e2e` script is currently defined.
+- The audit document was committed first as required: `f03c77b docs: add app fluidity and motion audit`.
+
+Implementation commits in this loop:
+
+- `f03c77b docs: add app fluidity and motion audit`
+- `8a1771d feat: enforce reduced motion and motion tokens`
+- `ac63672 feat: add typed ipc events and chat streaming`
+- `dd636f1 feat: add localized pending states for async actions`
+- `2f791d8 feat: slim snapshots and add paged module flows`
+- `24f9971 feat: add database indexes and usage aggregation`
+- `4295695 test: add fluidity regression coverage`
+- `f17b3d2 refactor: type module page action refresh options`
+- `165fb84 fix: keep browser mock exports i18n safe`
+
+P0 items completed:
+
+- Added shared motion tokens, reduced-motion shell state, CSS reduced-motion rules, reduced Chat auto-scroll behavior, and reduced progressive reveal timing.
+- Added localized pending state handling across Chat, Models/Provider, Gateway, Knowledge, Data, and Settings actions without turning every action into one global disabled state.
+- Added typed IPC event channels for Chat stream events and generic task progress events, with controlled preload subscribe/unsubscribe APIs and no raw `ipcRenderer` exposure.
+- Added optimistic user bubbles, assistant pending bubbles, request-scoped streaming updates, cancel guards for late chunks, and an invoke-based `sendMessage` fallback.
+- Split App shell state from module data by introducing shell summary handling and action refresh modes (`none`, `module`, `full`, and patch-style updates).
+
+P1 items completed or reduced to stable closure:
+
+- Added Chat conversation and message pagination APIs and moved first-screen Chat loading away from all-message snapshot reads.
+- Added lightweight timeline windowing for long message lists and kept full export backed by a full conversation read instead of the visible window.
+- Slimmed AppSnapshot payloads and moved Gateway logs, Audit logs, Knowledge lists/chunks, and usage trend data behind module APIs with loading/error/load-more states.
+- Added paged Gateway/Audit/Knowledge queries plus SQL usage aggregation.
+- Added additive SQLite indexes and migration coverage for Gateway logs, usage records, audit logs, and provider health records.
+- Added a lightweight background task runner with cooperative progress/cancel flow for Data backup/restore preflight and Audit verify.
+- Reworked model comparison to use per-model statuses, limited concurrency, partial failure isolation, and per-model UI feedback.
+
+P2 items completed or reduced to stable closure:
+
+- Added renderer and main-process performance mark/measure helpers for boot, Chat interaction, send/first chunk, Provider test, Gateway logs, snapshot, sendMessage, audit verify, and backup/restore timing.
+- Added low-risk component extraction for Chat message rows and memoized repeated row/action surfaces where it helped without rewriting the whole shell.
+- Added regression coverage for reduced motion, streaming/cancel/fallback, pending states, IPC event cleanup, pagination, virtualization/windowing, export completeness, SQL aggregation, background cancel, compare partial failure, seven-module navigation, chat-first routing, and horizontal overflow.
+
+Minimum closures and fallbacks kept intentionally:
+
+- Chat streaming keeps `api.sendMessage()` as a clear fallback for non-streaming providers, stream failure, or event delivery failure.
+- Background work uses cooperative async slicing and task progress, not `worker_threads`; workers remain a future hardening path because SQLite writes must stay owned by the main process.
+- Compare Models has per-model statuses, concurrency, and failure isolation, but it does not yet expose a full typed compare-run progress/cancel event stream.
+- Page splitting is intentionally partial. The highest-risk pages were not fully decomposed into every requested container/view/hook file in this loop to avoid large DOM and locator churn.
+- Chat search is still scoped to the currently loaded/paged view; all-history search should be a separate main-side query pass.
+- Full refresh remains as a compatibility fallback for cross-module state changes and schema-wide operations.
+
+Performance and validation notes:
+
+- Vite production build after the loop produced `dist/assets/index-Bxp105yN.css` at `25.63 kB` and `dist/assets/index-CHWUF2BM.js` at `449.61 kB`.
+- The loop added instrumentation rather than a strict latency budget. The smoke tests remain the acceptance gate, while the new marks make future regressions measurable.
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test`: passed, 24 files / 97 tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run test:ui-smoke`: passed, 7 Playwright tests.
+- `npm.cmd run test:electron-smoke`: passed, Electron shell rendered.
+- Known warning: Node prints `node:sqlite ExperimentalWarning`; it is a runtime warning, not a failing test result.
+
+Risk and rollback strategy:
+
+- Revert by phase commit if needed. The highest-risk Chat streaming path has an invoke fallback, schema changes are additive indexes/migrations, and paged module APIs preserve snapshot first-screen compatibility.
+- If a user reports unstable streaming, disable the stream capability path and fall back to `sendMessage` while retaining optimistic local rendering.
+- If a large task progress path regresses, route it back through the previous synchronous action while keeping the task event contract available for a narrower follow-up.
+
+Push status:
+
+- At this document write time the branch is local `main` ahead of `origin/main`. The final commit hash, push result, and `git ls-remote origin refs/heads/main` confirmation are recorded in the final operator closeout because a commit cannot contain its own final SHA or post-push remote ref.
+
 ## 2026-05-17 Main-Process Architecture Service Split Quality Audit
 
 Audit baseline:
