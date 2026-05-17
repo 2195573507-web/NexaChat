@@ -66,18 +66,31 @@ describe('provider invocation through NexaStore', () => {
     expect(tested.healthStatus).toBe('healthy');
 
     const conversation = store.createConversation('Round 6');
+    const sensitivePrompt = 'call the upstream with nxk_request_log_secret and private plan text';
     const result = await store.sendMessage({
       conversationId: conversation.id,
-      content: 'call the upstream',
+      content: sensitivePrompt,
       modelId: model.id,
       contextStrategy: 'recent_n',
     });
+    const requestSummary = JSON.parse(result.requestLog.requestSummaryJson ?? '{}') as {
+      message?: string;
+      promptLength?: number;
+      promptHash?: string;
+      redactedPreview?: string;
+    };
 
     expect(result.assistantMessage.content).toBe('store upstream response');
     expect(result.assistantMessage.status).toBe('completed');
     expect(result.requestLog.status).toBe('completed');
     expect(result.requestLog.responseSummaryJson).toContain('store upstream response');
     expect(result.requestLog.requestSummaryJson).not.toContain('sk-round-06-secret');
+    expect(result.requestLog.requestSummaryJson).not.toContain(sensitivePrompt);
+    expect(result.requestLog.requestSummaryJson).not.toContain('nxk_request_log_secret');
+    expect(requestSummary.message).toBeUndefined();
+    expect(requestSummary.promptLength).toBe(sensitivePrompt.length);
+    expect(requestSummary.promptHash).toMatch(/^[a-f0-9]{16}$/);
+    expect(requestSummary.redactedPreview).toContain('[REDACTED]');
     expect(store.getUsageRecords()).toHaveLength(1);
     expect(store.getAuditLogs().some((entry) => entry.action === 'chat.completed')).toBe(true);
   });

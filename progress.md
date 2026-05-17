@@ -587,3 +587,21 @@
 - Confirmed the real `C:\Users\至亲\AppData\Roaming\NexaChat\nexachat.sqlite` now has the migrated `files` and `knowledge_chunks` columns.
 - Ran `npm.cmd run test:desktop-entry`: passed package smoke, installer smoke, and packaged shortcut readback.
 - Ran `git diff --check`: passed with LF/CRLF conversion warning only.
+
+## 2026-05-17 Audit Repair Round
+
+- Reconfirmed real project root with `git rev-parse --show-toplevel`: `D:/NexaChat`.
+- Re-read `using-superpowers`; `using-superpower` remains unavailable as a local skill path.
+- Restored project context from `task_plan.md`, `findings.md`, `progress.md`, and the project audit report.
+- Chose the lowest-risk repair slice from the audit: P1-3 new request-log prompt duplication and P2-3 raw `nxk_` redaction gaps.
+- Updated `src/main/services/store.ts` so new Chat `request_summary_json` records prompt length, token estimate, hash prefix, and redacted preview instead of raw `message` text.
+- Updated runtime and desktop diagnostic redaction for raw `nxk_` Gateway keys.
+- Added focused tests in `tests/redaction.test.ts` and strengthened Provider store, desktop diagnostics, and observability tests.
+- First targeted test run failed because an attempted audit redaction fixture inserted an unhashed audit row and correctly broke audit integrity verification; moved that coverage into an isolated redaction unit test.
+- Re-ran targeted tests: `npm.cmd run test -- tests/provider-store-integration.test.ts tests/security-runtime.test.ts tests/desktop-entry.test.ts tests/observability-runtime.test.ts tests/redaction.test.ts` passed, 5 files / 13 tests.
+- Updated the audit report and `PROJECT_PROGRESS.md` with the repair status and remaining follow-ups.
+- Ran `npm.cmd run typecheck`: passed.
+- Ran `npm.cmd run test`: passed, 21 Vitest files / 72 tests.
+- Ran `npm.cmd run build`: passed.
+- Ran `npm.cmd run test:ui-smoke`: passed, 7 Playwright tests.
+- Ran `npm.cmd run test:electron-smoke`: passed.

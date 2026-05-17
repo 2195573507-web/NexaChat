@@ -1497,7 +1497,7 @@ export class NexaStore {
         routeDecision.modelNameSnapshot,
         requestId,
         JSON.stringify({
-          message: trimmedContent,
+          ...buildChatRequestSummary(trimmedContent),
           contextStrategy,
           routeReason: routeDecision.reason,
           contextMessageIds: context.contextMessageIds,
@@ -1580,6 +1580,7 @@ export class NexaStore {
         .prepare('UPDATE request_logs SET request_summary_json = ? WHERE id = ?')
         .run(JSON.stringify({
           ...getProviderRequestSummary(providerInput),
+          ...buildChatRequestSummary(trimmedContent),
           contextStrategy,
           routeReason: routeDecision.reason,
           contextMessageIds: context.contextMessageIds,
@@ -4103,6 +4104,15 @@ export class NexaStore {
 
 function normalizeBaseUrl(value: string): string {
   return value.trim().replace(/\/+$/, '');
+}
+
+function buildChatRequestSummary(content: string): Record<string, unknown> {
+  return {
+    promptLength: content.length,
+    promptTokenEstimate: estimateTokens(content),
+    promptHash: createHash('sha256').update(content).digest('hex').slice(0, 16),
+    redactedPreview: redactSensitive(content).slice(0, 120),
+  };
 }
 
 function encodeSecretValue(value: string): string {

@@ -7,7 +7,7 @@ type DiagnosticDetails = Record<string, string | number | boolean | null | undef
 
 const WINDOWS_PATH_PATTERN = /[A-Za-z]:\\[^\s"'<>]+/g;
 const POSIX_PATH_PATTERN = /\/(?:Users|home|tmp|var|private|Volumes)\/[^\s"'<>]+/g;
-const SECRET_PATTERN = /(sk-[A-Za-z0-9_-]{8,}|nxa_[A-Za-z0-9_-]{8,}|Bearer\s+[A-Za-z0-9._-]+)/g;
+const SECRET_PATTERN = /(sk-[A-Za-z0-9_-]{8,}|nxa_[A-Za-z0-9_-]{8,}|nxk_[A-Za-z0-9._-]{8,}|Bearer\s+[A-Za-z0-9._-]+)/g;
 
 function redactDiagnosticText(value: string): string {
   return value

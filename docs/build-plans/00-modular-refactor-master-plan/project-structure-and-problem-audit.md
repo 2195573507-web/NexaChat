@@ -94,7 +94,9 @@ No P0 issue was confirmed in this pass. There is no current evidence from source
 - Root cause: Request log summary is being used for both debugging metadata and message content capture.
 - Upstream/downstream impact: Sensitive user text exists in both `messages` and `request_logs`, increasing the local data exposure surface and making observability privacy settings less effective for already-written logs.
 - Recommended fix: Replace the raw `message` field with `redactedPreview`, length, hash, message count, context IDs, route reason, and retrieval metadata.
-- Suitable for this round: No. It changes log semantics and needs migration/test updates.
+- Repair status 2026-05-17: Fixed for new Chat request logs in `src/main/services/store.ts`. `request_summary_json` now uses prompt length, token estimate, SHA-256 prompt hash prefix, and redacted preview while preserving context strategy, context IDs, route reason, retrieval ID, citation count, attachment summary, action, and Provider request metadata.
+- Remaining follow-up: Existing historical SQLite rows written before this repair can still contain the old `message` field until a dedicated migration or privacy-pruning task rewrites them. This round intentionally did not add a data migration.
+- Suitable for direct repair: Completed for new writes in the 2026-05-17 repair round.
 - Test requirements: Assert request summaries do not contain raw secret-like prompt text; preserve context strategy, route reason, attachment summary, retrieval IDs, and usage/audit links.
 
 ### P2-1: IPC runtime validation only checks argument count
@@ -127,7 +129,9 @@ No P0 issue was confirmed in this pass. There is no current evidence from source
 - Root cause: Gateway key prefix and redaction rules drifted.
 - Upstream/downstream impact: If a raw `nxk_...` value appears outside a Bearer header or known JSON key, diagnostic/audit text may fail to mask it.
 - Recommended fix: Centralize secret-prefix redaction and include `nxk_[A-Za-z0-9_-]+` in both runtime and desktop diagnostics.
-- Suitable for this round: No. Although small, it is source behavior and should have focused redaction tests.
+- Repair status 2026-05-17: Fixed in `src/main/security/redaction.ts` and `src/main/desktopDiagnostics.ts`. Runtime redaction now masks raw `nxk_...` values, and desktop diagnostics include the Gateway key prefix in `SECRET_PATTERN`.
+- Remaining follow-up: Redaction patterns are still duplicated between runtime, desktop diagnostics, and shared observability export. A later cleanup should centralize the prefix list without changing behavior.
+- Suitable for direct repair: Completed in the 2026-05-17 repair round with focused tests.
 - Test requirements: Add tests for raw `nxk_`, Bearer `nxk_`, JSON API key fields, diagnostic messages, and observability/audit exports.
 
 ### P2-4: Electron renderer sandbox remains disabled
@@ -329,9 +333,43 @@ No command failed in this round. The `node:sqlite` warning during unit tests is 
 
 ## 8. Next Round Codex Task List
 
-1. Secret hardening round: restrict `local-dev:v1` fallback, add `nxk_` redaction coverage, and add production safeStorage-unavailable tests.
+1. Secret hardening round: restrict `local-dev:v1` fallback and add production safeStorage-unavailable tests.
 2. Provider config safety round: reject or secret-store sensitive custom headers; keep adapter behavior and logs redacted.
-3. Request log privacy round: replace raw prompt copies in `request_summary_json` with redacted preview/hash/metadata.
+3. Historical request-log privacy cleanup: optionally migrate or prune old `request_summary_json.message` fields from existing SQLite databases.
 4. IPC schema round: add runtime validators for Gateway key, Data restore/rollback/import, execution approval, Provider, and Chat payloads.
 5. Docs structure round: add `docs/build-plans/README.md`, mark historical docs, and add stale-fact scanning before moving root ledgers.
 6. Store extraction plan round: start with Secret/Audit/GatewayKey services while keeping `NexaStore` as the facade until all tests are green.
+
+## 9. Repair Round 2026-05-17 Status
+
+This repair round implemented the smallest source changes from the audit that had clear root cause, narrow blast radius, and direct test coverage.
+
+Completed repairs:
+
+- P1-3 new Chat request logs no longer duplicate full prompt text in `request_logs.request_summary_json`.
+- P2-3 raw `nxk_` Gateway keys are covered by runtime redaction and desktop diagnostics redaction.
+
+Files changed by the repair:
+
+- `src/main/services/store.ts`
+- `src/main/security/redaction.ts`
+- `src/main/desktopDiagnostics.ts`
+- `tests/provider-store-integration.test.ts`
+- `tests/desktop-entry.test.ts`
+- `tests/observability-runtime.test.ts`
+- `tests/redaction.test.ts`
+
+Targeted verification:
+
+- `npm.cmd run test -- tests/provider-store-integration.test.ts tests/security-runtime.test.ts tests/desktop-entry.test.ts tests/observability-runtime.test.ts tests/redaction.test.ts`: Passed, 5 files / 13 tests.
+- `npm.cmd run typecheck`: Passed.
+- `npm.cmd run test`: Passed, 21 Vitest files / 72 tests.
+- `npm.cmd run build`: Passed.
+- `npm.cmd run test:ui-smoke`: Passed, 7 Playwright Chromium smoke tests.
+- `npm.cmd run test:electron-smoke`: Passed.
+
+Not changed in this repair:
+
+- No safeStorage fallback behavior was changed.
+- No Provider custom header storage behavior was changed.
+- No IPC schema validation, SQLite schema migration, Electron sandbox change, Store extraction, i18n split, browser mock split, or documentation directory migration was performed.

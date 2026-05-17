@@ -1,6 +1,7 @@
 const secretPatterns = [
   /Bearer\s+[A-Za-z0-9._~+/=-]+/gi,
   /sk-[A-Za-z0-9._-]+/gi,
+  /nxk_[A-Za-z0-9._-]+/gi,
   /(api[-_ ]?key["']?\s*[:=]\s*["']?)[^"',\s]+/gi,
   /(authorization["']?\s*[:=]\s*["']?)[^"',\n]+/gi,
   /(x-api-key["']?\s*[:=]\s*["']?)[^"',\n]+/gi,

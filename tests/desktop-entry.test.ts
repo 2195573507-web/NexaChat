@@ -54,5 +54,6 @@ describe('desktop entry authority', () => {
     expect(diagnosticsSource).toContain('render-process-gone');
     expect(diagnosticsSource).toContain('child-process-gone');
     expect(diagnosticsSource).toContain('redacted-secret');
+    expect(diagnosticsSource).toContain('nxk_');
   });
 });

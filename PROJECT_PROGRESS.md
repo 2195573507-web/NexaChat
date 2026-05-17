@@ -1671,3 +1671,64 @@ Follow-up recommendations:
 - Harden secret storage and redaction first: restrict `local-dev:v1`, add `nxk_` redaction tests, and protect production safeStorage-unavailable paths.
 - Fix Provider custom-header secret handling and request-log prompt duplication before broader service extraction.
 - Add docs stale-fact scanning, then create a `docs/build-plans/README.md` active/archive index before moving root ledgers or historical plans.
+
+## 2026-05-17 Audit Repair Round: Request Log Privacy And Gateway Key Redaction
+
+Time: 2026-05-17 12:40:58 +08:00.
+
+Project root:
+
+- Confirmed by `git rev-parse --show-toplevel`: `D:/NexaChat`.
+
+Round goal:
+
+- Implement the lowest-risk fixes from `docs/build-plans/00-modular-refactor-master-plan/project-structure-and-problem-audit.md`.
+- Avoid broad source migration, Store extraction, schema migration, or UI rewrite.
+- Keep the current chat-first 7-module direction unchanged.
+
+Modified files:
+
+- `src/main/services/store.ts`: changed new Chat `request_summary_json` writes from raw prompt text to prompt length, token estimate, hash prefix, and redacted preview.
+- `src/main/security/redaction.ts`: added raw `nxk_` Gateway key redaction.
+- `src/main/desktopDiagnostics.ts`: added raw `nxk_` Gateway key redaction for startup/crash diagnostics.
+- `tests/provider-store-integration.test.ts`: asserted request summaries do not persist raw secret-like prompts and keep privacy metadata.
+- `tests/desktop-entry.test.ts`: asserted desktop diagnostics include the Gateway key redaction prefix.
+- `tests/observability-runtime.test.ts`: asserted observability export masks `nxk_` values.
+- `tests/redaction.test.ts`: added focused runtime redaction coverage for raw and Bearer-wrapped Gateway keys.
+- `docs/build-plans/00-modular-refactor-master-plan/project-structure-and-problem-audit.md`: recorded repair status and remaining follow-ups.
+- `PROJECT_PROGRESS.md`: appended this repair entry.
+
+Detected issue summary:
+
+- Fixed for new writes: P1-3 request logs duplicating full prompt content.
+- Fixed: P2-3 raw `nxk_` Gateway key redaction gaps in runtime and desktop diagnostics.
+- Still open: P1-1 safeStorage fallback behavior, P1-2 Provider sensitive custom headers, P2-1 IPC shape validation, P2-2 Gateway key indexed auth, P2-4 Electron sandbox, P2-5 large Store/i18n/mock authorities, P2-6 browser mock parity risk, and P3 documentation/structure cleanup items.
+
+Low-risk scope control:
+
+- No tracked file was deleted.
+- No project directory was moved.
+- No SQLite schema migration was added.
+- No safeStorage fallback behavior was changed.
+- No Provider custom header contract was changed.
+- Historical request-log rows can still contain old `request_summary_json.message` values until a dedicated migration or pruning task is planned.
+
+Verification commands and results:
+
+- `npm.cmd run test -- tests/provider-store-integration.test.ts tests/security-runtime.test.ts tests/desktop-entry.test.ts tests/observability-runtime.test.ts tests/redaction.test.ts`: passed, 5 files / 13 tests.
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test`: passed, 21 Vitest files / 72 tests. Existing Node `node:sqlite` experimental warnings appeared.
+- `npm.cmd run build`: passed.
+- `npm.cmd run test:ui-smoke`: passed, 7 Playwright Chromium smoke tests.
+- `npm.cmd run test:electron-smoke`: passed; Electron shell rendered.
+
+Git commit hash:
+
+- Baseline before this repair: `50d50ea docs: audit project structure and optimization plan`.
+- Delivery commit for this repair is created after full verification and is reported in the final run output.
+
+Follow-up recommendations:
+
+- Next, fix P1-2 Provider custom-header secret handling because it can persist sensitive values in `providers.custom_headers_json`.
+- Then add production-mode tests and policy for safeStorage-unavailable secret writes.
+- Plan a historical request-log privacy cleanup only after deciding whether to migrate or prune existing local rows.
