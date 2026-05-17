@@ -8,6 +8,10 @@
 - Rechecked required skill names: `using-superpower` is unavailable and `using-superpowers` is available.
 - Loaded long-run/planning/UI skill guidance and project memory. User-provided acceptance criteria are treated as the implementation design, so no extra design-approval stop is introduced.
 - Phase 1 scope started: motion tokens, reduced-motion wiring, local async pending, typed IPC events, streaming/pagination/task-progress follow-up phases.
+- Committed reduced-motion and motion-token closure as `8a1771d feat: enforce reduced motion and motion tokens`.
+- Added typed IPC event channels for Chat stream and task progress, controlled preload `subscribe`/unsubscribe, browser mock event parity, Chat streaming event emission, renderer optimistic user bubble, assistant stream chunk updates, late-chunk cancel filtering, and Audit verify task progress events.
+- Ran `npm.cmd run typecheck`: passed after typed IPC and Chat streaming event changes.
+- Ran `npm.cmd run test -- tests/app.test.tsx tests/ipc-contract.test.ts`: passed, 2 files / 22 tests.
 
 ## 2026-05-17 Main-Process Architecture Service Split
 

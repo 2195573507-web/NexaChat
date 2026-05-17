@@ -1,5 +1,6 @@
 import type {
   CancelMessageInput,
+  ChatResponse,
   ApprovalDecisionInput,
   CompareModelsInput,
   ExecutionStartInput,
@@ -84,6 +85,75 @@ export const IPC_CHANNELS = {
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
 
+export const IPC_EVENT_CHANNELS = {
+  chatStream: 'chat:stream:event',
+  taskProgress: 'task:progress:event',
+} as const;
+
+export type IpcEventChannel = (typeof IPC_EVENT_CHANNELS)[keyof typeof IPC_EVENT_CHANNELS];
+
+export type IpcEventPhase =
+  | 'queued'
+  | 'started'
+  | 'sending'
+  | 'streaming'
+  | 'processing'
+  | 'writing'
+  | 'completed'
+  | 'failed'
+  | 'canceled';
+
+export type ChatStreamEventType =
+  | 'chat.stream.started'
+  | 'chat.stream.chunk'
+  | 'chat.stream.progress'
+  | 'chat.stream.completed'
+  | 'chat.stream.failed'
+  | 'chat.stream.canceled';
+
+export type TaskEventType =
+  | 'task.started'
+  | 'task.progress'
+  | 'task.completed'
+  | 'task.failed'
+  | 'task.canceled';
+
+export interface IpcEventBase {
+  type: ChatStreamEventType | TaskEventType;
+  phase: IpcEventPhase;
+  timestamp: number;
+  progress?: number;
+  message?: string;
+  error?: string;
+}
+
+export interface ChatStreamEventPayload extends IpcEventBase {
+  type: ChatStreamEventType;
+  requestId: string;
+  clientRequestId?: string;
+  conversationId?: string;
+  userMessageId?: string;
+  assistantMessageId?: string;
+  chunk?: string;
+  visibleContent?: string;
+  response?: ChatResponse;
+  fallback?: boolean;
+}
+
+export interface TaskEventPayload extends IpcEventBase {
+  type: TaskEventType;
+  taskId: string;
+  taskKind: 'audit.verify' | 'data.backup' | 'data.restore-preflight' | 'knowledge.import' | 'knowledge.rebuild' | 'compare.models' | string;
+  entityId?: string;
+}
+
+export type IpcEventPayloads = {
+  [IPC_EVENT_CHANNELS.chatStream]: ChatStreamEventPayload;
+  [IPC_EVENT_CHANNELS.taskProgress]: TaskEventPayload;
+};
+
+export const IPC_EVENT_CHANNEL_LIST = Object.values(IPC_EVENT_CHANNELS);
+
 export type IpcInvokeArgs = {
   [IPC_CHANNELS.appGetSnapshot]: [];
   [IPC_CHANNELS.providerCreate]: [ProviderInput];
@@ -147,6 +217,10 @@ export const IPC_CHANNEL_LIST = Object.values(IPC_CHANNELS);
 
 export function isIpcChannel(value: string): value is IpcChannel {
   return (IPC_CHANNEL_LIST as string[]).includes(value);
+}
+
+export function isIpcEventChannel(value: string): value is IpcEventChannel {
+  return (IPC_EVENT_CHANNEL_LIST as string[]).includes(value);
 }
 
 export function assertIpcPayload<C extends IpcChannel>(channel: C, args: unknown[]): asserts args is IpcInvokeArgs[C] {

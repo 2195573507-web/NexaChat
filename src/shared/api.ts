@@ -54,6 +54,10 @@ import type {
   ObservabilityQueryInput,
   ObservabilitySnapshot,
 } from './types.js';
+import type { IpcEventChannel, IpcEventPayloads } from './ipc.js';
+
+export type AppEventHandler<C extends IpcEventChannel = IpcEventChannel> = (payload: IpcEventPayloads[C]) => void;
+export type AppEventUnsubscribe = () => void;
 
 export interface AppApi {
   getSnapshot(): Promise<AppSnapshot>;
@@ -108,6 +112,7 @@ export interface AppApi {
   verifyAuditIntegrity(): Promise<AuditIntegrityReport>;
   exportAuditLogs(): Promise<AuditExportResult>;
   openLogs(): Promise<void>;
+  subscribe<C extends IpcEventChannel>(channel: C, handler: AppEventHandler<C>): AppEventUnsubscribe;
 }
 
 export const APP_API_METHODS = [
@@ -160,6 +165,7 @@ export const APP_API_METHODS = [
   'verifyAuditIntegrity',
   'exportAuditLogs',
   'openLogs',
+  'subscribe',
 ] as const satisfies readonly (keyof AppApi)[];
 
 declare global {

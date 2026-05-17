@@ -1770,7 +1770,7 @@ export interface ServiceContext {
   cancelMessage(input: CancelMessageInput): ChatResponse;
   compareModels(input: CompareModelsInput): Promise<CompareModelsResponse>;
   exportConversation(input: ExportConversationInput): ConversationExport;
-  sendMessage(input: SendMessageInput): Promise<ChatResponse>;
+  sendMessage(input: SendMessageInput, options?: { onEvent?: (payload: unknown) => void }): Promise<ChatResponse>;
   getGatewayKeys(): GatewayApiKey[];
   getGatewayLogs(): GatewayLog[];
   getGatewayStatus(): GatewayStatus;

@@ -2,17 +2,22 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { APP_API_METHODS } from '../src/shared/api';
-import { IPC_CHANNELS, IPC_CHANNEL_LIST, assertIpcPayload } from '../src/shared/ipc';
+import { IPC_CHANNELS, IPC_CHANNEL_LIST, IPC_EVENT_CHANNELS, IPC_EVENT_CHANNEL_LIST, assertIpcPayload, isIpcEventChannel } from '../src/shared/ipc';
 
 const projectRoot = process.cwd();
 
 describe('IPC contract authority', () => {
   it('keeps one unique channel for each preload API method', () => {
-    expect(IPC_CHANNEL_LIST).toHaveLength(APP_API_METHODS.length);
+    expect(IPC_CHANNEL_LIST).toHaveLength(APP_API_METHODS.length - 1);
     expect(new Set(IPC_CHANNEL_LIST).size).toBe(IPC_CHANNEL_LIST.length);
+    expect(new Set(IPC_EVENT_CHANNEL_LIST).size).toBe(IPC_EVENT_CHANNEL_LIST.length);
     expect(IPC_CHANNELS.appGetSnapshot).toBe('app:getSnapshot');
     expect(IPC_CHANNELS.chatSendMessage).toBe('chat:sendMessage');
     expect(IPC_CHANNELS.systemOpenLogs).toBe('system:openLogs');
+    expect(IPC_EVENT_CHANNELS.chatStream).toBe('chat:stream:event');
+    expect(IPC_EVENT_CHANNELS.taskProgress).toBe('task:progress:event');
+    expect(isIpcEventChannel(IPC_EVENT_CHANNELS.chatStream)).toBe(true);
+    expect(isIpcEventChannel('ipcRenderer')).toBe(false);
   });
 
   it('rejects invalid payload arity at the main-process boundary', () => {
@@ -49,6 +54,8 @@ describe('IPC contract authority', () => {
 
     expect(mainIpc).not.toMatch(/ipcMain\.handle\(['"]/);
     expect(preload).not.toMatch(/ipcRenderer\.invoke\(['"]/);
+    expect(preload).not.toMatch(/exposeInMainWorld\([^)]*ipcRenderer/);
+    expect(preload).toContain('ipcRenderer.removeListener(channel, listener)');
     expect(mainIpc).toContain('IPC_CHANNELS.');
     expect(preload).toContain('IPC_CHANNELS.');
   });

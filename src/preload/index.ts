@@ -1,6 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { AppApi } from '../shared/api.js';
-import { IPC_CHANNELS, type IpcChannel, type IpcInvokeArgs } from '../shared/ipc.js';
+import {
+  IPC_CHANNELS,
+  isIpcEventChannel,
+  type IpcChannel,
+  type IpcEventChannel,
+  type IpcEventPayloads,
+  type IpcInvokeArgs,
+} from '../shared/ipc.js';
 import type {
   CancelMessageInput,
   CompareModelsInput,
@@ -32,6 +39,17 @@ import type {
 
 function invoke<C extends IpcChannel>(channel: C, ...args: IpcInvokeArgs[C]) {
   return ipcRenderer.invoke(channel, ...args);
+}
+
+function subscribe<C extends IpcEventChannel>(channel: C, handler: (payload: IpcEventPayloads[C]) => void): () => void {
+  if (!isIpcEventChannel(channel)) {
+    throw new Error(`Unsupported IPC event channel: ${channel}`);
+  }
+  const listener = (_event: Electron.IpcRendererEvent, payload: IpcEventPayloads[C]) => handler(payload);
+  ipcRenderer.on(channel, listener);
+  return () => {
+    ipcRenderer.removeListener(channel, listener);
+  };
 }
 
 const api: AppApi = {
@@ -84,6 +102,7 @@ const api: AppApi = {
   verifyAuditIntegrity: () => invoke(IPC_CHANNELS.auditVerify),
   exportAuditLogs: () => invoke(IPC_CHANNELS.auditExport),
   openLogs: () => invoke(IPC_CHANNELS.systemOpenLogs),
+  subscribe,
 };
 
 contextBridge.exposeInMainWorld('nexachat', api);

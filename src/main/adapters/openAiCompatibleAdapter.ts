@@ -23,6 +23,8 @@ export interface ProviderInvocationInput {
   signal?: AbortSignal;
   timeoutMs?: number;
   maxRetries?: number;
+  onChunk?: (chunk: string) => void;
+  onProgress?: (message: string) => void;
 }
 
 export interface ProviderInvocationResult {
@@ -110,7 +112,7 @@ export async function invokeOpenAiCompatibleChat(input: ProviderInvocationInput)
       }
 
       const result = input.stream === true
-        ? await parseStreamingResponse(response)
+        ? await parseStreamingResponse(response, input)
         : await parseJsonResponse(response);
       return {
         ...result,
@@ -280,7 +282,10 @@ async function parseJsonResponse(response: Response): Promise<Omit<ProviderInvoc
   };
 }
 
-async function parseStreamingResponse(response: Response): Promise<Omit<ProviderInvocationResult, 'latencyMs' | 'retryCount'>> {
+async function parseStreamingResponse(
+  response: Response,
+  input: Pick<ProviderInvocationInput, 'onChunk' | 'onProgress'> = {},
+): Promise<Omit<ProviderInvocationResult, 'latencyMs' | 'retryCount'>> {
   if (!response.body) {
     throw new ProviderRuntimeError('Provider streaming response did not include a body.', PROVIDER_RUNTIME_ERROR_CODES.invalidResponse);
   }
@@ -313,12 +318,14 @@ async function parseStreamingResponse(response: Response): Promise<Omit<Provider
       if (typeof choice?.delta?.content === 'string') {
         chunks.push(choice.delta.content);
         content += choice.delta.content;
+        input.onChunk?.(choice.delta.content);
       }
       if (typeof choice?.finish_reason === 'string') {
         finishReason = choice.finish_reason;
       }
       if (chunk.usage) {
         usage = chunk.usage;
+        input.onProgress?.('usage');
       }
     }
   }

@@ -20,10 +20,13 @@ import type {
   RetryMessageInput,
   SendMessageInput
 } from '../../shared/types.js';
+import type { ChatStreamEventPayload } from '../../shared/ipc.js';
 import { ProviderRuntimeError, getProviderRequestSummary, invokeOpenAiCompatibleChat } from '../adapters/openAiCompatibleAdapter.js';
 import { ServiceContext, type ServiceConstructor } from './serviceContext.js';
 
 const t = (key: Parameters<typeof translate>[1], params?: Parameters<typeof translate>[2]) => translate('zh-CN', key, params);
+
+type ChatEventEmitter = (payload: Omit<ChatStreamEventPayload, 'requestId'>) => void;
 
 
 
@@ -257,7 +260,7 @@ export function ChatService<TBase extends ServiceConstructor<ServiceContext>>(Ba
   }
 
 
-  async sendMessage(input: SendMessageInput): Promise<ChatResponse> {
+  async sendMessage(input: SendMessageInput, options: { onEvent?: ChatEventEmitter } = {}): Promise<ChatResponse> {
     this.requirePermission(SECURITY_ACTION_PERMISSIONS.chatWrite, 'conversation', input.conversationId ?? null);
     if (!input.content.trim()) {
       throw new Error(t('models.errors.messageRequired'));
@@ -272,6 +275,7 @@ export function ChatService<TBase extends ServiceConstructor<ServiceContext>>(Ba
     const requestId = createId('gwreq');
     const trimmedContent = input.content.trim();
     const inputTokens = estimateTokens(trimmedContent);
+    const emit = options.onEvent ?? (() => {});
     const modelForContext = this.requireModel(routeDecision.modelId);
     const retrieval = this.retrieveKnowledge(trimmedContent, { persistCitations: false });
     const context = this.buildConversationContext(
@@ -387,6 +391,17 @@ export function ChatService<TBase extends ServiceConstructor<ServiceContext>>(Ba
       status: 'streaming',
       chunkType: 'text',
     });
+    emit({
+      type: 'chat.stream.started',
+      phase: 'started',
+      timestamp,
+      clientRequestId: input.clientRequestId,
+      conversationId: conversation.id,
+      userMessageId,
+      assistantMessageId,
+      message: t('chat.generation.sending'),
+      progress: 0,
+    });
     this.db
       .prepare('UPDATE conversations SET title = ?, last_message_at = ?, message_count = message_count + 2, updated_at = ? WHERE id = ?')
       .run(this.inferConversationTitle(conversation.title, trimmedContent), timestamp, timestamp, conversation.id);
@@ -408,6 +423,31 @@ export function ChatService<TBase extends ServiceConstructor<ServiceContext>>(Ba
         messages: context.providerMessages,
         stream: model.supportsStreaming,
         signal: abortController.signal,
+        onChunk: (chunk: string) => {
+          emit({
+            type: 'chat.stream.chunk',
+            phase: 'streaming',
+            timestamp: now(),
+            clientRequestId: input.clientRequestId,
+            conversationId: conversation.id,
+            userMessageId,
+            assistantMessageId,
+            chunk,
+            progress: undefined,
+          });
+        },
+        onProgress: () => {
+          emit({
+            type: 'chat.stream.progress',
+            phase: 'streaming',
+            timestamp: now(),
+            clientRequestId: input.clientRequestId,
+            conversationId: conversation.id,
+            userMessageId,
+            assistantMessageId,
+            message: t('chat.generation.generating'),
+          });
+        },
       };
       this.db
         .prepare('UPDATE request_logs SET request_summary_json = ? WHERE id = ?')
@@ -512,6 +552,26 @@ export function ChatService<TBase extends ServiceConstructor<ServiceContext>>(Ba
         retryCount: result.retryCount,
       });
       this.recordProviderHealth(routeDecision.providerId, routeDecision.modelId, 'healthy', result.latencyMs, 'chat', null, null);
+      const completedResponse: ChatResponse = {
+        conversation: this.requireConversation(conversation.id),
+        userMessage: this.requireMessage(userMessageId),
+        assistantMessage: this.requireMessage(assistantMessageId),
+        requestLog: this.requireRequestLog(requestLogId),
+        routeDecision,
+        chunks: this.getMessageChunks(assistantMessageId),
+      };
+      emit({
+        type: 'chat.stream.completed',
+        phase: 'completed',
+        timestamp: now(),
+        clientRequestId: input.clientRequestId,
+        conversationId: conversation.id,
+        userMessageId,
+        assistantMessageId,
+        message: t('chat.generation.completed'),
+        progress: 1,
+        response: completedResponse,
+      });
     } catch (error) {
       const normalized = this.normalizeProviderError(error);
       const failedStatus = normalized.code === PROVIDER_RUNTIME_ERROR_CODES.cancelled ? 'cancelled' : 'failed';
@@ -576,6 +636,18 @@ export function ChatService<TBase extends ServiceConstructor<ServiceContext>>(Ba
         errorCode: normalized.code,
       });
       this.recordProviderHealth(routeDecision.providerId, routeDecision.modelId, 'error', Math.max(1, now() - timestamp), 'chat', normalized.code, normalized.message);
+      emit({
+        type: normalized.code === PROVIDER_RUNTIME_ERROR_CODES.cancelled ? 'chat.stream.canceled' : 'chat.stream.failed',
+        phase: normalized.code === PROVIDER_RUNTIME_ERROR_CODES.cancelled ? 'canceled' : 'failed',
+        timestamp: now(),
+        clientRequestId: input.clientRequestId,
+        conversationId: conversation.id,
+        userMessageId,
+        assistantMessageId,
+        message: normalized.code === PROVIDER_RUNTIME_ERROR_CODES.cancelled ? t('chat.generation.canceled') : t('chat.generation.failed'),
+        error: normalized.message,
+        progress: 1,
+      });
     } finally {
       this.activeChatControllers.delete(requestLogId);
     }

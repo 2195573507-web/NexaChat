@@ -7,6 +7,8 @@
 - `AppFrame` receives the full snapshot mainly for shell summary, preferences, provider/model labels, and gateway status. It can be narrowed after module query APIs exist.
 - `ChatPage` currently uses renderer-side progressive reveal from a completed response. Real IPC events must be added without removing `api.sendMessage()` fallback.
 - `progressiveReveal.ts`, CSS, and Chat autoscroll currently do not honor reduced-motion preferences. This is the first low-risk behavior slice.
+- The typed IPC event boundary can be added without exposing raw `ipcRenderer`: renderer gets only `subscribe(channel, handler)` returning an unsubscribe function, while main uses `webContents.send` only after checking the sender is not destroyed.
+- Chat streaming can safely use the existing `sendMessage()` invoke as the compatibility fallback: chunk events improve perceived streaming when providers stream, but the final invoke response still persists messages, chunks, usage, request logs, and citations.
 
 ## Main-Process Architecture Service Split Findings
 

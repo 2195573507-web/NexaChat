@@ -1,7 +1,8 @@
+import type { WebContents } from 'electron';
 import { app, ipcMain, shell } from 'electron';
 import { store } from './services/store.js';
 import { startLocalGateway, stopLocalGateway } from './services/localGateway.js';
-import { assertIpcPayload, IPC_CHANNELS, type IpcChannel } from '../shared/ipc.js';
+import { assertIpcPayload, IPC_CHANNELS, IPC_EVENT_CHANNELS, type IpcChannel, type IpcEventChannel, type IpcEventPayloads } from '../shared/ipc.js';
 import { IPC_PERMISSION_BY_CHANNEL } from '../shared/securityRuntime.js';
 import type {
   CancelMessageInput,
@@ -41,6 +42,17 @@ function handleIpc<C extends IpcChannel>(channel: C, handler: (...args: any[]) =
   });
 }
 
+function safeSendEvent<C extends IpcEventChannel>(
+  webContents: WebContents | null | undefined,
+  channel: C,
+  payload: IpcEventPayloads[C],
+): void {
+  if (!webContents || webContents.isDestroyed()) {
+    return;
+  }
+  webContents.send(channel, payload);
+}
+
 export function registerIpcHandlers(): void {
   handleIpc(IPC_CHANNELS.appGetSnapshot, () => store.getSnapshot());
   handleIpc(IPC_CHANNELS.providerCreate, (input: ProviderInput) => store.createProvider(input));
@@ -49,7 +61,21 @@ export function registerIpcHandlers(): void {
   handleIpc(IPC_CHANNELS.providerTest, (providerId: string) => store.testProvider(providerId));
   handleIpc(IPC_CHANNELS.modelCreate, (input: ModelInput) => store.createModel(input));
   handleIpc(IPC_CHANNELS.chatCreateConversation, (title?: string) => store.createConversation(title));
-  handleIpc(IPC_CHANNELS.chatSendMessage, (input: SendMessageInput) => store.sendMessage(input));
+  ipcMain.handle(IPC_CHANNELS.chatSendMessage, async (event, input: SendMessageInput) => {
+    const args = [input];
+    assertIpcPayload(IPC_CHANNELS.chatSendMessage, args);
+    store.requirePermission(IPC_PERMISSION_BY_CHANNEL[IPC_CHANNELS.chatSendMessage]);
+    const requestId = input.clientRequestId?.trim() || `req_ipc_${Date.now().toString(36)}`;
+    return store.sendMessage(input, {
+      onEvent(payload) {
+        safeSendEvent(event.sender, IPC_EVENT_CHANNELS.chatStream, {
+          clientRequestId: input.clientRequestId,
+          requestId,
+          ...(payload as Omit<IpcEventPayloads[typeof IPC_EVENT_CHANNELS.chatStream], 'requestId'>),
+        });
+      },
+    });
+  });
   handleIpc(IPC_CHANNELS.chatRetryMessage, (input: RetryMessageInput) => store.retryMessage(input));
   handleIpc(IPC_CHANNELS.chatRegenerateMessage, (input: RegenerateMessageInput) => store.regenerateMessage(input));
   handleIpc(IPC_CHANNELS.chatCancelMessage, (input: CancelMessageInput) => store.cancelMessage(input));
@@ -103,7 +129,22 @@ export function registerIpcHandlers(): void {
   handleIpc(IPC_CHANNELS.observabilitySavePrivacy, (input: Partial<ObservabilityPrivacySettings>) => store.saveObservabilityPrivacy(input));
   handleIpc(IPC_CHANNELS.observabilityExport, (input?: ObservabilityQueryInput) => store.exportObservability(input));
   handleIpc(IPC_CHANNELS.auditSearch, (query?: string) => store.searchAuditLogs(query));
-  handleIpc(IPC_CHANNELS.auditVerify, () => store.verifyAuditIntegrity());
+  ipcMain.handle(IPC_CHANNELS.auditVerify, async (event) => {
+    const args: unknown[] = [];
+    assertIpcPayload(IPC_CHANNELS.auditVerify, args);
+    store.requirePermission(IPC_PERMISSION_BY_CHANNEL[IPC_CHANNELS.auditVerify]);
+    const taskId = `task_audit_${Date.now().toString(36)}`;
+    const emit = (payload: IpcEventPayloads[typeof IPC_EVENT_CHANNELS.taskProgress]) => safeSendEvent(event.sender, IPC_EVENT_CHANNELS.taskProgress, payload);
+    emit({ taskId, taskKind: 'audit.verify', type: 'task.started', phase: 'started', timestamp: Date.now(), progress: 0, message: 'audit verify started' });
+    try {
+      const result = store.verifyAuditIntegrity();
+      emit({ taskId, taskKind: 'audit.verify', type: 'task.completed', phase: 'completed', timestamp: Date.now(), progress: 1, message: result.status });
+      return result;
+    } catch (error) {
+      emit({ taskId, taskKind: 'audit.verify', type: 'task.failed', phase: 'failed', timestamp: Date.now(), progress: 1, error: error instanceof Error ? error.message : String(error) });
+      throw error;
+    }
+  });
   handleIpc(IPC_CHANNELS.auditExport, () => store.exportAuditLogs());
   handleIpc(IPC_CHANNELS.systemOpenLogs, async () => {
     await shell.openPath(app.getPath('logs'));

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../src/renderer/App';
 import { createMockApi } from '../src/renderer/mockApi';
 import { modulePageRegistry } from '../src/renderer/modules/modulePageRegistry';
-import { IPC_CHANNELS, IPC_CHANNEL_LIST, assertIpcPayload, isIpcChannel } from '../src/shared/ipc';
+import { IPC_CHANNELS, IPC_CHANNEL_LIST, IPC_EVENT_CHANNELS, type ChatStreamEventPayload, type TaskEventPayload, assertIpcPayload, isIpcChannel } from '../src/shared/ipc';
 import { translate } from '../src/shared/i18n';
 import { navModules, resolveNavigation, routeAliasRegistry } from '../src/shared/navigation';
 import { DEFAULT_MODEL_FORM, DEFAULT_PROVIDER_FORM, PROVIDER_CATALOG } from '../src/shared/providerCatalog';
@@ -144,6 +144,100 @@ describe('NexaChat renderer', () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(screen.queryByText(/late response/)).not.toBeInTheDocument();
+  });
+
+  it('renders an optimistic user bubble before the send response resolves', async () => {
+    const baseApi = createMockApi();
+    const pending = deferred<ChatResponse>();
+    window.nexachat = {
+      ...baseApi,
+      async sendMessage() {
+        return pending.promise;
+      },
+    };
+    await renderApp();
+
+    fireEvent.change(screen.getByPlaceholderText(translate('zh-CN', 'chat.composer.placeholder')), { target: { value: 'optimistic now' } });
+    fireEvent.click(screen.getByRole('button', { name: translate('zh-CN', 'chat.send') }));
+
+    expect(screen.getByText('optimistic now')).toBeInTheDocument();
+    expect(document.querySelector('.generation-progress')).toHaveAttribute('data-generation-phase', expect.stringMatching(/queued|sending/));
+  });
+
+  it('updates the assistant bubble from typed stream chunks and ignores late chunks after cancel', async () => {
+    const baseApi = createMockApi();
+    let streamHandler: ((payload: ChatStreamEventPayload) => void) | null = null;
+    let capturedRequestId = '';
+    const pending = deferred<ChatResponse>();
+    window.nexachat = {
+      ...baseApi,
+      subscribe(channel, handler) {
+        if (channel === IPC_EVENT_CHANNELS.chatStream) {
+          streamHandler = handler as (payload: ChatStreamEventPayload) => void;
+        }
+        return () => {
+          streamHandler = null;
+        };
+      },
+      async sendMessage(input) {
+        capturedRequestId = input.clientRequestId ?? '';
+        streamHandler?.({
+          type: 'chat.stream.started',
+          phase: 'started',
+          requestId: capturedRequestId,
+          clientRequestId: capturedRequestId,
+          timestamp: Date.now(),
+        });
+        streamHandler?.({
+          type: 'chat.stream.chunk',
+          phase: 'streaming',
+          requestId: capturedRequestId,
+          clientRequestId: capturedRequestId,
+          chunk: 'first chunk',
+          timestamp: Date.now(),
+        });
+        return pending.promise;
+      },
+      async cancelMessage(input) {
+        streamHandler?.({
+          type: 'chat.stream.canceled',
+          phase: 'canceled',
+          requestId: input.requestLogId,
+          clientRequestId: input.requestLogId,
+          message: translate('zh-CN', 'chat.cancelled.message'),
+          timestamp: Date.now(),
+        });
+        streamHandler?.({
+          type: 'chat.stream.chunk',
+          phase: 'streaming',
+          requestId: input.requestLogId,
+          clientRequestId: input.requestLogId,
+          chunk: 'late chunk',
+          timestamp: Date.now(),
+        });
+        const response = await baseApi.sendMessage({ content: 'cancel source', clientRequestId: input.requestLogId });
+        return {
+          ...response,
+          requestLog: { ...response.requestLog, id: input.requestLogId, status: 'cancelled' },
+          assistantMessage: { ...response.assistantMessage, requestLogId: input.requestLogId, status: 'cancelled' },
+        };
+      },
+    };
+    await renderApp();
+
+    fireEvent.change(screen.getByPlaceholderText(translate('zh-CN', 'chat.composer.placeholder')), { target: { value: 'stream me' } });
+    fireEvent.click(screen.getByRole('button', { name: translate('zh-CN', 'chat.send') }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/first chunk/)).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getAllByRole('button', { name: translate('zh-CN', 'chat.message.cancel') }).at(-1)!);
+
+    await waitFor(() => {
+      expect(document.querySelector('.generation-progress')).toHaveAttribute('data-generation-phase', 'canceled');
+    });
+    expect(capturedRequestId).toBeTruthy();
+    expect(screen.queryByText(/late chunk/)).not.toBeInTheDocument();
   });
 
   it('keeps chat composer multiline and sends only plain Enter', async () => {
@@ -419,6 +513,46 @@ describe('NexaChat renderer', () => {
     expect(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'observability.feedback.create') })).toBeDisabled();
     fireEvent.change(within(activePanel()).getByLabelText(translate('zh-CN', 'observability.feedback.notes')), { target: { value: 'Generation state should be clearer.' } });
     expect(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'observability.feedback.create') })).not.toBeDisabled();
+  });
+
+  it('receives typed task progress around audit verification and cleans up subscriptions', async () => {
+    const baseApi = createMockApi();
+    const taskEvents: TaskEventPayload[] = [];
+    let taskHandler: ((payload: TaskEventPayload) => void) | null = null;
+    const emitTask = (payload: TaskEventPayload) => {
+      taskHandler?.(payload);
+    };
+    let cleanupCalled = false;
+    window.nexachat = {
+      ...baseApi,
+      subscribe(channel, handler) {
+        if (channel === IPC_EVENT_CHANNELS.taskProgress) {
+          taskHandler = handler as (payload: TaskEventPayload) => void;
+        }
+        return () => {
+          cleanupCalled = true;
+          taskHandler = null;
+        };
+      },
+      async verifyAuditIntegrity() {
+        emitTask({ type: 'task.started', phase: 'started', taskId: 'task_test', taskKind: 'audit.verify', timestamp: Date.now(), progress: 0 });
+        const result = await baseApi.verifyAuditIntegrity();
+        emitTask({ type: 'task.completed', phase: 'completed', taskId: 'task_test', taskKind: 'audit.verify', timestamp: Date.now(), progress: 1, message: result.status });
+        return result;
+      },
+    };
+    const unsubscribe = window.nexachat.subscribe(IPC_EVENT_CHANNELS.taskProgress, (payload) => {
+      taskEvents.push(payload);
+    });
+
+    const report = await window.nexachat.verifyAuditIntegrity();
+    unsubscribe();
+    emitTask({ type: 'task.progress', phase: 'processing', taskId: 'task_test', taskKind: 'audit.verify', timestamp: Date.now(), progress: 0.5 });
+
+    expect(report.status).toBe('verified');
+    expect(taskEvents.map((event) => event.type)).toEqual(['task.started', 'task.completed']);
+    expect(taskEvents.every((event) => event.taskId && event.phase && typeof event.timestamp === 'number')).toBe(true);
+    expect(cleanupCalled).toBe(true);
   });
 });
 

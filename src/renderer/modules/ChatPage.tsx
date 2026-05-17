@@ -1,6 +1,7 @@
 import { BookOpenText, Copy, DatabaseBackup, GitCompareArrows, KeyRound, MessageSquarePlus, Pin, RefreshCw, RotateCcw, Search, Send, ServerCog, Settings, SlidersHorizontal, Star, XCircle } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { I18nKey } from '../../shared/i18n';
+import { IPC_EVENT_CHANNELS } from '../../shared/ipc';
 import type { ChatResponse, ContextStrategy, Conversation, KnowledgeCitation, Message, Model } from '../../shared/types';
 import { ChatInput, CommandButton, EmptyBlock, InlineNotice, MessageBubble, StatusPillLite } from '../components/AppFrame';
 import { useI18n } from '../i18n';
@@ -53,13 +54,14 @@ type LocalGenerationState = {
   requestLogId: string;
   conversationId: string;
   content: string;
+  optimisticUserContent: string;
   modelId?: string;
   modelName: string;
   phase: GenerationPhase;
   visibleContent: string;
   response?: ChatResponse;
   error?: string;
-  source: 'renderer-side-progressive-reveal';
+  source: 'ipc-stream' | 'send-message-fallback';
 };
 
 function createClientRequestId() {
@@ -104,6 +106,66 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
   const groupedConversations = useMemo(() => getGroupedConversations(snapshot.conversations, searchQuery), [snapshot.conversations, searchQuery]);
 
   useEffect(() => {
+    return api.subscribe(IPC_EVENT_CHANNELS.chatStream, (event) => {
+      setGeneration((current) => {
+        if (!current || event.requestId !== current.requestLogId || canceledRequestIds.current.has(event.requestId)) {
+          return current;
+        }
+        if (event.type === 'chat.stream.started') {
+          return {
+            ...current,
+            phase: 'sending',
+            conversationId: event.conversationId ?? current.conversationId,
+          };
+        }
+        if (event.type === 'chat.stream.chunk' && typeof event.chunk === 'string') {
+          return {
+            ...current,
+            phase: 'generating',
+            conversationId: event.conversationId ?? current.conversationId,
+            visibleContent: `${current.visibleContent}${event.chunk}`,
+            source: 'ipc-stream',
+          };
+        }
+        if (event.type === 'chat.stream.progress') {
+          return {
+            ...current,
+            phase: 'generating',
+            conversationId: event.conversationId ?? current.conversationId,
+          };
+        }
+        if (event.type === 'chat.stream.completed') {
+          return {
+            ...current,
+            phase: 'completed',
+            conversationId: event.conversationId ?? current.conversationId,
+            visibleContent: event.visibleContent ?? current.visibleContent,
+            response: event.response ?? current.response,
+          };
+        }
+        if (event.type === 'chat.stream.canceled') {
+          canceledRequestIds.current.add(event.requestId);
+          return {
+            ...current,
+            phase: 'canceled',
+            conversationId: event.conversationId ?? current.conversationId,
+            error: event.message ?? event.error ?? t('chat.cancelled.message'),
+          };
+        }
+        if (event.type === 'chat.stream.failed') {
+          return {
+            ...current,
+            phase: 'failed',
+            conversationId: event.conversationId ?? current.conversationId,
+            error: event.error ?? event.message,
+          };
+        }
+        return current;
+      });
+    });
+  }, [api, t]);
+
+  useEffect(() => {
     if (!activeConversationId && snapshot.conversations[0]) {
       setActiveConversationId(snapshot.conversations[0].id);
       return;
@@ -126,6 +188,16 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
 
   const createConversationFromQuickAction = () => onAction(t('chat.toast.created'), createConversationAndSelect);
 
+  useEffect(() => {
+    if (!generation || generation.phase !== 'completed') {
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      setGeneration((current) => current?.requestLogId === generation.requestLogId && current.phase === 'completed' ? null : current);
+    }, reducedMotion ? 0 : 350);
+    return () => window.clearTimeout(timer);
+  }, [generation?.requestLogId, generation?.phase, reducedMotion]);
+
   const sendCurrentMessage = async () => {
     const content = draft.trim();
     if (!content || !selectedModel || generation?.phase === 'sending' || generation?.phase === 'generating' || generation?.phase === 'queued') {
@@ -138,11 +210,12 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
       requestLogId,
       conversationId: targetConversationId,
       content,
+      optimisticUserContent: content,
       modelId: selectedModel.id,
       modelName: selectedModel.displayName,
       phase: 'queued',
       visibleContent: '',
-      source: 'renderer-side-progressive-reveal',
+      source: 'send-message-fallback',
     });
     setDraft('');
     try {
@@ -171,6 +244,22 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
   };
 
   const revealResponse = async (requestLogId: string, response: ChatResponse) => {
+    let shouldFallbackReveal = false;
+    setGeneration((current) => {
+      shouldFallbackReveal = Boolean(current?.requestLogId === requestLogId && current.visibleContent.length === 0);
+      return current;
+    });
+    if (!shouldFallbackReveal) {
+      setGeneration((current) => current?.requestLogId === requestLogId ? {
+        ...current,
+        phase: response.requestLog.status === 'cancelled' ? 'canceled' : 'completed',
+        response,
+      } : current);
+      window.setTimeout(() => {
+        setGeneration((current) => current?.requestLogId === requestLogId && current.phase === 'completed' ? null : current);
+      }, reducedMotion ? 0 : 350);
+      return;
+    }
     const frames = buildProgressiveRevealFrames(response.assistantMessage.content, { reducedMotion });
     for (const frame of frames) {
       if (canceledRequestIds.current.has(requestLogId)) {
@@ -182,7 +271,7 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
     setGeneration((current) => current?.requestLogId === requestLogId ? { ...current, phase: response.requestLog.status === 'cancelled' ? 'canceled' : 'completed', visibleContent: response.assistantMessage.content, response } : current);
     window.setTimeout(() => {
       setGeneration((current) => current?.requestLogId === requestLogId && current.phase === 'completed' ? null : current);
-    }, 350);
+    }, reducedMotion ? 0 : 350);
   };
 
   const cancelGeneration = () => {
@@ -312,6 +401,15 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
                   {message.errorMessage ? <small>{message.errorMessage}</small> : null}
                 </MessageBubble>
               ))}
+              {generationInActiveConversation && !generationInActiveConversation.response?.userMessage ? (
+                <MessageBubble
+                  role="user"
+                  status="completed"
+                  meta={<span>{t('chat.generation.sending')} / {formatDate(Date.now(), t)}</span>}
+                >
+                  <p>{generationInActiveConversation.optimisticUserContent}</p>
+                </MessageBubble>
+              ) : null}
               {generationInActiveConversation ? <GenerationBubble generation={generationInActiveConversation} onCancel={cancelGeneration} /> : null}
               </>
             ) : (

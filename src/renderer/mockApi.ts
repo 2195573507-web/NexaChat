@@ -70,6 +70,7 @@ import type {
   RollbackRecord,
 } from '../shared/types';
 import type { AppApi } from '../shared/api';
+import { IPC_EVENT_CHANNELS, isIpcEventChannel, type IpcEventChannel, type IpcEventPayloads } from '../shared/ipc';
 import { translate } from '../shared/i18n';
 import { normalizeThemeMode } from '../shared/theme';
 import { EXECUTION_TOOL_IDS, TOOL_FIXTURES, normalizeApprovalDecision, normalizeExecutionStartInput } from '../shared/executionRuntime';
@@ -908,6 +909,13 @@ function createExecutionRun(state: MockState, input: ExecutionStartInput): Execu
 
 export function createMockApi(): AppApi {
   const state = createSeedState();
+  const eventHandlers = new Map<IpcEventChannel, Set<(payload: IpcEventPayloads[IpcEventChannel]) => void>>();
+
+  function emitEvent<C extends IpcEventChannel>(channel: C, payload: IpcEventPayloads[C]) {
+    for (const handler of eventHandlers.get(channel) ?? []) {
+      handler(payload as IpcEventPayloads[IpcEventChannel]);
+    }
+  }
 
   function pushAudit(action: string, targetType: string, targetId: string | null, details?: unknown): void {
     state.auditLogs.unshift(createAuditLog(action, targetType, targetId, details));
@@ -970,6 +978,21 @@ export function createMockApi(): AppApi {
   const api: AppApi = {
     async getSnapshot() {
       return clone(buildSnapshot(state));
+    },
+
+    subscribe(channel, handler) {
+      if (!isIpcEventChannel(channel)) {
+        throw new Error(`Unsupported IPC event channel: ${channel}`);
+      }
+      const handlers = eventHandlers.get(channel) ?? new Set();
+      handlers.add(handler as (payload: IpcEventPayloads[IpcEventChannel]) => void);
+      eventHandlers.set(channel, handlers);
+      return () => {
+        handlers.delete(handler as (payload: IpcEventPayloads[IpcEventChannel]) => void);
+        if (handlers.size === 0) {
+          eventHandlers.delete(channel);
+        }
+      };
     },
 
     async createProvider(input: ProviderInput) {
@@ -1176,6 +1199,16 @@ export function createMockApi(): AppApi {
       const assistantOutputTokens = estimateTokens(assistantContent);
       const requestLogId = input.clientRequestId?.trim() || createId('request');
       const assistantChunks = assistantContent.split('\n\n').filter(Boolean);
+      emitEvent(IPC_EVENT_CHANNELS.chatStream, {
+        type: 'chat.stream.started',
+        phase: 'started',
+        requestId: requestLogId,
+        clientRequestId: input.clientRequestId,
+        conversationId: storedConversation.id,
+        timestamp,
+        progress: 0,
+        message: t('chat.generation.sending'),
+      });
 
       const previousMessage = [...state.messages]
         .reverse()
@@ -1284,6 +1317,21 @@ export function createMockApi(): AppApi {
 
       state.messages.push(userMessage, assistantMessage);
       state.messageChunks.push(...chunks);
+      if (state.models.find((model) => model.id === routeDecision.modelId)?.supportsStreaming !== false) {
+        for (const chunk of chunks) {
+          emitEvent(IPC_EVENT_CHANNELS.chatStream, {
+            type: 'chat.stream.chunk',
+            phase: 'streaming',
+            requestId: requestLogId,
+            clientRequestId: input.clientRequestId,
+            conversationId: storedConversation.id,
+            userMessageId: userMessage.id,
+            assistantMessageId: assistantMessage.id,
+            chunk: chunk.content,
+            timestamp: now(),
+          });
+        }
+      }
       const attachedCitations = retrieval.citations.map((citation) => ({
         ...citation,
         id: createId('knowledge_citation'),
@@ -1324,6 +1372,19 @@ export function createMockApi(): AppApi {
         routeDecision,
         chunks,
       };
+      emitEvent(IPC_EVENT_CHANNELS.chatStream, {
+        type: 'chat.stream.completed',
+        phase: 'completed',
+        requestId: requestLogId,
+        clientRequestId: input.clientRequestId,
+        conversationId: storedConversation.id,
+        userMessageId: userMessage.id,
+        assistantMessageId: assistantMessage.id,
+        response,
+        timestamp: now(),
+        progress: 1,
+        message: t('chat.generation.completed'),
+      });
       return clone(response);
     },
 
