@@ -1554,7 +1554,7 @@ export function createMockApi(): AppApi {
       const redacted = input.redacted !== false;
       const content = input.format === 'json'
         ? JSON.stringify({ conversation, messages, redacted, source: 'browser-mock' }, null, 2)
-        : [`# ${conversation.title}`, '', ...messages.flatMap((message) => [`## ${message.role} 路 ${message.status}`, message.content, ''])].join('\n');
+        : [`# ${conversation.title}`, '', ...messages.flatMap((message) => [`## ${message.role} - ${message.status}`, message.content, ''])].join('\n');
       const created: ConversationExport = {
         id: createId('conversation_export'),
         conversationId: conversation.id,
