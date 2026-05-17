@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import App from '../src/renderer/App';
 import { createMockApi } from '../src/renderer/mockApi';
@@ -96,6 +96,7 @@ describe('NexaChat renderer', () => {
     const baseApi = createMockApi();
     const pending = deferred<ChatResponse>();
     let capturedRequestId = '';
+    let cancelledResponse: ChatResponse | null = null;
     const slowApi: AppApi = {
       ...baseApi,
       async sendMessage(input) {
@@ -108,11 +109,12 @@ describe('NexaChat renderer', () => {
           content: 'cancel source',
           clientRequestId: input.requestLogId,
         });
-        return {
+        cancelledResponse = {
           ...response,
           requestLog: { ...response.requestLog, id: input.requestLogId, status: 'cancelled' },
           assistantMessage: { ...response.assistantMessage, requestLogId: input.requestLogId, status: 'cancelled' },
         };
+        return cancelledResponse;
       },
     };
     window.nexachat = slowApi;
@@ -132,7 +134,14 @@ describe('NexaChat renderer', () => {
       expect(document.querySelector('.generation-progress')).toHaveAttribute('data-generation-phase', 'canceled');
     });
 
-    pending.resolve(await baseApi.sendMessage({ content: 'late response', clientRequestId: capturedRequestId }));
+    if (!cancelledResponse) {
+      throw new Error('Expected cancellation response before resolving slow send.');
+    }
+    const lateResponse = cancelledResponse as ChatResponse;
+    pending.resolve({
+      ...lateResponse,
+      assistantMessage: { ...lateResponse.assistantMessage, content: 'late response' },
+    });
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(screen.queryByText(/late response/)).not.toBeInTheDocument();
   });
@@ -216,12 +225,93 @@ describe('NexaChat renderer', () => {
 
     openFeature(models, models.tabs.find((tab) => tab.id === 'providers')!);
     fireEvent.click(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'models.deleteProvider') }));
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'models.delete.warningTitle'));
+    expect(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'models.delete.cancel') })).toBeInTheDocument();
+    fireEvent.click(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'models.delete.cancel') }));
+    expect(activePanel()).not.toHaveTextContent(translate('zh-CN', 'models.delete.warningTitle'));
+
+    fireEvent.click(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'models.deleteProvider') }));
     fireEvent.click(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'models.delete.confirm') }));
 
     await waitFor(() => {
       expect(activePanel()).toHaveTextContent(translate('zh-CN', 'common.notConfigured'));
     });
     expect(activePanel()).not.toHaveTextContent('Local Mock Provider');
+
+    openFeature(models, models.tabs.find((tab) => tab.id === 'catalog')!);
+    expect(activePanel()).not.toHaveTextContent('Local Mock Provider');
+  });
+
+  it('renders gateway token usage trend from real usage records and keeps empty state honest', async () => {
+    const baseApi = createMockApi();
+    window.nexachat = {
+      ...baseApi,
+      async getSnapshot() {
+        const snapshot = await baseApi.getSnapshot();
+        return {
+          ...snapshot,
+          usageRecords: [],
+          dashboard: {
+            ...snapshot.dashboard,
+            usageToday: {
+              requests: 0,
+              inputTokens: 0,
+              outputTokens: 0,
+              costEstimate: 0,
+            },
+          },
+        };
+      },
+    };
+    await renderApp();
+
+    const gateway = navModules.find((module) => module.id === 'gateway')!;
+    openFeature(gateway, gateway.tabs.find((tab) => tab.id === 'usage')!);
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'gateway.usage.empty'));
+    expect(document.querySelector('.usage-trend-chart')).not.toBeInTheDocument();
+
+    await baseApi.sendMessage({ content: 'usage trend source' });
+    cleanup();
+    window.nexachat = baseApi;
+    await renderApp();
+
+    openFeature(gateway, gateway.tabs.find((tab) => tab.id === 'usage')!);
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'gateway.usage.trendTitle'));
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'gateway.usage.inputTokens'));
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'gateway.usage.outputTokens'));
+    expect(document.querySelector('.usage-trend-chart')).toBeInTheDocument();
+  });
+
+  it('does not draw a gateway token trend when usage records lack token counts', async () => {
+    const baseApi = createMockApi();
+    window.nexachat = {
+      ...baseApi,
+      async getSnapshot() {
+        const snapshot = await baseApi.getSnapshot();
+        return {
+          ...snapshot,
+          usageRecords: [
+            {
+              id: 'usage_without_tokens',
+              requestLogId: 'req_without_tokens',
+              workspaceId: snapshot.dashboard.workspace.id,
+              providerId: snapshot.providers[0]?.id ?? 'provider_missing',
+              modelId: snapshot.models[0]?.id ?? null,
+              inputTokens: 0,
+              outputTokens: 0,
+              costEstimate: 0,
+              createdAt: Date.now(),
+            },
+          ],
+        };
+      },
+    };
+    await renderApp();
+
+    const gateway = navModules.find((module) => module.id === 'gateway')!;
+    openFeature(gateway, gateway.tabs.find((tab) => tab.id === 'usage')!);
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'gateway.usage.noTokenData'));
+    expect(document.querySelector('.usage-trend-chart')).not.toBeInTheDocument();
   });
 
   it('keeps each module route backed by the registry', async () => {
@@ -288,7 +378,7 @@ describe('NexaChat renderer', () => {
 
     openFeature(settings, settings.tabs.find((tab) => tab.id === 'feedback')!);
     expect(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'observability.feedback.create') })).toBeDisabled();
-    fireEvent.change(within(activePanel()).getByLabelText(translate('zh-CN', 'observability.feedback.notes')), { target: { value: '具体反馈：生成状态需要更清晰。' } });
+    fireEvent.change(within(activePanel()).getByLabelText(translate('zh-CN', 'observability.feedback.notes')), { target: { value: 'Generation state should be clearer.' } });
     expect(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'observability.feedback.create') })).not.toBeDisabled();
   });
 });

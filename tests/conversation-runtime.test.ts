@@ -94,6 +94,27 @@ describe('Round 7 conversation runtime', () => {
     expect(store.getSnapshot().conversationExports).toHaveLength(1);
     expect(cancelled.requestLog.status).toBe('cancelled');
   });
+
+  it('uses clientRequestId as the cancellable request log id for in-flight UI cancellation', async () => {
+    const { store } = await import('../src/main/services/store');
+    const provider = store.createProvider({ name: 'Round 7 Provider', type: 'openai-compatible', baseUrl, apiKey: 'sk-round-07' });
+    const model = store.createModel({ providerId: provider.id, name: 'round-07-chat', supportsStreaming: false });
+    const conversation = store.createConversation('Client request id cancel');
+    const clientRequestId = 'req_ui_cancel_contract';
+    responseMode = 'fail';
+
+    const result = await store.sendMessage({
+      conversationId: conversation.id,
+      content: 'fail then cancel by client id',
+      modelId: model.id,
+      clientRequestId,
+    });
+
+    expect(result.requestLog.id).toBe(clientRequestId);
+    const cancelled = store.cancelMessage({ requestLogId: clientRequestId });
+    expect(cancelled.requestLog.id).toBe(clientRequestId);
+    expect(cancelled.requestLog.status).toBe('cancelled');
+  });
 });
 
 function handleRequest(request: IncomingMessage, response: ServerResponse): void {

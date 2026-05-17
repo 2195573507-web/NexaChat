@@ -1,7 +1,8 @@
-import { Copy, KeyRound, Play, Power, RotateCcw, Save, ShieldAlert } from 'lucide-react';
+import { Copy, KeyRound, Play, Power, RotateCcw, Save, ShieldAlert, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
 import { GATEWAY_AVAILABLE_ENDPOINTS, GATEWAY_DEFAULT_KEY_POLICY, GATEWAY_ENDPOINT, GATEWAY_RESERVED_ENDPOINTS } from '../../shared/gatewayRuntime';
-import type { GatewayApiKey } from '../../shared/types';
+import { buildUsageTrend, type UsageTrendPoint } from '../../shared/observabilityRuntime';
+import type { GatewayApiKey, UsageRecord } from '../../shared/types';
 import { GATEWAY_DOCS, FORM_DEFAULTS } from '../../shared/uiCopy';
 import { ActivityList, CommandButton, ConfigDetail, ConfigList, CopyableCommand, DataRows, EmptyBlock, Field, InlineNotice, PageHeader, StatusPillLite, ToolSection } from '../components/AppFrame';
 import { useI18n } from '../i18n';
@@ -77,6 +78,7 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
   }
 
   if (activeTab.id === 'logs' || activeTab.id === 'usage') {
+    const usageTrend = buildUsageTrend(snapshot.usageRecords, { bucketSize: 'day' });
     const logItems = activeTab.id === 'usage'
       ? snapshot.usageRecords.slice(0, 12).map((usage) => ({
           title: t('common.valueSeparator', { left: usage.inputTokens + usage.outputTokens, right: t('knowledge.columns.tokens') }),
@@ -98,14 +100,17 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
         />
         <div className="tool-layout">
         <ConfigList title={activeTab.label} description={activeTab.featureBoundary}>
-          <ActivityList empty={t('app.recent.empty')} items={logItems} />
+          {activeTab.id === 'usage' ? <GatewayUsageTrendPanel usageRecords={snapshot.usageRecords} /> : null}
+          <ActivityList empty={activeTab.id === 'usage' ? t('gateway.usage.empty') : t('app.recent.empty')} items={logItems} />
         </ConfigList>
         <ConfigDetail title={t('observability.usage.title')} description={t('gateway.overview.note', { host: snapshot.dashboard.gatewayStatus.bindHost, port: snapshot.dashboard.gatewayStatus.port })}>
           <InlineNotice tone="info" title={t('gateway.logs.depth')} detail={t('gateway.logs.depth.detail')} />
           <DataRows
             rows={[
-              { label: t('observability.summary.requests'), value: snapshot.dashboard.usageToday.requests },
-              { label: t('observability.summary.tokens'), value: snapshot.dashboard.usageToday.inputTokens + snapshot.dashboard.usageToday.outputTokens },
+              { label: t('observability.summary.requests'), value: usageTrend.totals.requestCount },
+              { label: t('observability.summary.tokens'), value: usageTrend.totals.totalTokens },
+              { label: t('gateway.usage.inputTokens'), value: usageTrend.totals.inputTokens },
+              { label: t('gateway.usage.outputTokens'), value: usageTrend.totals.outputTokens },
               { label: t('gateway.recentError'), value: gatewayStatus.recentError ?? t('common.none') },
             ]}
           />
@@ -189,6 +194,90 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
       </div>
     </TabPanel>
   );
+}
+
+function GatewayUsageTrendPanel({ usageRecords }: { usageRecords: UsageRecord[] }) {
+  const { t } = useI18n();
+  const trend = buildUsageTrend(usageRecords, { bucketSize: 'day' });
+
+  if (usageRecords.length === 0) {
+    return (
+      <ToolSection title={t('gateway.usage.trendTitle')} description={t('gateway.usage.trendSource')}>
+        <EmptyBlock title={t('gateway.usage.empty')} detail={t('gateway.usage.empty.detail')} />
+      </ToolSection>
+    );
+  }
+
+  if (!trend.hasData) {
+    return (
+      <ToolSection title={t('gateway.usage.trendTitle')} description={t('gateway.usage.trendSource')}>
+        <InlineNotice tone="warning" title={t('gateway.usage.noTokenData')} detail={t('gateway.usage.noTokenData.detail')} />
+      </ToolSection>
+    );
+  }
+
+  return (
+    <ToolSection
+      title={t('gateway.usage.trendTitle')}
+      description={t('gateway.usage.trendSource')}
+      actions={<StatusPillLite label={t('gateway.usage.bucket.day')} state="info" />}
+    >
+      <div className="usage-trend-panel" aria-label={t('gateway.usage.chart.aria')}>
+        <UsageTrendChart points={trend.points} />
+        <div className="usage-trend-legend">
+          <span><i className="legend-input" />{t('gateway.usage.inputTokens')}</span>
+          <span><i className="legend-output" />{t('gateway.usage.outputTokens')}</span>
+          <span><TrendingUp size={14} />{t('gateway.usage.totalTokens')}</span>
+          <span>{t('gateway.usage.requests', { count: trend.totals.requestCount })}</span>
+        </div>
+      </div>
+    </ToolSection>
+  );
+}
+
+function UsageTrendChart({ points }: { points: UsageTrendPoint[] }) {
+  const chartPoints = points.length === 1
+    ? [
+        { ...points[0], bucketStart: points[0].bucketStart - 1 },
+        points[0],
+      ]
+    : points;
+  const maxTotal = Math.max(1, ...chartPoints.map((point) => point.totalTokens));
+  const inputPath = buildTrendPath(chartPoints.map((point) => point.inputTokens), maxTotal);
+  const outputPath = buildTrendPath(chartPoints.map((point) => point.outputTokens), maxTotal);
+  const totalPath = buildTrendPath(chartPoints.map((point) => point.totalTokens), maxTotal);
+
+  return (
+    <svg className="usage-trend-chart" viewBox="0 0 320 148" role="img" aria-hidden="true" focusable="false">
+      <line x1="20" y1="124" x2="306" y2="124" />
+      <line x1="20" y1="18" x2="20" y2="124" />
+      <path className="trend-total" d={totalPath} />
+      <path className="trend-input" d={inputPath} />
+      <path className="trend-output" d={outputPath} />
+      {chartPoints.map((point, index) => {
+        const x = chartX(index, chartPoints.length);
+        const y = chartY(point.totalTokens, maxTotal);
+        return <circle key={`${point.bucketStart}-${index}`} cx={x} cy={y} r="3" />;
+      })}
+    </svg>
+  );
+}
+
+function buildTrendPath(values: number[], maxValue: number): string {
+  return values
+    .map((value, index) => `${index === 0 ? 'M' : 'L'} ${chartX(index, values.length)} ${chartY(value, maxValue)}`)
+    .join(' ');
+}
+
+function chartX(index: number, count: number): number {
+  if (count <= 1) {
+    return 20;
+  }
+  return 20 + (286 * index) / (count - 1);
+}
+
+function chartY(value: number, maxValue: number): number {
+  return 124 - (Math.max(0, value) / maxValue) * 106;
 }
 
 function GatewayKeyRow({

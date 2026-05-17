@@ -1732,3 +1732,57 @@ Follow-up recommendations:
 - Next, fix P1-2 Provider custom-header secret handling because it can persist sensitive values in `providers.custom_headers_json`.
 - Then add production-mode tests and policy for safeStorage-unavailable secret writes.
 - Plan a historical request-log privacy cleanup only after deciding whether to migrate or prune existing local rows.
+
+## 2026-05-17 Dialog-Scope Long-Run Engineering Iteration
+
+Time: 2026-05-17 13:02:54 +08:00.
+
+Project root:
+
+- Confirmed by `git rev-parse --show-toplevel`: `D:/NexaChat`.
+
+Round goal:
+
+- Execute a current-dialog-scope long-run iteration, not a docs-only audit.
+- Stay inside the features named in the current dialog: Provider deletion, Provider model list auto-fetch, Gateway token trend, Chat generation feedback, localization soft-coding, tests, docs, commit, and push.
+- Avoid unrelated historical requirements, broad UI redesign, database-wide rewrites, fake data, fake streaming, and `/v1/responses`.
+
+Actual code changes:
+
+- Provider deletion: kept the Store soft-delete strategy and added explicit Chinese/English i18n-backed confirmation, cancel action, related model count warning, selection cleanup, and UI refresh coverage.
+- Model list auto-fetch: preserved the existing `fetchProviderModels` -> OpenAI-compatible `/v1/models` path, improved manual refetch error state, retained manual model ID fallback, and tested success/empty/upstream-failure/unsupported Provider paths.
+- Gateway token usage curve: added real `usage_records` aggregation and a compact SVG trend panel with input/output/total tokens and request count. Empty and no-token-data states do not render fake charts.
+- Chat generation: extracted renderer-side progressive reveal frames, aligned `clientRequestId` with Store request log id for cancellation, preserved late-response cancellation behavior, and improved scroll-follow so manual upward scroll is not overridden.
+- Localization: added zh-CN/en-US keys for new Provider deletion and Gateway usage trend copy, removed mojibake in the progressive reveal helper, and kept new user-facing text dictionary-backed.
+
+Tests added or modified:
+
+- `tests/progressive-reveal.test.ts`
+- `tests/observability-runtime.test.ts`
+- `tests/provider-store-integration.test.ts`
+- `tests/conversation-runtime.test.ts`
+- `tests/app.test.tsx`
+- Existing i18n/hardcode checks rerun.
+
+Verification results so far:
+
+- `npm.cmd run test -- tests/progressive-reveal.test.ts tests/app.test.tsx tests/provider-store-integration.test.ts tests/observability-runtime.test.ts tests/conversation-runtime.test.ts tests/i18n-authority.test.ts`: passed, 6 files / 30 tests.
+- `npm.cmd run scan:hardcode`: passed.
+- `npm.cmd run test -- tests/provider-store-integration.test.ts tests/app.test.tsx tests/observability-runtime.test.ts`: passed, 3 files / 23 tests.
+- `npm.cmd run typecheck`: passed after fixing the new test fixture shape; final rerun passed.
+- `npm.cmd run test`: passed final rerun, 22 files / 80 tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run test:ui-smoke`: passed, 7 Playwright tests.
+- `npm.cmd run test:electron-smoke`: passed.
+- Supplemental in-app browser check against `http://127.0.0.1:5173/` was attempted twice and timed out; this is recorded as blocked, not passed.
+- Final commit hash and push status are recorded after Git closeout. Because a commit hash cannot be known before the commit is created, the final response is the authoritative source for the final hash.
+
+Honest limitations:
+
+- Chat progressive output is UI progressive rendering, not real backend streaming to the renderer.
+- Gateway token curve uses only real `usage_records`; if token fields are absent, it shows a no-token-data state instead of a fake zero curve.
+- Provider deletion is soft delete, not physical cascade delete, to preserve history and avoid dangling references.
+
+Documentation:
+
+- Updated `docs/build-plans/00-modular-refactor-master-plan/long-run-dialog-scope-execution-report.md` with audit, implementation, downgrade, hallucination-guard, and verification notes.

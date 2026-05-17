@@ -605,3 +605,19 @@
 - Ran `npm.cmd run build`: passed.
 - Ran `npm.cmd run test:ui-smoke`: passed, 7 Playwright tests.
 - Ran `npm.cmd run test:electron-smoke`: passed.
+
+## 2026-05-17 Dialog-Scope Long-Run Engineering Iteration
+
+- Reconfirmed project root as `D:/NexaChat`, branch `main`, initial HEAD `85ef81f15bd6659bb648e97012884d6a2dbc51a8`, and clean startup status.
+- Rechecked required skills: `using-superpowers` exists, singular `using-superpower` is missing, and long-run/browser/UI/planning skills were used as applicable.
+- Completed startup checks for Node/npm/scripts and baseline `typecheck`/`test`.
+- Audited only current-dialog scope: Provider deletion, model list auto-fetch, Gateway token trend, Chat generation feedback, and localization.
+- Implemented Provider delete confirmation/cancel UI while keeping existing Store soft-delete behavior.
+- Kept Provider model discovery on the existing `/v1/models` adapter path and strengthened manual refetch error state.
+- Added real `usage_records` token trend aggregation and Gateway usage SVG trend panel with honest empty/no-token states.
+- Added renderer-side progressive reveal helper for Chat and aligned cancellation request ids with Store request log ids.
+- Added/updated tests for progressive reveal, usage trend aggregation, Provider delete/model discovery, Chat cancellation, and renderer UI states.
+- Ran targeted tests and hardcode scan successfully.
+- Ran the required full verification set successfully after docs update: `typecheck`, `test` (22 files / 80 tests), `build`, `test:ui-smoke` (7 Playwright tests), and `test:electron-smoke`.
+- Attempted supplemental in-app browser verification twice against local Vite; browser plugin calls timed out, so this is recorded as blocked and not used as pass evidence.
+- Updated `PROJECT_PROGRESS.md` and the dialog-scope execution report; final commit and push are still pending.

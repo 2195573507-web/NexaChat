@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 let server: Server | null = null;
 let baseUrl = '';
 let dataDir = '';
+let modelListMode: 'success' | 'empty' | 'error' = 'success';
 
 vi.mock('electron', () => ({
   app: {
@@ -20,6 +21,7 @@ vi.mock('electron', () => ({
 
 beforeEach(async () => {
   vi.resetModules();
+  modelListMode = 'success';
   dataDir = join(process.cwd(), 'test-results', `round-06-store-${Date.now()}-${Math.random().toString(16).slice(2)}`);
   mkdirSync(dataDir, { recursive: true });
   process.env.NEXACHAT_DATA_DIR = dataDir;
@@ -107,6 +109,10 @@ describe('provider invocation through NexaStore', () => {
     await expect(store.fetchProviderModels(provider.id)).resolves.toEqual([{ id: 'round-06-chat', name: 'round-06-chat' }]);
     const model = store.createModel({ providerId: provider.id, name: 'round-06-chat', supportsStreaming: false });
     const conversation = store.createConversation('Soft delete trace');
+    const rawDb = store.getRawDatabaseForTesting();
+    rawDb
+      .prepare('UPDATE workspaces SET default_provider_id = ?, default_model_id = ?, updated_at = ? WHERE id = ?')
+      .run(provider.id, model.id, Date.now(), conversation.workspaceId);
     await store.sendMessage({
       conversationId: conversation.id,
       content: 'keep provider trace',
@@ -118,13 +124,52 @@ describe('provider invocation through NexaStore', () => {
     expect(deleted.enabled).toBe(false);
     expect(store.getProviders().some((item) => item.id === provider.id)).toBe(false);
     expect(store.getModels().some((item) => item.id === model.id)).toBe(false);
+    expect(store.getDashboardSummary().gatewayStatus.endpoints).toContain('/v1/models');
+    expect(store.resolveGatewayModelId(model.name)).toBeUndefined();
+    expect(store.getDashboardSummary().workspace.defaultProviderId).toBeNull();
+    expect(store.getDashboardSummary().workspace.defaultModelId).toBeNull();
     expect(store.getMessages(conversation.id).some((message) => message.providerId === provider.id && message.modelId === model.id)).toBe(true);
     expect(store.getAuditLogs().some((entry) => entry.action === 'provider.deleted')).toBe(true);
+  });
+
+  it('keeps provider model discovery failures and unsupported providers on the existing adapter path', async () => {
+    const { store } = await import('../src/main/services/store');
+    const provider = store.createProvider({
+      name: 'Round 6 Empty Models',
+      type: 'openai-compatible',
+      baseUrl,
+      apiKey: 'sk-round-06-secret',
+    });
+
+    modelListMode = 'empty';
+    await expect(store.fetchProviderModels(provider.id)).resolves.toEqual([]);
+    expect(store.getProviderHealthRecords()[0]).toMatchObject({ providerId: provider.id, status: 'healthy' });
+
+    modelListMode = 'error';
+    await expect(store.fetchProviderModels(provider.id)).rejects.toThrow(/upstream failed/i);
+    expect(store.getProviderHealthRecords()[0]).toMatchObject({ providerId: provider.id, status: 'error' });
+
+    const unsupported = store.createProvider({
+      name: 'Round 6 Unsupported Provider',
+      type: 'anthropic',
+      baseUrl,
+      apiKey: 'sk-round-06-secret',
+    });
+    await expect(store.fetchProviderModels(unsupported.id)).rejects.toMatchObject({ code: 'provider_unsupported' });
+    expect(store.getProviderHealthRecords()[0]).toMatchObject({ providerId: unsupported.id, status: 'error' });
   });
 });
 
 function handleRequest(request: IncomingMessage, response: ServerResponse): void {
   if (request.url === '/v1/models') {
+    if (modelListMode === 'error') {
+      writeJson(response, 502, { error: { message: 'upstream failed while listing models' } });
+      return;
+    }
+    if (modelListMode === 'empty') {
+      writeJson(response, 200, { object: 'list', data: [] });
+      return;
+    }
     writeJson(response, 200, { object: 'list', data: [{ id: 'round-06-chat', object: 'model' }] });
     return;
   }

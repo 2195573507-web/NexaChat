@@ -202,3 +202,11 @@
 - The screenshot error was consistent with a partially migrated packaged userData database: core workspace columns already existed, but legacy `files` and `knowledge_chunks` tables were still missing columns required by current startup schema/index creation.
 - `release/win-unpacked` cannot be regenerated while a prior packaged `NexaChat.exe` process is still running. Check for `ExecutablePath` under `D:\NexaChat\release\win-unpacked\*`, stop those NexaChat processes only, then rerun `npm.cmd run package:release`.
 - For this class of bug, the strongest verification is launching `release\win-unpacked\NexaChat.exe` against the real Electron userData directory after backing up `nexachat.sqlite`, then confirming the app renders and the database columns are present.
+
+## 2026-05-17 Dialog-Scope Long-Run Findings
+
+- Provider deletion was already safe at the Store layer through soft-delete, related model disablement, alias disablement, and default clearing. The gap was user-facing confirmation clarity and test coverage, not a need for destructive cascade deletion.
+- Model discovery was already routed through `fetchProviderModels` and the OpenAI-compatible `/v1/models` adapter. The useful hardening was to keep manual fallback visible after refetch failures and cover empty/upstream-error/unsupported Provider paths.
+- Gateway trend must key off real `usage_records`. Request-only records should contribute to request count but must not draw a fake zero-token chart.
+- Chat can improve perceived generation by renderer-side progressive reveal, but this must stay explicitly distinct from real backend streaming until a renderer IPC chunk protocol exists.
+- CJK punctuation in regex source should use Unicode escapes in this repo to avoid mojibake scanner failures and PowerShell display ambiguity.

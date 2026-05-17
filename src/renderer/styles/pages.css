@@ -509,6 +509,80 @@
   align-items: stretch;
 }
 
+.usage-trend-panel {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.usage-trend-chart {
+  width: 100%;
+  max-width: 100%;
+  min-height: 148px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+}
+
+.usage-trend-chart line {
+  stroke: color-mix(in srgb, var(--color-border) 70%, transparent);
+  stroke-width: 1;
+}
+
+.usage-trend-chart path {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.usage-trend-chart circle {
+  fill: var(--color-text);
+  opacity: 0.72;
+}
+
+.trend-total {
+  stroke: var(--color-primary);
+}
+
+.trend-input {
+  stroke: var(--color-info);
+}
+
+.trend-output {
+  stroke: var(--color-success);
+}
+
+.usage-trend-legend {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.usage-trend-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.usage-trend-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  display: inline-block;
+}
+
+.legend-input {
+  background: var(--color-info);
+}
+
+.legend-output {
+  background: var(--color-success);
+}
+
 .provider-switch-list .config-row,
 .workbench-home .config-row {
   align-items: flex-start;

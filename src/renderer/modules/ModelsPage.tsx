@@ -117,12 +117,20 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
             title={t('models.modelName')}
             description={t('models.modelName.help')}
             actions={<CommandButton icon={<DownloadCloud size={14} />} disabled={!selectedProviderId || modelFetchState === 'loading'} onClick={() => onAction(t('models.toast.fetched'), async () => {
-              const options = await api.fetchProviderModels(selectedProviderId);
-              setModelOptions(options);
-              setModelFetchState('ready');
+              setModelFetchState('loading');
               setModelFetchError('');
-              const firstNewModel = options.find((option) => !existingModelNames.has(option.id)) ?? options[0];
-              if (firstNewModel) setModelName(firstNewModel.id);
+              try {
+                const options = await api.fetchProviderModels(selectedProviderId);
+                setModelOptions(options);
+                setModelFetchState('ready');
+                const firstNewModel = options.find((option) => !existingModelNames.has(option.id)) ?? options[0];
+                if (firstNewModel) setModelName(firstNewModel.id);
+              } catch (error) {
+                setModelOptions([]);
+                setModelFetchState('error');
+                setModelFetchError(error instanceof Error ? error.message : String(error));
+                throw error;
+              }
             })}>{t('models.fetchModels')}</CommandButton>}
           >
             <div className="form-stack">
@@ -257,6 +265,7 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
             <ProviderRow
               key={provider.id}
               provider={provider}
+              relatedModelCount={snapshot.models.filter((model) => model.providerId === provider.id).length}
               isDefault={provider.id === defaultProvider?.id}
               pendingDeleteProviderId={pendingDeleteProviderId}
               setPendingDeleteProviderId={setPendingDeleteProviderId}
@@ -309,6 +318,7 @@ function ModelFetchNotice({
 
 function ProviderRow({
   provider,
+  relatedModelCount,
   isDefault,
   pendingDeleteProviderId,
   setPendingDeleteProviderId,
@@ -316,6 +326,7 @@ function ProviderRow({
   onAction,
 }: {
   provider: TabPageProps['snapshot']['providers'][number];
+  relatedModelCount: number;
   isDefault: boolean;
   pendingDeleteProviderId: string | null;
   setPendingDeleteProviderId: (id: string | null) => void;
@@ -347,7 +358,17 @@ function ProviderRow({
         >
           {confirming ? t('models.delete.confirm') : t('models.deleteProvider')}
         </CommandButton>
+        {confirming ? (
+          <CommandButton variant="ghost" onClick={() => setPendingDeleteProviderId(null)}>{t('models.delete.cancel')}</CommandButton>
+        ) : null}
       </span>
+      {confirming ? (
+        <InlineNotice
+          tone="warning"
+          title={t('models.delete.warningTitle')}
+          detail={t('models.delete.warningDetail', { models: relatedModelCount })}
+        />
+      ) : null}
     </div>
   );
 }

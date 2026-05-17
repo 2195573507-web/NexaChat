@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildObservabilitySummary,
+  buildUsageTrend,
   buildRedactedObservabilityExport,
   filterObservabilityRequestLogs,
   normalizeObservabilityPrivacySettings,
@@ -42,6 +43,49 @@ describe('Round 13 observability runtime', () => {
     expect(summary.providerHealth[0].requestCount).toBe(2);
     expect(summary.topErrors.map((item) => item.code)).toContain('timeout');
     expect(summary.topErrors.map((item) => item.code)).toContain('provider_error');
+  });
+
+  it('aggregates real usage records into token trend buckets without synthetic data', () => {
+    const day = 24 * 60 * 60 * 1000;
+    const usageRecords: UsageRecord[] = [
+      usageRecord({ requestLogId: 'req_1', inputTokens: 8, outputTokens: 13, createdAt: day + 1000 }),
+      usageRecord({ requestLogId: 'req_2', inputTokens: 5, outputTokens: 7, createdAt: day + 2000 }),
+      usageRecord({ requestLogId: 'req_3', inputTokens: 3, outputTokens: 2, createdAt: day * 2 + 1000 }),
+    ];
+
+    const trend = buildUsageTrend(usageRecords, { bucketSize: 'day' });
+
+    expect(trend.hasData).toBe(true);
+    expect(trend.points).toHaveLength(2);
+    expect(trend.points[0]).toMatchObject({
+      inputTokens: 13,
+      outputTokens: 20,
+      totalTokens: 33,
+      requestCount: 2,
+      hasTokenData: true,
+    });
+    expect(trend.totals).toEqual({
+      inputTokens: 16,
+      outputTokens: 22,
+      totalTokens: 38,
+      requestCount: 3,
+    });
+    expect(buildUsageTrend([], { bucketSize: 'day' })).toMatchObject({ hasData: false, points: [] });
+  });
+
+  it('does not treat request-only usage records as drawable token trend data', () => {
+    const trend = buildUsageTrend([
+      usageRecord({ requestLogId: 'req_without_tokens', inputTokens: 0, outputTokens: 0 }),
+    ]);
+
+    expect(trend.hasData).toBe(false);
+    expect(trend.totals).toEqual({
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      requestCount: 1,
+    });
+    expect(trend.points[0]).toMatchObject({ requestCount: 1, hasTokenData: false });
   });
 
   it('redacts keys prompts and local paths from observability exports by default', () => {
@@ -138,7 +182,7 @@ function usageRecord(input: Partial<UsageRecord>): UsageRecord {
     inputTokens: input.inputTokens ?? 0,
     outputTokens: input.outputTokens ?? 0,
     costEstimate: 0,
-    createdAt: 1,
+    createdAt: input.createdAt ?? 1,
   };
 }
 

@@ -16,6 +16,7 @@ import {
   TabPanel,
   type TabPageProps,
 } from './shared';
+import { buildProgressiveRevealFrames } from './progressiveReveal';
 
 function getConversationMessages(messages: Message[], conversationId: string | undefined) {
   if (!conversationId) {
@@ -89,6 +90,7 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
   const [detailOpen, setDetailOpen] = useState(false);
   const [generation, setGeneration] = useState<LocalGenerationState | null>(null);
   const timelineRef = useRef<HTMLDivElement | null>(null);
+  const shouldAutoScrollRef = useRef(true);
   const canceledRequestIds = useRef(new Set<string>());
 
   const defaultModel = getDefaultModel(snapshot);
@@ -168,15 +170,13 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
   };
 
   const revealResponse = async (requestLogId: string, response: ChatResponse) => {
-    const segments = splitProgressiveSegments(response.assistantMessage.content);
-    let visible = '';
-    for (const segment of segments) {
+    const frames = buildProgressiveRevealFrames(response.assistantMessage.content);
+    for (const frame of frames) {
       if (canceledRequestIds.current.has(requestLogId)) {
         return;
       }
-      visible += segment;
-      setGeneration((current) => current?.requestLogId === requestLogId ? { ...current, phase: 'generating', visibleContent: visible, response } : current);
-      await new Promise((resolve) => setTimeout(resolve, Math.min(140, Math.max(28, segment.length * 3))));
+      setGeneration((current) => current?.requestLogId === requestLogId ? { ...current, phase: 'generating', visibleContent: frame.visibleContent, response } : current);
+      await new Promise((resolve) => setTimeout(resolve, frame.delayMs));
     }
     setGeneration((current) => current?.requestLogId === requestLogId ? { ...current, phase: response.requestLog.status === 'cancelled' ? 'canceled' : 'completed', visibleContent: response.assistantMessage.content, response } : current);
     window.setTimeout(() => {
@@ -190,12 +190,21 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
     }
     canceledRequestIds.current.add(generation.requestLogId);
     setGeneration({ ...generation, phase: 'canceled', error: t('chat.cancelled.message') });
-    onAction(t('chat.toast.cancelled'), () => api.cancelMessage({ requestLogId: generation.requestLogId }));
+    onAction(t('chat.toast.cancelled'), () => api.cancelMessage({ requestLogId: generation.response?.requestLog.id ?? generation.requestLogId }));
+  };
+
+  const updateAutoScrollPreference = () => {
+    const timeline = timelineRef.current;
+    if (!timeline) {
+      return;
+    }
+    const distanceFromBottom = timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight;
+    shouldAutoScrollRef.current = distanceFromBottom < 96;
   };
 
   useEffect(() => {
     const timeline = timelineRef.current;
-    if (!timeline) {
+    if (!timeline || !shouldAutoScrollRef.current) {
       return;
     }
     if (typeof timeline.scrollTo === 'function') {
@@ -277,7 +286,7 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
             <QuickAction icon={<Settings size={16} />} title={t('chat.quickActions.settings')} detail={t('chat.quickActions.settings.detail')} onClick={() => onOpenModule({ moduleId: 'settings', tabId: 'preferences' })} />
           </div>
 
-          <div className="message-timeline" ref={timelineRef}>
+          <div className="message-timeline" ref={timelineRef} onScroll={updateAutoScrollPreference}>
             {visibleMessages.length > 0 || generationInActiveConversation ? (
               <>
               {visibleMessages.map((message) => (

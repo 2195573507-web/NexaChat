@@ -4,6 +4,9 @@ import { createMockApi } from './mockApi';
 let cachedApi: AppApi | null = null;
 
 export function getAppApi(): AppApi {
+  if (import.meta.env.MODE === 'test') {
+    return window.nexachat ?? createMockApi();
+  }
   if (cachedApi) {
     return cachedApi;
   }

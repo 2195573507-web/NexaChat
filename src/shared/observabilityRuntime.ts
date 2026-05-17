@@ -108,6 +108,30 @@ export interface ObservabilitySourceData {
   evalResultCount: number;
 }
 
+export type UsageTrendBucketSize = 'hour' | 'day';
+
+export interface UsageTrendPoint {
+  bucketStart: number;
+  bucketEnd: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  requestCount: number;
+  hasTokenData: boolean;
+}
+
+export interface UsageTrendSummary {
+  bucketSize: UsageTrendBucketSize;
+  points: UsageTrendPoint[];
+  totals: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    requestCount: number;
+  };
+  hasData: boolean;
+}
+
 export const DEFAULT_OBSERVABILITY_PRIVACY_SETTINGS: ObservabilityPrivacySettings = {
   retentionPolicy: 'ninety_days',
   exportScope: 'redacted_details',
@@ -222,6 +246,59 @@ export function buildObservabilitySummary(data: ObservabilitySourceData): Observ
   };
 }
 
+export function buildUsageTrend(
+  usageRecords: UsageRecord[],
+  options: { bucketSize?: UsageTrendBucketSize; since?: number; until?: number } = {},
+): UsageTrendSummary {
+  const bucketSize = options.bucketSize ?? 'day';
+  const intervalMs = bucketSize === 'hour' ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+  const records = usageRecords
+    .filter((record) => Number.isFinite(record.createdAt))
+    .filter((record) => options.since === undefined || record.createdAt >= options.since!)
+    .filter((record) => options.until === undefined || record.createdAt <= options.until!)
+    .sort((left, right) => left.createdAt - right.createdAt);
+  const buckets = new Map<number, UsageTrendPoint>();
+
+  for (const record of records) {
+    const bucketStart = Math.floor(record.createdAt / intervalMs) * intervalMs;
+    const existing = buckets.get(bucketStart) ?? {
+      bucketStart,
+      bucketEnd: bucketStart + intervalMs - 1,
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      requestCount: 0,
+      hasTokenData: false,
+    };
+    const inputTokens = safeTokenCount(record.inputTokens);
+    const outputTokens = safeTokenCount(record.outputTokens);
+    existing.inputTokens += inputTokens;
+    existing.outputTokens += outputTokens;
+    existing.totalTokens += inputTokens + outputTokens;
+    existing.requestCount += 1;
+    existing.hasTokenData = existing.hasTokenData || inputTokens > 0 || outputTokens > 0;
+    buckets.set(bucketStart, existing);
+  }
+
+  const points = [...buckets.values()].sort((left, right) => left.bucketStart - right.bucketStart);
+  const totals = points.reduce(
+    (summary, point) => ({
+      inputTokens: summary.inputTokens + point.inputTokens,
+      outputTokens: summary.outputTokens + point.outputTokens,
+      totalTokens: summary.totalTokens + point.totalTokens,
+      requestCount: summary.requestCount + point.requestCount,
+    }),
+    { inputTokens: 0, outputTokens: 0, totalTokens: 0, requestCount: 0 },
+  );
+
+  return {
+    bucketSize,
+    points,
+    totals,
+    hasData: points.some((point) => point.hasTokenData),
+  };
+}
+
 export function redactObservabilityValue(value: unknown, settings: ObservabilityPrivacySettings = DEFAULT_OBSERVABILITY_PRIVACY_SETTINGS): unknown {
   if (value === null || value === undefined) return value;
   if (typeof value === 'string') {
@@ -260,6 +337,10 @@ export function buildRedactedObservabilityExport(data: unknown, settings: Observ
     null,
     2,
   );
+}
+
+function safeTokenCount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
 }
 
 function average(values: number[]): number | null {

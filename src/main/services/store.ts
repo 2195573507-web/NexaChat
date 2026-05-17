@@ -1435,7 +1435,7 @@ export class NexaStore {
     const timestamp = now();
     const userMessageId = createId('msg');
     const assistantMessageId = createId('msg');
-    const requestLogId = createId('req');
+    const requestLogId = input.clientRequestId?.trim() || createId('req');
     const requestId = createId('gwreq');
     const trimmedContent = input.content.trim();
     const inputTokens = estimateTokens(trimmedContent);
