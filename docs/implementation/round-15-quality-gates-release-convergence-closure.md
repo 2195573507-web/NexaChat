@@ -23,7 +23,7 @@ Implemented chain:
 - Added `scripts/quality-gates.mjs` with `hardcode`, `duplicates`, `security`, `dead-links`, `docs`, `all-scans`, and `release` modes.
 - Added package scripts for `scan:hardcode`, `scan:duplicates`, `scan:security`, `scan:dead-links`, `scan:docs`, `scan:quality`, and `verify:release`.
 - Added `tests/quality-gates.test.ts` to lock gate order and package script exposure.
-- Removed milestone-expired legacy route aliases from `src/shared/navigation.ts`, preserving only the root fallback `/ -> /workspace/overview`.
+- Removed milestone-expired legacy route aliases from `src/shared/navigation.ts`, preserving only the root fallback `/ -> /chat/conversations`.
 - Updated navigation/UI smoke tests so old routes fall back through current route resolution instead of relying on legacy alias chains.
 - Replaced a hardcoded Chinese fallback check in `src/main/repositories/mappers.ts` with an English structured fallback.
 - Centralized Electron smoke cleanup in `scripts/desktop-entry.mjs` and reused it from Electron, package, and installer smoke scripts.

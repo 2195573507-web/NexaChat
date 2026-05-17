@@ -1617,3 +1617,57 @@ No-source-change confirmation:
 - The repository already had pre-existing uncommitted source/test changes before this round began.
 - Those pre-existing source/test changes were not edited, staged, reverted, or included in this documentation round.
 - The intended round changes are limited to the long-run feedback file and this progress ledger entry.
+
+## 2026-05-17 Project Structure And Problem Audit
+
+Time: 2026-05-17 12:19:20 +08:00 to 2026-05-17 12:26 local time.
+
+Project root:
+
+- Confirmed by `git rev-parse --show-toplevel`: `D:/NexaChat`.
+
+Round goal:
+
+- Run a project problem detection, file-structure optimization audit, and low-risk cleanup pass without blind refactoring or breaking current behavior.
+- Keep conclusions based on source, docs, and test evidence.
+- Preserve the chat-first 7-module mainline and current `/ -> /chat/conversations` route behavior.
+
+Modified files:
+
+- `docs/build-plans/00-modular-refactor-master-plan/project-structure-and-problem-audit.md`: new audit report and optimization plan.
+- `docs/implementation/round-15-quality-gates-release-convergence-closure.md`: corrected one stale historical line from `/ -> /workspace/overview` to `/ -> /chat/conversations`.
+- `PROJECT_PROGRESS.md`: appended this round record.
+
+Detected issue summary:
+
+- P0: 0 confirmed.
+- P1: 3 confirmed issues: safeStorage fallback can degrade to reversible Base64, Provider custom headers can persist sensitive values as plaintext, and request logs duplicate full prompt content.
+- P2: 6 confirmed issues: IPC shape validation gap, Gateway key full-table decrypt scan, missing raw `nxk_` redaction coverage, Electron renderer sandbox disabled, oversized Store/i18n/mock authorities, and browser mock parity risk.
+- P3: 5 confirmed issues: stale historical docs, root ledgers mixing history/current state, no clear build-plan active/archive index, UTF-8 Chinese docs can be misread through default PowerShell output, and ignored generated directories should not be deleted blindly.
+
+Low-risk cleanup content:
+
+- Performed one documentation-only correction in the Round 15 closeout file.
+- Did not migrate source files.
+- Did not delete tracked files.
+- Did not delete ignored generated directories.
+- Listed duplicate/stale documentation risks in the audit report instead of removing documents.
+
+Verification commands and results:
+
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test`: passed, 20 files / 71 tests. Existing Node `node:sqlite` experimental warnings appeared.
+- `npm.cmd run build`: passed.
+- `npm.cmd run test:ui-smoke`: passed, 7 Playwright tests.
+- `npm.cmd run test:electron-smoke`: passed; Electron shell rendered.
+
+Git commit hash:
+
+- Baseline before this audit: `6b57032 fix: resolve agent feedback across app modules`.
+- Delivery commit for this round is created after this progress entry is written and is reported in the final run output. The final hash cannot be embedded into the same commit without creating a self-referential hash mismatch.
+
+Follow-up recommendations:
+
+- Harden secret storage and redaction first: restrict `local-dev:v1`, add `nxk_` redaction tests, and protect production safeStorage-unavailable paths.
+- Fix Provider custom-header secret handling and request-log prompt duplication before broader service extraction.
+- Add docs stale-fact scanning, then create a `docs/build-plans/README.md` active/archive index before moving root ledgers or historical plans.
