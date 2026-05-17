@@ -8,13 +8,13 @@ import { KnowledgePage } from './KnowledgePage';
 import { ModelsPage } from './ModelsPage';
 import { SettingsPage } from './SettingsPage';
 import { ToolsPage } from './ToolsPage';
-import type { OpenModuleTarget } from './shared';
+import type { ActionRunOptions, OpenModuleTarget } from './shared';
 
 export type ModulePageRendererProps = {
   activeTab: NavTab;
   snapshot: AppSnapshot;
   api: AppApi;
-  onAction: (label: string, action: () => Promise<unknown>) => void;
+  onAction: (label: string, action: () => Promise<unknown>, options?: ActionRunOptions) => void;
   onOpenModule: (target: OpenModuleTarget) => void;
 };
 
