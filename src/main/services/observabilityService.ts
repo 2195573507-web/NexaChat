@@ -20,7 +20,9 @@ import type {
   ObservabilityExportResult,
   ObservabilitySnapshot,
   RequestLog,
-  UsageRecord
+  UsageRecord,
+  UsageTrendBucket,
+  UsageTrendInput
 } from '../../shared/types.js';
 import { ProviderRuntimeError, invokeOpenAiCompatibleChat } from '../adapters/openAiCompatibleAdapter.js';
 import { ServiceContext, type ServiceConstructor } from './serviceContext.js';
@@ -39,6 +41,10 @@ export function ObservabilityService<TBase extends ServiceConstructor<ServiceCon
 
   getUsageRecords(): UsageRecord[] {
     return this.repositories.observability.listUsageRecords();
+  }
+
+  getUsageTrend(input: UsageTrendInput = {}): UsageTrendBucket[] {
+    return this.repositories.observability.aggregateUsageTrend(input);
   }
 
 

@@ -206,6 +206,7 @@ function runAdditiveMigrations(db: DatabaseSync): void {
   addColumnIfMissing(db, 'audit_logs', 'entry_hash', 'TEXT');
   addColumnIfMissing(db, 'audit_logs', 'integrity_state', "TEXT NOT NULL DEFAULT 'verified'");
   addColumnIfMissing(db, 'ui_preferences', 'advanced_mode', 'INTEGER NOT NULL DEFAULT 0');
+  createPerformanceIndexes(db);
 }
 
 function runPreSchemaMigrations(db: DatabaseSync): void {
@@ -241,4 +242,20 @@ function addColumnIfMissing(db: DatabaseSync, table: string, column: string, def
 function tableExists(db: DatabaseSync, table: string): boolean {
   const row = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(table);
   return Boolean(row);
+}
+
+function createPerformanceIndexes(db: DatabaseSync): void {
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_gateway_logs_created ON gateway_logs(created_at);
+    CREATE INDEX IF NOT EXISTS idx_gateway_logs_key_created ON gateway_logs(gateway_key_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_gateway_logs_status_created ON gateway_logs(status_code, created_at);
+    CREATE INDEX IF NOT EXISTS idx_usage_records_created ON usage_records(created_at);
+    CREATE INDEX IF NOT EXISTS idx_usage_records_workspace_created ON usage_records(workspace_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_usage_records_provider_created ON usage_records(provider_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_usage_records_model_created ON usage_records(model_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at);
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_created ON audit_logs(actor, created_at);
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_action_created ON audit_logs(action, created_at);
+    CREATE INDEX IF NOT EXISTS idx_provider_health_created ON provider_health_records(created_at);
+  `);
 }
