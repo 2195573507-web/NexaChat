@@ -6,7 +6,7 @@
 - Branch/upstream: `main` / `origin/main`
 - Baseline commit: `decac4733686051dfcd6d17e3c48445b062c1e35`
 - Final commit: assigned by Git after this report is committed; the final response records the post-push commit hash.
-- Scope: main-process architecture service split only. No UI redesign, route change, SQLite schema rewrite, or capability inflation was introduced.
+- Scope: main-process architecture service split and boundary-quality audit only. No UI redesign, route change, SQLite schema rewrite, or capability inflation was introduced.
 
 ## Before
 
@@ -22,6 +22,18 @@ export type { GatewayAuthorizationResult, GatewayLogInput } from './serviceConte
 ```
 
 The composition root is `src/main/services/serviceRegistry.ts`. It builds one registry instance from domain service mixins over `ServiceContext`. `ServiceContext` owns the single shared `DatabaseSync` instance, repository context, seed/bootstrap helpers, shared require helpers, secret encode/decode, common redaction, audit hash helpers, and cross-service utilities.
+
+## Audit Addendum
+
+This round re-checked the split after the code was in place.
+
+- `store.ts` still behaves as a thin facade.
+- `serviceRegistry.ts` is still the only composition root.
+- `serviceContext.ts` still centralizes shared database context, bootstrap, redaction, secret handling, audit hashing, and the Gateway compat types.
+- No domain service reintroduced service-to-service imports or helper duplication.
+- Renderer access still stays preload-only.
+- Main-process adapter-only HTTP calls still own the live provider protocol path.
+- Docs still do not overstate reserved capabilities as complete.
 
 ## Service Responsibilities
 
@@ -109,7 +121,7 @@ These compatibility layers do not contain real business logic.
 Final required verification:
 
 - `npm.cmd run typecheck`: passed.
-- `npm.cmd run test`: passed, 22 files / 80 tests.
+- `npm.cmd run test`: passed, 22 files / 81 tests.
 - `npm.cmd run build`: passed.
 - `npm.cmd run test:ui-smoke`: passed, 7 Playwright tests.
 - `npm.cmd run test:electron-smoke`: passed, Electron shell rendered.
@@ -120,9 +132,11 @@ Final required verification:
 - Move transaction-heavy SQL from services/context into repositories only after focused behavior tests exist for each domain. This is intentionally deferred to avoid a broad SQL rewrite in the architecture split round.
 - Reduce duplicated broad imports in generated service files. TypeScript accepts them, and cleanup should be mechanical in a separate low-risk pass.
 - Consider replacing the mixin composition with explicit service instances once all call sites no longer rely on the legacy aggregate `store` shape.
+- The audit round found no additional structural defect that required code change beyond the helper/type centralization already completed.
 
 ## Risk Notes
 
 - The service split is complete for public domain behavior and `store.ts` is no longer the business owner.
 - Repository extraction is partial by design and documented as such.
 - No user data deletion, schema rewrite, route change, UI redesign, or fake capability claim was introduced.
+- The remaining risk is incremental drift, not a broken boundary contract.

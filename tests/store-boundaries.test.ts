@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { APP_API_METHODS } from '../src/shared/api';
 import { STORE_BOUNDARY_MAP, getStoreBoundaryTarget } from '../src/main/services/storeBoundaries';
+
+const projectRoot = process.cwd();
+const servicesDir = join(projectRoot, 'src/main/services');
+const domainServiceFiles = readdirSync(servicesDir)
+  .filter((fileName) => fileName.endsWith('Service.ts') && fileName !== 'serviceContext.ts');
 
 describe('main-process service boundaries', () => {
   it('documents implemented service targets for the compatibility facade', () => {
@@ -34,6 +41,20 @@ describe('main-process service boundaries', () => {
     ]);
     for (const entry of STORE_BOUNDARY_MAP) {
       expect(apiMethodNames.has(entry.method) || facadeMethods.has(entry.method)).toBe(true);
+    }
+  });
+
+  it('keeps shared service helpers and gateway compatibility types centralized in ServiceContext', () => {
+    const duplicatedHelperPattern =
+      /function (normalizeBaseUrl|buildChatRequestSummary|encodeSecretValue|decodeSecretValue|inferTitle|safeJsonParse|safeStringArray|scoreEvaluationOutput|computeAuditHash)\(/;
+
+    for (const fileName of domainServiceFiles) {
+      const source = readFileSync(join(servicesDir, fileName), 'utf8');
+      expect(source, `${fileName} should not redefine ServiceContext helpers`).not.toMatch(duplicatedHelperPattern);
+      if (fileName !== 'gatewayService.ts') {
+        expect(source, `${fileName} should not export gateway compatibility types`).not.toContain('GatewayAuthorizationResult');
+        expect(source, `${fileName} should not export gateway compatibility types`).not.toContain('GatewayLogInput');
+      }
     }
   });
 });

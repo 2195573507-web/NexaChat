@@ -1,5 +1,46 @@
 ﻿# NexaChat Project Progress
 
+## 2026-05-17 Main-Process Architecture Service Split Quality Audit
+
+Audit baseline:
+
+- Real project root confirmed with `git rev-parse --show-toplevel`: `D:/NexaChat`.
+- Branch/upstream confirmed as `main` / `origin/main`.
+- Current `HEAD` and `origin/main`: `c0f341554e417ae050022b523b3c7cfe2ca59a90`.
+- `using-superpowers` was read; singular `using-superpower` is not installed in this Codex environment.
+
+Audit focus:
+
+- Service / repository / adapter / context boundary cleanliness.
+- IPC / preload / renderer call path stability and privilege boundaries.
+- Docs truth versus current implementation.
+- Test coverage for the boundary seams introduced by the split.
+
+Audit result:
+
+- `src/main/services/store.ts` remains a thin compatibility facade.
+- `src/main/services/serviceRegistry.ts` remains the sole composition root.
+- `src/main/services/serviceContext.ts` owns the shared database context, repository context, redaction helpers, secret helpers, audit hash helpers, and Gateway compat types.
+- Domain services no longer keep duplicated helper tails from the old monolith.
+- Renderer access remains preload-only; no direct renderer path to SQLite, `fs`, `safeStorage`, or raw Provider / Gateway secrets was found.
+- Main-process live HTTP calls remain in the provider adapter path, not renderer code.
+- Active docs still do not overstate `/v1/responses`, PDF / Office / OCR, external vector DB, arbitrary MCP execution, or a release-grade Agent sandbox as complete.
+
+Fixes and coverage:
+
+- Shared helper ownership was consolidated back into `serviceContext.ts`.
+- `GatewayAuthorizationResult` and `GatewayLogInput` now have one shared definition source.
+- Added `tests/store-boundaries.test.ts` so helper/type duplication does not drift back in.
+- Existing targeted tests already cover provider delete history retention, provider model discovery failure behavior, gateway secret redaction, chat send / retry / regenerate / cancel, audit hash-chain integrity, and data backup / restore precheck boundaries.
+
+Verification status:
+
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test`: passed, 22 files / 81 tests.
+- `npm.cmd run build`: passed.
+- `npm.cmd run test:ui-smoke`: passed, 7 Playwright tests.
+- `npm.cmd run test:electron-smoke`: passed, Electron shell rendered.
+
 ## 2026-05-17 Main-Process Architecture Service Split
 
 Execution baseline:

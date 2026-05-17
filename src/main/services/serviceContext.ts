@@ -273,6 +273,44 @@ export class ServiceContext {
     return this.db;
   }
 
+  protected normalizeBaseUrl(value: string): string {
+    return normalizeBaseUrl(value);
+  }
+
+  protected buildChatRequestSummary(content: string): Record<string, unknown> {
+    return buildChatRequestSummary(content);
+  }
+
+  protected decodeStoredSecretValue(value: string): string {
+    return decodeSecretValue(value);
+  }
+
+  protected inferConversationTitle(currentTitle: string, content: string): string {
+    return inferTitle(currentTitle, content);
+  }
+
+  protected safeStringArray(value: string): string[] {
+    return safeStringArray(value);
+  }
+
+  protected scoreEvaluationOutput(output: string, expectedKeywords: string[]): number {
+    return scoreEvaluationOutput(output, expectedKeywords);
+  }
+
+  protected computeAuditHash(input: {
+    id: string;
+    action: string;
+    actor: string;
+    targetType: string;
+    targetId: string | null;
+    detailsJson: string | null;
+    permissionKey: SecurityPermissionKey | null;
+    previousHash: string | null;
+    createdAt: number;
+  }): string {
+    return computeAuditHash(input);
+  }
+
   protected seed(): void {
     const timestamp = now();
     this.seedSecurity(timestamp);
