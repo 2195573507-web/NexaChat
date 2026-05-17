@@ -1,6 +1,6 @@
 import { Activity, Download, Save, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { ObservabilityFeedbackLabel, ObservabilityPrivacySettings, UiPreferences } from '../../shared/types';
+import type { AuditLog, ObservabilityFeedbackLabel, ObservabilityPrivacySettings, UiPreferences } from '../../shared/types';
 import { OBSERVABILITY_EXPORT_SCOPES, OBSERVABILITY_FEEDBACK_LABELS, OBSERVABILITY_RETENTION_POLICIES } from '../../shared/observabilityRuntime';
 import { ActivityList, CommandButton, ConfigDetail, ConfigList, DataRows, Field, InlineNotice, PageHeader, SettingRow, StatusPillLite, ToggleRow, ToolSection } from '../components/AppFrame';
 import { useI18n } from '../i18n';
@@ -14,11 +14,39 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
   const [feedbackLabel, setFeedbackLabel] = useState<ObservabilityFeedbackLabel>('bug');
   const [feedbackNotes, setFeedbackNotes] = useState(t('observability.feedback.defaultNote'));
   const [privacy, setPrivacy] = useState<ObservabilityPrivacySettings>(snapshot.observability.privacy);
+  const [auditPage, setAuditPage] = useState({ items: snapshot.auditLogs, total: snapshot.auditLogs.length, hasMore: false, loading: false, error: null as string | null });
   const pending = useLocalPending();
   const feedbackEdited = feedbackNotes.trim().length > 0 && feedbackNotes.trim() !== t('observability.feedback.defaultNote');
 
   useEffect(() => setPrefs(snapshot.uiPreferences), [snapshot.uiPreferences]);
   useEffect(() => setPrivacy(snapshot.observability.privacy), [snapshot.observability.privacy]);
+  useEffect(() => {
+    setAuditPage((current) => ({ ...current, items: snapshot.auditLogs, total: snapshot.auditLogs.length }));
+  }, [snapshot.auditLogs]);
+
+  const loadAuditLogs = async (reset = false, query = auditQuery) => {
+    setAuditPage((current) => ({ ...current, loading: true, error: null }));
+    try {
+      const offset = reset ? 0 : auditPage.items.length;
+      const page = await api.listAuditLogs({ limit: 30, offset, query: query.trim() || undefined });
+      setAuditPage((current) => ({
+        items: reset ? page.items : [...current.items, ...page.items],
+        total: page.total,
+        hasMore: page.hasMore,
+        loading: false,
+        error: null,
+      }));
+    } catch (error) {
+      setAuditPage((current) => ({ ...current, loading: false, error: error instanceof Error ? error.message : String(error) }));
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab.id !== 'audit') {
+      return;
+    }
+    void loadAuditLogs(true, auditQuery);
+  }, [activeTab.id, auditQuery]);
 
   if (activeTab.id === 'security') {
     return (
@@ -58,9 +86,7 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
   }
 
   if (activeTab.id === 'audit') {
-    const visibleLogs = auditQuery.trim()
-      ? snapshot.auditLogs.filter((log) => `${log.action} ${log.actor} ${log.targetType}`.toLowerCase().includes(auditQuery.trim().toLowerCase()))
-      : snapshot.auditLogs;
+    const visibleLogs: AuditLog[] = auditPage.items;
     return (
       <TabPanel moduleId="settings" tab={activeTab}>
         <PageHeader
@@ -83,6 +109,12 @@ export function SettingsPage({ activeTab, snapshot, api, onAction }: TabPageProp
             {pending.errorFor('audit.verify') ? <InlineNotice tone="warning" title={t('app.action.failed')} detail={pending.errorFor('audit.verify')} /> : null}
           </div>
           <ActivityList empty={t('app.recent.empty')} items={visibleLogs.slice(0, 14).map((log) => ({ title: log.action, meta: `${log.actor} / ${formatDate(log.createdAt, t)}`, state: healthState(log.integrityState) }))} />
+          {auditPage.error ? <InlineNotice tone="warning" title={t('app.action.failed')} detail={auditPage.error} /> : null}
+          {auditPage.hasMore ? (
+            <CommandButton disabled={auditPage.loading} onClick={() => loadAuditLogs()}>
+              {auditPage.loading ? t('app.status.busy') : t('common.loadMore')}
+            </CommandButton>
+          ) : null}
         </ConfigList>
         <ConfigDetail title={t('settings.audit.integrity')} description={t('nav.settings.audit.boundary')}>
           <InlineNotice tone="info" title={t('settings.audit.recentSlice')} detail={t('settings.audit.recentSlice.detail')} />

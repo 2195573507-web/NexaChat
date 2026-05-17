@@ -1,15 +1,14 @@
-import { BookOpenText, Copy, DatabaseBackup, GitCompareArrows, KeyRound, MessageSquarePlus, Pin, RefreshCw, RotateCcw, Search, Send, ServerCog, Settings, SlidersHorizontal, Star, XCircle } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { BookOpenText, DatabaseBackup, GitCompareArrows, KeyRound, MessageSquarePlus, Pin, Search, Send, ServerCog, Settings, SlidersHorizontal, Star, XCircle } from 'lucide-react';
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { I18nKey } from '../../shared/i18n';
 import { IPC_EVENT_CHANNELS } from '../../shared/ipc';
-import type { ChatResponse, ContextStrategy, Conversation, KnowledgeCitation, Message, Model } from '../../shared/types';
+import type { ChatResponse, ContextStrategy, Conversation, Message, Model } from '../../shared/types';
 import { ChatInput, CommandButton, EmptyBlock, InlineNotice, MessageBubble, StatusPillLite } from '../components/AppFrame';
 import { useI18n } from '../i18n';
+import { markPerformance, measurePerformance } from '../performanceMarks';
 import {
   contextStrategies,
-  copyText,
   formatDate,
-  formatMessageMetadata,
   getDefaultModel,
   healthState,
   modelCapabilityLabels,
@@ -18,6 +17,7 @@ import {
   type TabPageProps,
 } from './shared';
 import { buildProgressiveRevealFrames } from './progressiveReveal';
+import { ChatMessageBubble } from './chat/ChatMessageBubble';
 
 function getConversationMessages(messages: Message[], conversationId: string | undefined) {
   if (!conversationId) {
@@ -38,6 +38,10 @@ function getGroupedConversations(conversations: Conversation[], query: string) {
     { key: 'recent', conversations: filtered.filter((conversation) => !conversation.isPinned) },
   ];
 }
+
+const CHAT_MESSAGE_PAGE_SIZE = 60;
+const CHAT_CONVERSATION_PAGE_SIZE = 30;
+const VIRTUAL_MESSAGE_WINDOW = 90;
 
 type GenerationPhase = 'queued' | 'sending' | 'generating' | 'completed' | 'failed' | 'canceled';
 
@@ -86,10 +90,6 @@ function splitProgressiveSegments(value: string) {
   return sentences.length > 0 ? sentences : [value];
 }
 
-function getMessageCitations(snapshot: TabPageProps['snapshot'], message: Message) {
-  return snapshot.knowledgeCitations.filter((citation) => citation.messageId === message.id);
-}
-
 export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: TabPageProps) {
   const { t } = useI18n();
   const [activeConversationId, setActiveConversationId] = useState(snapshot.conversations[0]?.id ?? '');
@@ -101,21 +101,144 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
   const [compareStates, setCompareStates] = useState<CompareModelState[]>([]);
   const [detailOpen, setDetailOpen] = useState(false);
   const [generation, setGeneration] = useState<LocalGenerationState | null>(null);
+  const [conversationPage, setConversationPage] = useState(() => ({
+    items: snapshot.conversations,
+    total: snapshot.conversations.length,
+    offset: 0,
+    hasMore: snapshot.conversations.length >= CHAT_CONVERSATION_PAGE_SIZE,
+    loading: false,
+    error: null as string | null,
+  }));
+  const [messagePage, setMessagePage] = useState(() => ({
+    conversationId: snapshot.conversations[0]?.id ?? '',
+    items: getConversationMessages(snapshot.messages, snapshot.conversations[0]?.id),
+    total: snapshot.messages.length,
+    offset: 0,
+    hasMore: false,
+    loading: false,
+    error: null as string | null,
+  }));
   const timelineRef = useRef<HTMLDivElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
   const canceledRequestIds = useRef(new Set<string>());
+  const conversationItemCountRef = useRef(snapshot.conversations.length);
+  const messageItemCountRef = useRef({
+    conversationId: snapshot.conversations[0]?.id ?? '',
+    count: getConversationMessages(snapshot.messages, snapshot.conversations[0]?.id).length,
+  });
+  const conversationRequestSeqRef = useRef(0);
+  const messageRequestSeqRef = useRef(0);
 
   const defaultModel = getDefaultModel(snapshot);
   const advancedMode = snapshot.uiPreferences.advancedMode;
   const reducedMotion = snapshot.uiPreferences.reducedMotion;
   const selectedModel = snapshot.models.find((model) => model.id === selectedModelId) ?? defaultModel;
-  const activeConversation = snapshot.conversations.find((conversation) => conversation.id === activeConversationId) ?? snapshot.conversations[0];
-  const messages = getConversationMessages(snapshot.messages, activeConversation?.id);
+  const activeConversation = conversationPage.items.find((conversation) => conversation.id === activeConversationId) ?? conversationPage.items[0] ?? snapshot.conversations[0];
+  const deferredMessageItems = useDeferredValue(messagePage.items);
+  const messages = activeConversation?.id === messagePage.conversationId ? deferredMessageItems : getConversationMessages(snapshot.messages, activeConversation?.id);
   const visibleMessages = messages.filter((message) => message.requestLogId !== generation?.requestLogId);
+  const windowedMessages = visibleMessages.length > VIRTUAL_MESSAGE_WINDOW ? visibleMessages.slice(-VIRTUAL_MESSAGE_WINDOW) : visibleMessages;
+  const hiddenMessageCount = Math.max(0, visibleMessages.length - windowedMessages.length);
   const generationInActiveConversation = generation && generation.conversationId === activeConversation?.id ? generation : null;
-  const groupedConversations = useMemo(() => getGroupedConversations(snapshot.conversations, searchQuery), [snapshot.conversations, searchQuery]);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const groupedConversations = useMemo(() => getGroupedConversations(conversationPage.items, deferredSearchQuery), [conversationPage.items, deferredSearchQuery]);
+
+  const loadConversationPage = useCallback(async ({ reset = false, query = searchQuery }: { reset?: boolean; query?: string } = {}) => {
+    const requestSeq = conversationRequestSeqRef.current + 1;
+    conversationRequestSeqRef.current = requestSeq;
+    setConversationPage((current) => ({ ...current, loading: true, error: null }));
+    try {
+      const offset = reset ? 0 : conversationItemCountRef.current;
+      const page = await api.listConversations({ limit: CHAT_CONVERSATION_PAGE_SIZE, offset, query: query.trim() || undefined });
+      if (conversationRequestSeqRef.current !== requestSeq) {
+        return;
+      }
+      setConversationPage((current) => ({
+        items: reset ? page.items : [...current.items, ...page.items],
+        total: page.total,
+        offset: page.offset,
+        hasMore: page.hasMore,
+        loading: false,
+        error: null,
+      }));
+      conversationItemCountRef.current = reset ? page.items.length : conversationItemCountRef.current + page.items.length;
+    } catch (error) {
+      if (conversationRequestSeqRef.current !== requestSeq) {
+        return;
+      }
+      setConversationPage((current) => ({
+        ...current,
+        loading: false,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }, [api, searchQuery]);
+
+  const loadMessagePage = useCallback(async (conversationId: string, { reset = false } = {}) => {
+    if (!conversationId) {
+      return;
+    }
+    const requestSeq = messageRequestSeqRef.current + 1;
+    messageRequestSeqRef.current = requestSeq;
+    setMessagePage((current) => ({ ...current, conversationId, loading: true, error: null }));
+    try {
+      const offset = reset || messageItemCountRef.current.conversationId !== conversationId ? 0 : messageItemCountRef.current.count;
+      const page = await api.listMessages({ conversationId, limit: CHAT_MESSAGE_PAGE_SIZE, offset });
+      if (messageRequestSeqRef.current !== requestSeq) {
+        return;
+      }
+      setMessagePage((current) => {
+        const currentItems = reset || current.conversationId !== conversationId ? [] : current.items;
+        const items = reset ? page.items : [...page.items, ...currentItems];
+        messageItemCountRef.current = { conversationId, count: items.length };
+        return {
+          conversationId,
+          items,
+          total: page.total,
+          offset: page.offset,
+          hasMore: page.hasMore,
+          loading: false,
+          error: null,
+        };
+      });
+    } catch (error) {
+      if (messageRequestSeqRef.current !== requestSeq) {
+        return;
+      }
+      setMessagePage((current) => ({
+        ...current,
+        conversationId,
+        loading: false,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }, [api]);
 
   useEffect(() => {
+    conversationItemCountRef.current = snapshot.conversations.length;
+    setConversationPage((current) => ({
+      items: snapshot.conversations,
+      total: Math.max(snapshot.conversations.length, current.total),
+      offset: 0,
+      hasMore: snapshot.conversations.length >= CHAT_CONVERSATION_PAGE_SIZE,
+      loading: false,
+      error: null,
+    }));
+  }, [snapshot.conversations]);
+
+  useEffect(() => {
+    void loadConversationPage({ reset: true, query: searchQuery });
+  }, [loadConversationPage, searchQuery]);
+
+  useEffect(() => {
+    if (!activeConversation?.id) {
+      return;
+    }
+    void loadMessagePage(activeConversation.id, { reset: true });
+  }, [activeConversation?.id, loadMessagePage]);
+
+  useEffect(() => {
+    markPerformance('chat page interactive');
     return api.subscribe(IPC_EVENT_CHANNELS.chatStream, (event) => {
       setGeneration((current) => {
         if (!current || event.requestId !== current.requestLogId || canceledRequestIds.current.has(event.requestId)) {
@@ -129,6 +252,10 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
           };
         }
         if (event.type === 'chat.stream.chunk' && typeof event.chunk === 'string') {
+          if (current.visibleContent.length === 0) {
+            markPerformance('assistant first chunk rendered');
+            measurePerformance('send click to first chunk', 'send click', 'assistant first chunk rendered');
+          }
           return {
             ...current,
             phase: 'generating',
@@ -176,14 +303,14 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
   }, [api, t]);
 
   useEffect(() => {
-    if (!activeConversationId && snapshot.conversations[0]) {
-      setActiveConversationId(snapshot.conversations[0].id);
+    if (!activeConversationId && conversationPage.items[0]) {
+      setActiveConversationId(conversationPage.items[0].id);
       return;
     }
-    if (activeConversationId && !snapshot.conversations.some((conversation) => conversation.id === activeConversationId)) {
-      setActiveConversationId(snapshot.conversations[0]?.id ?? '');
+    if (activeConversationId && !conversationPage.items.some((conversation) => conversation.id === activeConversationId)) {
+      setActiveConversationId(conversationPage.items[0]?.id ?? '');
     }
-  }, [activeConversationId, snapshot.conversations]);
+  }, [activeConversationId, conversationPage.items]);
 
   useEffect(() => {
     if (!selectedModelId && defaultModel) {
@@ -227,6 +354,8 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
       visibleContent: '',
       source: 'send-message-fallback',
     });
+    markPerformance('send click');
+    window.requestAnimationFrame(() => markPerformance('optimistic user bubble rendered'));
     setDraft('');
     try {
       setGeneration((current) => current?.requestLogId === requestLogId ? { ...current, phase: 'sending' } : current);
@@ -245,6 +374,8 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
       }
       setGeneration((current) => current?.requestLogId === requestLogId ? { ...current, conversationId: response.conversation.id, phase: 'generating', response } : current);
       await revealResponse(requestLogId, response);
+      void loadConversationPage({ reset: true });
+      void loadMessagePage(response.conversation.id, { reset: true });
     } catch (error) {
       setGeneration((current) => current?.requestLogId === requestLogId
         ? { ...current, phase: 'failed', error: error instanceof Error ? error.message : String(error) }
@@ -290,7 +421,7 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
     }
     canceledRequestIds.current.add(generation.requestLogId);
     setGeneration({ ...generation, phase: 'canceled', error: t('chat.cancelled.message') });
-    onAction(t('chat.toast.cancelled'), () => api.cancelMessage({ requestLogId: generation.response?.requestLog.id ?? generation.requestLogId }));
+    onAction(t('chat.toast.cancelled'), () => api.cancelMessage({ requestLogId: generation.response?.requestLog.id ?? generation.requestLogId }), { refresh: 'none' });
   };
 
   const runCompareModels = async () => {
@@ -374,7 +505,13 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
                 </section>
               ) : null,
             )}
-            {snapshot.conversations.length === 0 ? (
+            {conversationPage.error ? <InlineNotice tone="warning" title={t('app.action.failed')} detail={conversationPage.error} /> : null}
+            {conversationPage.hasMore ? (
+              <button type="button" className="ghost-button" disabled={conversationPage.loading} onClick={() => void loadConversationPage()}>
+                {conversationPage.loading ? t('app.status.busy') : t('common.loadMore')}
+              </button>
+            ) : null}
+            {conversationPage.items.length === 0 ? (
               <EmptyBlock title={t('chat.empty.title')} detail={t('chat.empty.reason')} />
             ) : null}
           </div>
@@ -414,27 +551,25 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
           <div className="message-timeline" ref={timelineRef} onScroll={updateAutoScrollPreference}>
             {visibleMessages.length > 0 || generationInActiveConversation ? (
               <>
-              {visibleMessages.map((message) => (
-                <MessageBubble
+              {messagePage.hasMore ? (
+                <button type="button" className="ghost-button" disabled={messagePage.loading} onClick={() => void loadMessagePage(activeConversation?.id ?? '')}>
+                  {messagePage.loading ? t('app.status.busy') : t('common.loadOlder')}
+                </button>
+              ) : null}
+              {messagePage.error ? <InlineNotice tone="warning" title={t('app.action.failed')} detail={messagePage.error} /> : null}
+              {hiddenMessageCount > 0 ? (
+                <InlineNotice tone="muted" title={t('chat.virtualized.hidden', { count: hiddenMessageCount })} detail={t('chat.virtualized.window', { count: windowedMessages.length })} />
+              ) : null}
+              {windowedMessages.map((message) => (
+                <ChatMessageBubble
                   key={message.id}
-                  role={message.role}
-                  status={message.status}
-                  meta={<span>{message.modelNameSnapshot ?? statusLabel(message.status, t)} · {message.metadataJson ? formatMessageMetadata(message.metadataJson, t) : formatDate(message.createdAt, t)}</span>}
-                  actionsLabel={t('chat.message.actions.aria')}
-                  actions={
-                    <MessageActions
-                      message={message}
-                      api={api}
-                      onAction={onAction}
-                      contextStrategy={contextStrategy}
-                      modelId={selectedModel?.id}
-                    />
-                  }
-                >
-                  <p>{message.content}</p>
-                  {message.role === 'assistant' ? <CitationList citations={getMessageCitations(snapshot, message)} /> : null}
-                  {message.errorMessage ? <small>{message.errorMessage}</small> : null}
-                </MessageBubble>
+                  message={message}
+                  snapshot={snapshot}
+                  api={api}
+                  onAction={onAction}
+                  contextStrategy={contextStrategy}
+                  modelId={selectedModel?.id}
+                />
               ))}
               {generationInActiveConversation && !generationInActiveConversation.response?.userMessage ? (
                 <MessageBubble
@@ -481,7 +616,7 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
             disabled={!selectedModel || Boolean(generationInActiveConversation && ['queued', 'sending', 'generating'].includes(generationInActiveConversation.phase))}
             disabledReason={!selectedModel ? t('common.notConfigured') : t('chat.generation.generating')}
             onChange={setDraft}
-            onSend={() => onAction(t('chat.toast.sent'), sendCurrentMessage)}
+            onSend={() => onAction(t('chat.toast.sent'), sendCurrentMessage, { refresh: 'none' })}
           />
         </section>
 
@@ -543,7 +678,7 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
   );
 }
 
-function QuickAction({ icon, title, detail, onClick, primary = false }: { icon: ReactNode; title: string; detail: string; onClick: () => void; primary?: boolean }) {
+const QuickAction = memo(function QuickAction({ icon, title, detail, onClick, primary = false }: { icon: ReactNode; title: string; detail: string; onClick: () => void; primary?: boolean }) {
   return (
     <button type="button" className={`chat-quick-action ${primary ? 'is-primary' : ''}`} onClick={onClick}>
       <span className="quick-action-icon">{icon}</span>
@@ -553,7 +688,7 @@ function QuickAction({ icon, title, detail, onClick, primary = false }: { icon: 
       </span>
     </button>
   );
-}
+});
 
 function GenerationBubble({ generation, onCancel }: { generation: LocalGenerationState; onCancel: () => void }) {
   const { t } = useI18n();
@@ -578,21 +713,6 @@ function GenerationBubble({ generation, onCancel }: { generation: LocalGeneratio
   );
 }
 
-function CitationList({ citations }: { citations: KnowledgeCitation[] }) {
-  const { t } = useI18n();
-  if (citations.length === 0) {
-    return null;
-  }
-  return (
-    <div className="message-citations" aria-label={t('chat.citations.aria')}>
-      <strong>{t('chat.citations.title', { count: citations.length })}</strong>
-      {citations.slice(0, 4).map((citation) => (
-        <span key={citation.id}>{t('chat.citations.source', { file: citation.fileName, score: citation.score.toFixed(2) })} / {citation.snippet}</span>
-      ))}
-    </div>
-  );
-}
-
 function ModelPicker({ models, selectedModel, onChange }: { models: Model[]; selectedModel: Model | null | undefined; onChange: (modelId: string) => void }) {
   const { t } = useI18n();
   return (
@@ -605,44 +725,6 @@ function ModelPicker({ models, selectedModel, onChange }: { models: Model[]; sel
         <option value="">{t('common.notConfigured')}</option>
       )}
     </select>
-  );
-}
-
-function MessageActions({
-  message,
-  api,
-  onAction,
-  contextStrategy,
-  modelId,
-}: {
-  message: Message;
-  api: TabPageProps['api'];
-  onAction: TabPageProps['onAction'];
-  contextStrategy: ContextStrategy;
-  modelId?: string;
-}) {
-  const { t } = useI18n();
-  const cancellable = Boolean(message.requestLogId && (message.status === 'streaming' || message.status === 'draft' || message.status === 'failed'));
-  return (
-    <>
-      <button type="button" className="ghost-button" onClick={() => copyText(message.content)}><Copy size={14} />{t('chat.message.copy')}</button>
-      {message.role === 'assistant' ? (
-        <button type="button" className="ghost-button" onClick={() => onAction(t('chat.toast.regenerate'), () => api.regenerateMessage({ assistantMessageId: message.id, modelId, contextStrategy }))}>
-          <RefreshCw size={14} />
-          {t('chat.message.regenerate')}
-        </button>
-      ) : null}
-      <button type="button" className="ghost-button" onClick={() => onAction(t('chat.toast.retry'), () => api.retryMessage({ messageId: message.id, modelId, contextStrategy }))}>
-        <RotateCcw size={14} />
-        {t('chat.message.retry')}
-      </button>
-      {cancellable && message.requestLogId ? (
-        <button type="button" className="ghost-button" onClick={() => onAction(t('chat.toast.cancelled'), () => api.cancelMessage({ requestLogId: message.requestLogId! }))}>
-          <XCircle size={14} />
-          {t('chat.message.cancel')}
-        </button>
-      ) : null}
-    </>
   );
 }
 

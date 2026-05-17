@@ -1,13 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getDefaultTab, getTabRoute, navModules, resolveNavigation } from '../shared/navigation';
 import type { AppApi } from '../shared/api';
 import type { AppSnapshot, ModuleId, NavTab } from '../shared/types';
-import { AppFrame } from './components/AppFrame';
+import { AppFrame, type AppShellSummary } from './components/AppFrame';
 import { getAppApi } from './api';
 import { I18nProvider, translateModule, translateTab, useI18n } from './i18n';
 import { modulePageRegistry } from './modules/modulePageRegistry';
-import type { OpenModuleTarget } from './modules/shared';
+import type { ActionRunOptions, OpenModuleTarget } from './modules/shared';
+import { markPerformance, measurePerformance } from './performanceMarks';
 import './styles.css';
+
+markPerformance('app boot start');
 
 type ActionNotice = {
   type: 'success' | 'error';
@@ -22,9 +25,11 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<ActionNotice | null>(null);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     setSnapshot(await api.getSnapshot());
-  };
+    markPerformance('app interactive');
+    measurePerformance('app boot to interactive', 'app boot start', 'app interactive');
+  }, [api]);
 
   useEffect(() => {
     void refresh();
@@ -49,36 +54,42 @@ function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  const navigateTo = (moduleId: ModuleId, tabId?: string) => {
+  const navigateTo = useCallback((moduleId: ModuleId, tabId?: string) => {
     const module = navModules.find((candidate) => candidate.id === moduleId) ?? navModules[0];
     const defaultTab = getDefaultTab(module);
     const tab = module.tabs.find((candidate) => candidate.id === tabId) ?? defaultTab;
     const route = getTabRoute(module.id, tab.id);
     window.history.pushState(null, '', route);
     setNavigationState({ module, tab, route, replaced: false });
-  };
+  }, []);
 
-  const openModule = (target: OpenModuleTarget) => {
+  const openModule = useCallback((target: OpenModuleTarget) => {
     if (typeof target === 'string') {
       navigateTo(target);
       return;
     }
     navigateTo(target.moduleId, target.tabId);
-  };
+  }, [navigateTo]);
 
-  const runAction = async (label: string, action: () => Promise<unknown>) => {
+  const runAction = useCallback(async (label: string, action: () => Promise<unknown>, options: ActionRunOptions = {}) => {
     setBusy(true);
     setNotice(null);
     try {
       await action();
-      await refresh();
+      const refreshMode = options.refresh ?? 'full';
+      if (options.patch) {
+        setSnapshot((current) => current ? options.patch?.(current) ?? current : current);
+      }
+      if (refreshMode === 'full' || refreshMode === 'module') {
+        await refresh();
+      }
       setNotice({ type: 'success', message: label });
     } catch (error) {
       setNotice({ type: 'error', message: 'app.action.failed', detail: error instanceof Error ? error.message : String(error) });
     } finally {
       setBusy(false);
     }
-  };
+  }, [refresh]);
 
   if (!snapshot) {
     return <LoadingScreen />;
@@ -127,19 +138,37 @@ function AppContent({
   navigateTo: (moduleId: ModuleId, tabId?: string) => void;
   notice: ActionNotice | null;
   openModule: (target: OpenModuleTarget) => void;
-  runAction: (label: string, action: () => Promise<unknown>) => Promise<void>;
+  runAction: (label: string, action: () => Promise<unknown>, options?: ActionRunOptions) => Promise<void>;
   snapshot: AppSnapshot;
 }) {
   const { t } = useI18n();
   const translatedActiveModule = translateModule(activeModule, t);
   const translatedActiveTab = translateTab(activeTab, t);
   const ActivePage = modulePageRegistry[activeModuleId];
+  const shell = useMemo<AppShellSummary>(() => ({
+    dashboard: {
+      workspace: snapshot.dashboard.workspace,
+      gatewayStatus: snapshot.dashboard.gatewayStatus,
+    },
+    uiPreferences: snapshot.uiPreferences,
+    defaultModelLabel:
+      snapshot.models.find((model) => model.id === snapshot.dashboard.workspace.defaultModelId)?.displayName ??
+      snapshot.models.find((model) => model.enabled)?.displayName ??
+      snapshot.models[0]?.displayName ??
+      t('app.rail.unconfigured'),
+  }), [
+    snapshot.dashboard.gatewayStatus,
+    snapshot.dashboard.workspace,
+    snapshot.models,
+    snapshot.uiPreferences,
+    t,
+  ]);
   const page = (
     <ActivePage
       activeTab={translatedActiveTab}
       snapshot={snapshot}
       api={api}
-      onAction={(label, action) => runAction(label, action)}
+      onAction={(label, action, options) => runAction(label, action, options)}
       onOpenModule={openModule}
     />
   );
@@ -151,7 +180,7 @@ function AppContent({
       activeTab={translatedActiveTab}
       onModuleChange={(moduleId) => navigateTo(moduleId)}
       onTabChange={(tabId, moduleId = activeModuleId) => navigateTo(moduleId, tabId)}
-      snapshot={snapshot}
+      shell={shell}
       busy={busy}
       notice={notice}
     >

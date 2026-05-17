@@ -128,6 +128,7 @@ import type {
   AgentDefinition,
   AppSnapshot,
   AuditExportResult,
+  AuditLogPageInput,
   AuditIntegrityReport,
   ApprovalDecisionInput,
   ApprovalRequest,
@@ -137,6 +138,7 @@ import type {
   CompareModelsInput,
   CompareModelsResponse,
   Conversation,
+  ConversationPageInput,
   ConversationExport,
   DashboardSummary,
   DataBackupCreateInput,
@@ -163,13 +165,16 @@ import type {
   GatewayKeyRotateInput,
   GatewayKeyUpdateInput,
   GatewayLog,
+  GatewayLogPageInput,
   GatewayStatus,
   ImportPlanApplyOptions,
   ImportExportResult,
   KnowledgeChunk,
+  KnowledgeChunkPageInput,
   KnowledgeCitation,
   KnowledgeDeleteInput,
   KnowledgeFile,
+  KnowledgeFilePageInput,
   KnowledgeImportInput,
   KnowledgeRebuildInput,
   KnowledgeRetrievalInput,
@@ -177,6 +182,7 @@ import type {
   KnowledgeRetrievalTrace,
   McpServer,
   Message,
+  MessagePageInput,
   MessageAttachment,
   MessageAttachmentInput,
   MessageChunk,
@@ -184,6 +190,7 @@ import type {
   ModelInput,
   ObservabilityExportResult,
   ObservabilitySnapshot,
+  PageResult,
   PromptTemplate,
   Provider,
   ProviderHealthRecord,
@@ -204,6 +211,8 @@ import type {
   ToolDefinition,
   UiPreferences,
   UsageRecord,
+  UsageTrendBucket,
+  UsageTrendInput,
   Workspace,
   ProviderModelOption,
 } from '../../shared/types.js';
@@ -1758,7 +1767,9 @@ export interface ServiceContext {
   createModel(input: ModelInput): Model;
   resolveGatewayModelId(modelName: string | undefined): string | undefined;
   getConversations(): Conversation[];
+  listConversations(input?: ConversationPageInput): PageResult<Conversation>;
   getMessages(conversationId?: string): Message[];
+  listMessages(input: MessagePageInput): PageResult<Message>;
   getMessageChunks(messageId?: string): MessageChunk[];
   getMessageAttachments(conversationId?: string): MessageAttachment[];
   getPromptTemplates(): PromptTemplate[];
@@ -1773,6 +1784,7 @@ export interface ServiceContext {
   sendMessage(input: SendMessageInput, options?: { onEvent?: (payload: unknown) => void }): Promise<ChatResponse>;
   getGatewayKeys(): GatewayApiKey[];
   getGatewayLogs(): GatewayLog[];
+  listGatewayLogs(input?: GatewayLogPageInput): PageResult<GatewayLog>;
   getGatewayStatus(): GatewayStatus;
   setGatewayRuntime(enabled: boolean, recentError?: string | null, listenerState?: GatewayStatus['listenerState']): GatewayStatus;
   createGatewayKey(input: GatewayKeyCreateInput | string): GatewayKeyCreated;
@@ -1784,7 +1796,9 @@ export interface ServiceContext {
   validateGatewayKey(rawKey: string, scope: GatewayScope): GatewayApiKey | null;
   recordGatewayLog(input: GatewayLogInput): void;
   getKnowledgeFiles(): KnowledgeFile[];
+  listKnowledgeFiles(input?: KnowledgeFilePageInput): PageResult<KnowledgeFile>;
   getKnowledgeChunks(fileId?: string): KnowledgeChunk[];
+  listKnowledgeChunks(input?: KnowledgeChunkPageInput): PageResult<KnowledgeChunk>;
   getKnowledgeRetrievalTraces(): KnowledgeRetrievalTrace[];
   getKnowledgeCitations(messageId?: string): KnowledgeCitation[];
   createKnowledgeFile(input: KnowledgeImportInput): KnowledgeFile;
@@ -1827,6 +1841,7 @@ export interface ServiceContext {
   getSecurityState(): SecurityState;
   requirePermission(permissionKey: SecurityPermissionKey, resourceType?: string | null, resourceId?: string | null): void;
   getAuditLogs(): AuditLog[];
+  listAuditLogs(input?: AuditLogPageInput): PageResult<AuditLog>;
   countAuditAction(action: string): number;
   searchAuditLogs(query?: string): AuditLog[];
   verifyAuditIntegrity(options?: { persistAudit?: boolean }): AuditIntegrityReport;
@@ -1837,6 +1852,7 @@ export interface ServiceContext {
   saveUiPreferences(preferences: UiPreferences): UiPreferences;
   getRequestLogs(): RequestLog[];
   getUsageRecords(): UsageRecord[];
+  getUsageTrend(input?: UsageTrendInput): UsageTrendBucket[];
   getFeedbackItems(): FeedbackItem[];
   getEvalSets(): EvalSet[];
   getEvalResults(evalSetId?: string): EvalResult[];

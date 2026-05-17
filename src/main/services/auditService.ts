@@ -3,7 +3,7 @@ import { redactSensitive } from '../security/redaction.js';
 import { createId, now } from '../utils/ids.js';
 import { translate } from '../../shared/i18n.js';
 import { SECURITY_ACTION_PERMISSIONS } from '../../shared/securityRuntime.js';
-import type { AuditExportResult, AuditIntegrityReport, AuditLog } from '../../shared/types.js';
+import type { AuditExportResult, AuditIntegrityReport, AuditLog, AuditLogPageInput, PageResult } from '../../shared/types.js';
 import { ServiceContext, type ServiceConstructor } from './serviceContext.js';
 
 const t = (key: Parameters<typeof translate>[1], params?: Parameters<typeof translate>[2]) => translate('zh-CN', key, params);
@@ -14,6 +14,10 @@ export function AuditService<TBase extends ServiceConstructor<ServiceContext>>(B
   return class AuditService extends Base {
   getAuditLogs(): AuditLog[] {
     return this.repositories.audit.listAuditLogs();
+  }
+
+  listAuditLogs(input: AuditLogPageInput = {}): PageResult<AuditLog> {
+    return this.repositories.audit.pageAuditLogs(input);
   }
 
 

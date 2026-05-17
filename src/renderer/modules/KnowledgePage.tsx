@@ -1,6 +1,6 @@
 import { FilePlus, RefreshCw, Search, Trash2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import type { KnowledgeFile, KnowledgeRetrievalResult } from '../../shared/types';
+import { useEffect, useMemo, useState } from 'react';
+import type { KnowledgeChunk, KnowledgeFile, KnowledgeRetrievalResult } from '../../shared/types';
 import { KNOWLEDGE_RUNTIME_POLICY } from '../../shared/knowledgeRuntime';
 import { FORM_DEFAULTS } from '../../shared/uiCopy';
 import { ActivityList, CommandButton, ConfigDetail, ConfigList, DataRows, EmptyBlock, Field, InlineNotice, PageHeader, StatusPillLite, ToolSection } from '../components/AppFrame';
@@ -15,14 +15,64 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
   const [query, setQuery] = useState<string>(FORM_DEFAULTS.knowledgeRetrievalQuery);
   const [retrieval, setRetrieval] = useState<KnowledgeRetrievalResult | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [filePage, setFilePage] = useState({ items: snapshot.knowledgeFiles.filter((file) => !file.deletedAt), total: snapshot.knowledgeFiles.length, hasMore: false, loading: false, error: null as string | null });
+  const [chunkPage, setChunkPage] = useState({ items: snapshot.knowledgeChunks, total: snapshot.knowledgeChunks.length, hasMore: false, loading: false, error: null as string | null });
   const pending = useLocalPending();
-  const activeFiles = snapshot.knowledgeFiles.filter((file) => !file.deletedAt);
+  const activeFiles = filePage.items;
   const indexedFiles = activeFiles.filter((file) => file.indexStatus === 'indexed');
   const totals = useMemo(() => ({
     files: activeFiles.length,
-    chunks: snapshot.knowledgeChunks.filter((chunk) => chunk.status === 'indexed').length,
+    chunks: chunkPage.total || snapshot.knowledgeChunks.filter((chunk) => chunk.status === 'indexed').length,
     tokens: activeFiles.reduce((sum, file) => sum + file.tokenCount, 0),
-  }), [activeFiles, snapshot.knowledgeChunks]);
+  }), [activeFiles, chunkPage.total, snapshot.knowledgeChunks]);
+
+  useEffect(() => {
+    setFilePage((current) => ({ ...current, items: snapshot.knowledgeFiles.filter((file) => !file.deletedAt), total: snapshot.knowledgeFiles.length }));
+    setChunkPage((current) => ({ ...current, items: snapshot.knowledgeChunks, total: snapshot.knowledgeChunks.length }));
+  }, [snapshot.knowledgeChunks, snapshot.knowledgeFiles]);
+
+  const loadKnowledgeFiles = async (reset = false) => {
+    setFilePage((current) => ({ ...current, loading: true, error: null }));
+    try {
+      const offset = reset ? 0 : filePage.items.length;
+      const page = await api.listKnowledgeFiles({ limit: 30, offset });
+      setFilePage((current) => ({
+        items: reset ? page.items : [...current.items, ...page.items],
+        total: page.total,
+        hasMore: page.hasMore,
+        loading: false,
+        error: null,
+      }));
+    } catch (error) {
+      setFilePage((current) => ({ ...current, loading: false, error: error instanceof Error ? error.message : String(error) }));
+    }
+  };
+
+  const loadKnowledgeChunks = async (reset = false) => {
+    setChunkPage((current) => ({ ...current, loading: true, error: null }));
+    try {
+      const offset = reset ? 0 : chunkPage.items.length;
+      const page = await api.listKnowledgeChunks({ limit: 40, offset });
+      setChunkPage((current) => ({
+        items: reset ? page.items : [...current.items, ...page.items],
+        total: page.total,
+        hasMore: page.hasMore,
+        loading: false,
+        error: null,
+      }));
+    } catch (error) {
+      setChunkPage((current) => ({ ...current, loading: false, error: error instanceof Error ? error.message : String(error) }));
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab.id === 'files') {
+      void loadKnowledgeFiles(true);
+    }
+    if (activeTab.id === 'chunks') {
+      void loadKnowledgeChunks(true);
+    }
+  }, [activeTab.id]);
 
   if (activeTab.id === 'chunks') {
     return (
@@ -37,12 +87,18 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
         <ConfigList title={t('knowledge.chunks.title')} description={activeTab.featureBoundary}>
           <ActivityList
             empty={t('shared.empty.reason')}
-            items={snapshot.knowledgeChunks.slice(0, 16).map((chunk) => ({
+            items={chunkPage.items.slice(0, 40).map((chunk: KnowledgeChunk) => ({
               title: chunk.citation,
               meta: t('common.valueSeparator', { left: chunk.tokenCount, right: t('knowledge.columns.tokens') }),
               state: healthState(chunk.status),
             }))}
           />
+          {chunkPage.error ? <InlineNotice tone="warning" title={t('app.action.failed')} detail={chunkPage.error} /> : null}
+          {chunkPage.hasMore ? (
+            <CommandButton disabled={chunkPage.loading} onClick={() => loadKnowledgeChunks()}>
+              {chunkPage.loading ? t('app.status.busy') : t('common.loadMore')}
+            </CommandButton>
+          ) : null}
         </ConfigList>
         <ConfigDetail title={t('knowledge.index.title')} description={t('knowledge.chunks.note')}>
           <DataRows
@@ -152,6 +208,12 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
           {activeFiles.length > 0 ? activeFiles.map((file) => (
             <KnowledgeFileRow key={file.id} file={file} pendingDeleteId={pendingDeleteId} setPendingDeleteId={setPendingDeleteId} pending={pending} api={api} onAction={onAction} />
           )) : <EmptyBlock title={t('shared.empty.title')} detail={t('knowledge.files.note')} />}
+          {filePage.error ? <InlineNotice tone="warning" title={t('app.action.failed')} detail={filePage.error} /> : null}
+          {filePage.hasMore ? (
+            <CommandButton disabled={filePage.loading} onClick={() => loadKnowledgeFiles()}>
+              {filePage.loading ? t('app.status.busy') : t('common.loadMore')}
+            </CommandButton>
+          ) : null}
         </div>
       </ConfigList>
 

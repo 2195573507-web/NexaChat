@@ -4,14 +4,17 @@ import { KNOWLEDGE_RUNTIME_POLICY, chunkKnowledgeText, normalizeKnowledgeImport 
 import { SECURITY_ACTION_PERMISSIONS } from '../../shared/securityRuntime.js';
 import type {
   KnowledgeChunk,
+  KnowledgeChunkPageInput,
   KnowledgeCitation,
   KnowledgeDeleteInput,
   KnowledgeFile,
+  KnowledgeFilePageInput,
   KnowledgeImportInput,
   KnowledgeRebuildInput,
   KnowledgeRetrievalInput,
   KnowledgeRetrievalResult,
-  KnowledgeRetrievalTrace
+  KnowledgeRetrievalTrace,
+  PageResult
 } from '../../shared/types.js';
 import { ServiceContext, type ServiceConstructor } from './serviceContext.js';
 
@@ -26,9 +29,17 @@ export function KnowledgeService<TBase extends ServiceConstructor<ServiceContext
     return this.repositories.knowledge.listKnowledgeFiles();
   }
 
+  listKnowledgeFiles(input: KnowledgeFilePageInput = {}): PageResult<KnowledgeFile> {
+    return this.repositories.knowledge.pageKnowledgeFiles(input);
+  }
+
 
   getKnowledgeChunks(fileId?: string): KnowledgeChunk[] {
     return this.repositories.knowledge.listKnowledgeChunks(fileId);
+  }
+
+  listKnowledgeChunks(input: KnowledgeChunkPageInput = {}): PageResult<KnowledgeChunk> {
+    return this.repositories.knowledge.pageKnowledgeChunks(input);
   }
 
 

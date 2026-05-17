@@ -11,6 +11,7 @@ import type {
   ContextStrategy,
   Conversation,
   ConversationExport,
+  ConversationPageInput,
   ExecutionRun,
   ExecutionStartInput,
   ExecutionStep,
@@ -19,6 +20,7 @@ import type {
   GatewayApiKey,
   GatewayKeyCreated,
   GatewayLog,
+  GatewayLogPageInput,
   GatewayStatus,
   HealthStatus,
   ImportExportResult,
@@ -26,9 +28,11 @@ import type {
   DataConflictRecord,
   DataMobilityJob,
   KnowledgeChunk,
+  KnowledgeChunkPageInput,
   KnowledgeCitation,
   KnowledgeDeleteInput,
   KnowledgeFile,
+  KnowledgeFilePageInput,
   KnowledgeImportInput,
   KnowledgeRebuildInput,
   KnowledgeRetrievalInput,
@@ -36,10 +40,12 @@ import type {
   KnowledgeRetrievalTrace,
   McpServer,
   Message,
+  MessagePageInput,
   MessageAttachment,
   MessageChunk,
   Model,
   ModelInput,
+  PageResult,
   PromptTemplate,
   Provider,
   ProviderInput,
@@ -66,8 +72,12 @@ import type {
   ObservabilityQueryInput,
   ObservabilitySnapshot,
   ObservabilityExportResult,
+  UsageTrendBucket,
+  UsageTrendInput,
+  AuditLogPageInput,
   ProviderHealthRecord,
   RollbackRecord,
+  TaskCancelResult,
 } from '../shared/types';
 import type { AppApi } from '../shared/api';
 import { IPC_EVENT_CHANNELS, isIpcEventChannel, type IpcEventChannel, type IpcEventPayloads } from '../shared/ipc';
@@ -152,6 +162,29 @@ function createId(prefix: string): string {
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function normalizePageLimit(value: number | undefined, fallback: number, max: number): number {
+  const parsed = Math.floor(Number(value ?? fallback));
+  return Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, max) : fallback;
+}
+
+function normalizePageOffset(value: number | undefined): number {
+  const parsed = Math.floor(Number(value ?? 0));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function pageItems<T>(items: T[], input: { limit?: number; offset?: number } | undefined, fallback = 50, max = 200): PageResult<T> {
+  const limit = normalizePageLimit(input?.limit, fallback, max);
+  const offset = normalizePageOffset(input?.offset);
+  const page = items.slice(offset, offset + limit);
+  return {
+    items: clone(page),
+    total: items.length,
+    limit,
+    offset,
+    hasMore: offset + page.length < items.length,
+  };
 }
 
 function findById<T extends { id: string }>(items: T[], id: string, label: string): T {
@@ -565,6 +598,15 @@ function buildSnapshot(state: MockState): AppSnapshot {
     setupGaps.push(t('dashboard.setup.browserGatewayDisabled'));
   }
   const auditIntegrity = buildAuditIntegrity(state.auditLogs);
+  const snapshotConversations = [...state.conversations]
+    .filter((conversation) => conversation.status !== 'deleted')
+    .sort((left, right) => {
+      if (left.isPinned !== right.isPinned) {
+        return left.isPinned ? -1 : 1;
+      }
+      return (right.lastMessageAt ?? right.updatedAt) - (left.lastMessageAt ?? left.updatedAt);
+    });
+  const currentConversationId = snapshotConversations[0]?.id;
 
   return {
     dashboard: {
@@ -579,8 +621,14 @@ function buildSnapshot(state: MockState): AppSnapshot {
       usageToday,
       setupGaps,
     },
-    conversations: state.conversations,
-    messages: state.messages,
+    conversations: snapshotConversations.slice(0, 30),
+    messages: currentConversationId
+      ? state.messages
+          .filter((message) => message.conversationId === currentConversationId && message.status !== 'deleted')
+          .sort((left, right) => right.createdAt - left.createdAt || right.id.localeCompare(left.id))
+          .slice(0, 60)
+          .reverse()
+      : [],
     messageChunks: state.messageChunks,
     messageAttachments: state.messageAttachments,
     promptTemplates: state.promptTemplates,
@@ -588,16 +636,16 @@ function buildSnapshot(state: MockState): AppSnapshot {
     providers: activeProviders,
     models: activeModels,
     requestLogs: state.requestLogs,
-    gatewayLogs: state.gatewayLogs,
-    usageRecords: state.usageRecords,
+    gatewayLogs: state.gatewayLogs.slice(0, 24),
+    usageRecords: state.usageRecords.slice(0, 24),
     providerHealthRecords: state.providerHealthRecords,
     feedbackItems: state.feedbackItems,
     evalSets: state.evalSets,
     evalResults: state.evalResults,
     observability: buildObservabilitySnapshot(state),
     gatewayKeys: state.gatewayKeys,
-    knowledgeFiles: activeKnowledgeFiles,
-    knowledgeChunks: activeKnowledgeChunks,
+    knowledgeFiles: activeKnowledgeFiles.slice(0, 30),
+    knowledgeChunks: activeKnowledgeChunks.slice(0, 40),
     knowledgeRetrievals: state.knowledgeRetrievals,
     knowledgeCitations: activeKnowledgeCitations,
     mcpServers: state.mcpServers,
@@ -613,7 +661,7 @@ function buildSnapshot(state: MockState): AppSnapshot {
     dataBackups: state.dataBackups,
     migrationRuns: state.migrationRuns,
     rollbackRecords: state.rollbackRecords,
-    auditLogs: state.auditLogs,
+    auditLogs: state.auditLogs.slice(0, 30),
     security: buildSecurityState(),
     auditIntegrity,
     uiPreferences: state.uiPreferences,
@@ -1546,6 +1594,108 @@ export function createMockApi(): AppApi {
       touchWorkspace();
       pushAudit('chat.createConversation', 'conversation', conversation.id);
       return clone(conversation);
+    },
+
+    async listConversations(input?: ConversationPageInput) {
+      const query = input?.query?.trim().toLowerCase();
+      const conversations = [...state.conversations]
+        .filter((conversation) => conversation.status !== 'deleted')
+        .filter((conversation) => !query || conversation.title.toLowerCase().includes(query) || (conversation.groupName ?? '').toLowerCase().includes(query))
+        .sort((left, right) => {
+          if (left.isPinned !== right.isPinned) {
+            return left.isPinned ? -1 : 1;
+          }
+          return (right.lastMessageAt ?? right.updatedAt) - (left.lastMessageAt ?? left.updatedAt);
+        });
+      return pageItems(conversations, input, 30, 100);
+    },
+
+    async listMessages(input: MessagePageInput) {
+      const messages = state.messages
+        .filter((message) => message.conversationId === input.conversationId && message.status !== 'deleted')
+        .sort((left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id));
+      const newestFirst = [...messages].reverse();
+      const page = pageItems(newestFirst, input, 40, 200);
+      return { ...page, items: clone([...page.items].reverse()) };
+    },
+
+    async listGatewayLogs(input?: GatewayLogPageInput) {
+      const logs = state.gatewayLogs
+        .filter((log) => input?.statusCode === undefined || log.statusCode === input.statusCode)
+        .filter((log) => input?.since === undefined || log.createdAt >= input.since)
+        .filter((log) => input?.until === undefined || log.createdAt <= input.until)
+        .sort((left, right) => right.createdAt - left.createdAt);
+      return pageItems(logs, input, 50, 200);
+    },
+
+    async listAuditLogs(input?: AuditLogPageInput) {
+      const query = input?.query?.trim().toLowerCase();
+      const logs = state.auditLogs
+        .filter((log) => !query || JSON.stringify(log).toLowerCase().includes(query))
+        .filter((log) => !input?.action || log.action === input.action)
+        .filter((log) => !input?.userId || log.actor === input.userId)
+        .filter((log) => input?.since === undefined || log.createdAt >= input.since)
+        .filter((log) => input?.until === undefined || log.createdAt <= input.until)
+        .sort((left, right) => right.createdAt - left.createdAt || right.id.localeCompare(left.id));
+      return pageItems(logs, input, 50, 200);
+    },
+
+    async listKnowledgeFiles(input?: KnowledgeFilePageInput) {
+      const files = state.knowledgeFiles
+        .filter((file) => !file.deletedAt)
+        .filter((file) => !input?.status || file.indexStatus === input.status)
+        .sort((left, right) => right.updatedAt - left.updatedAt);
+      return pageItems(files, input, 50, 200);
+    },
+
+    async listKnowledgeChunks(input?: KnowledgeChunkPageInput) {
+      const activeFileIds = new Set(state.knowledgeFiles.filter((file) => !file.deletedAt).map((file) => file.id));
+      const chunks = state.knowledgeChunks
+        .filter((chunk) => chunk.status !== 'deleted' && activeFileIds.has(chunk.fileId))
+        .filter((chunk) => !input?.fileId || chunk.fileId === input.fileId)
+        .sort((left, right) => right.createdAt - left.createdAt || left.position - right.position);
+      return pageItems(chunks, input, 50, 200);
+    },
+
+    async getUsageTrend(input?: UsageTrendInput) {
+      const bucketMs = Math.max(60 * 1000, Number(input?.bucketMs ?? 60 * 60 * 1000));
+      const limit = normalizePageLimit(input?.limit, 48, 366);
+      const buckets = new Map<number, UsageTrendBucket>();
+      state.usageRecords
+        .filter((record) => !input?.workspaceId || record.workspaceId === input.workspaceId)
+        .filter((record) => !input?.providerId || record.providerId === input.providerId)
+        .filter((record) => !input?.modelId || record.modelId === input.modelId)
+        .filter((record) => input?.since === undefined || record.createdAt >= input.since)
+        .filter((record) => input?.until === undefined || record.createdAt <= input.until)
+        .forEach((record) => {
+          const bucketStart = Math.floor(record.createdAt / bucketMs) * bucketMs;
+          const bucket = buckets.get(bucketStart) ?? {
+            bucketStart,
+            requestCount: 0,
+            inputTokens: 0,
+            outputTokens: 0,
+            costEstimate: 0,
+          };
+          bucket.requestCount += 1;
+          bucket.inputTokens += record.inputTokens;
+          bucket.outputTokens += record.outputTokens;
+          bucket.costEstimate += record.costEstimate;
+          buckets.set(bucketStart, bucket);
+        });
+      return clone([...buckets.values()].sort((left, right) => left.bucketStart - right.bucketStart).slice(-limit));
+    },
+
+    async cancelTask(taskId: string): Promise<TaskCancelResult> {
+      emitEvent(IPC_EVENT_CHANNELS.taskProgress, {
+        taskId,
+        taskKind: 'browser.mock',
+        type: 'task.canceled',
+        phase: 'canceled',
+        timestamp: now(),
+        progress: 1,
+        message: 'browser mock task canceled',
+      });
+      return { taskId, canceled: true };
     },
 
     async updateConversationFlags(conversationId, flags) {

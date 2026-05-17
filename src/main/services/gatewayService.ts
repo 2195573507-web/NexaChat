@@ -21,7 +21,9 @@ import type {
   GatewayKeyRotateInput,
   GatewayKeyUpdateInput,
   GatewayLog,
-  GatewayStatus
+  GatewayLogPageInput,
+  GatewayStatus,
+  PageResult
 } from '../../shared/types.js';
 import {
   ServiceContext,
@@ -44,6 +46,10 @@ export function GatewayService<TBase extends ServiceConstructor<ServiceContext>>
 
   getGatewayLogs(): GatewayLog[] {
     return this.repositories.gateway.listGatewayLogs();
+  }
+
+  listGatewayLogs(input: GatewayLogPageInput = {}): PageResult<GatewayLog> {
+    return this.repositories.gateway.pageGatewayLogs(input);
   }
 
 

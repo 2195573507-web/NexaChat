@@ -36,7 +36,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { navModules } from '../../shared/navigation';
 import { getThemeClass, resolveThemeMode } from '../../shared/theme';
-import type { AppSnapshot, ModuleId, NavModule, NavTab } from '../../shared/types';
+import type { DashboardSummary, ModuleId, NavModule, NavTab, UiPreferences } from '../../shared/types';
 import { translateModule, useI18n } from '../i18n';
 
 const SYSTEM_DARK_QUERY = '(prefers-color-scheme: dark)';
@@ -86,23 +86,20 @@ interface AppFrameProps {
   activeTab: NavTab;
   onModuleChange: (moduleId: ModuleId) => void;
   onTabChange: (tabId: string, moduleId?: ModuleId) => void;
-  snapshot: AppSnapshot;
+  shell: AppShellSummary;
   busy: boolean;
   notice: { type: 'success' | 'error'; message: string; detail?: string } | null;
   children: ReactNode;
 }
 
-function getInitialSystemPrefersDark(): boolean {
-  return typeof window !== 'undefined' && window.matchMedia?.(SYSTEM_DARK_QUERY).matches === true;
+export interface AppShellSummary {
+  dashboard: Pick<DashboardSummary, 'workspace' | 'gatewayStatus'>;
+  uiPreferences: UiPreferences;
+  defaultModelLabel: string;
 }
 
-function getDefaultModelLabel(snapshot: AppSnapshot, fallback: string) {
-  return (
-    snapshot.models.find((model) => model.id === snapshot.dashboard.workspace.defaultModelId)?.displayName ??
-    snapshot.models.find((model) => model.enabled)?.displayName ??
-    snapshot.models[0]?.displayName ??
-    fallback
-  );
+function getInitialSystemPrefersDark(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia?.(SYSTEM_DARK_QUERY).matches === true;
 }
 
 export function AppFrame({
@@ -111,7 +108,7 @@ export function AppFrame({
   activeTab,
   onModuleChange,
   onTabChange,
-  snapshot,
+  shell,
   busy,
   notice,
   children,
@@ -121,8 +118,8 @@ export function AppFrame({
   const translatedModules = useMemo(() => navModules.map((module) => translateModule(module, t)), [t]);
   const translatedActiveModule = translateModule(activeModule, t);
   const translatedActiveTab = translatedActiveModule.tabs.find((tab) => tab.id === activeTab.id) ?? activeTab;
-  const themeClass = getThemeClass(snapshot.uiPreferences.theme, systemPrefersDark);
-  const resolvedTheme = resolveThemeMode(snapshot.uiPreferences.theme, systemPrefersDark);
+  const themeClass = getThemeClass(shell.uiPreferences.theme, systemPrefersDark);
+  const resolvedTheme = resolveThemeMode(shell.uiPreferences.theme, systemPrefersDark);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) {
@@ -137,11 +134,11 @@ export function AppFrame({
 
   return (
     <div
-      className={`app-frame ${themeClass} density-${snapshot.uiPreferences.density} font-${snapshot.uiPreferences.fontMode} ${snapshot.uiPreferences.advancedMode ? 'mode-advanced' : 'mode-ordinary'} ${snapshot.uiPreferences.reducedMotion ? 'motion-reduced' : 'motion-normal'}`}
-      data-theme-mode={snapshot.uiPreferences.theme}
+      className={`app-frame ${themeClass} density-${shell.uiPreferences.density} font-${shell.uiPreferences.fontMode} ${shell.uiPreferences.advancedMode ? 'mode-advanced' : 'mode-ordinary'} ${shell.uiPreferences.reducedMotion ? 'motion-reduced' : 'motion-normal'}`}
+      data-theme-mode={shell.uiPreferences.theme}
       data-resolved-theme={resolvedTheme}
-      data-user-mode={snapshot.uiPreferences.advancedMode ? 'advanced' : 'ordinary'}
-      data-motion-mode={snapshot.uiPreferences.reducedMotion ? 'reduced' : 'normal'}
+      data-user-mode={shell.uiPreferences.advancedMode ? 'advanced' : 'ordinary'}
+      data-motion-mode={shell.uiPreferences.reducedMotion ? 'reduced' : 'normal'}
     >
       <aside className="module-rail" aria-label={t('shell.sidebar.aria')}>
         <div className="brand-lockup">
@@ -175,8 +172,8 @@ export function AppFrame({
       <main className="work-surface">
         <header className="command-bar">
           <div className="command-context">
-            <span>{t('shell.defaultModel', { model: getDefaultModelLabel(snapshot, t('app.rail.unconfigured')) })}</span>
-            <span>{snapshot.dashboard.gatewayStatus.running ? t('shell.gateway.running') : t('shell.gateway.stopped')}</span>
+            <span>{t('shell.defaultModel', { model: shell.defaultModelLabel })}</span>
+            <span>{shell.dashboard.gatewayStatus.running ? t('shell.gateway.running') : t('shell.gateway.stopped')}</span>
           </div>
           <div className="command-actions">
             {translatedActiveModule.tabs.length > 1 ? (

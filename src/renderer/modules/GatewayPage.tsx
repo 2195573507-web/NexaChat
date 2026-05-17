@@ -1,11 +1,12 @@
 import { Copy, KeyRound, Play, Power, RotateCcw, Save, ShieldAlert, TrendingUp } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { GATEWAY_AVAILABLE_ENDPOINTS, GATEWAY_DEFAULT_KEY_POLICY, GATEWAY_ENDPOINT, GATEWAY_RESERVED_ENDPOINTS } from '../../shared/gatewayRuntime';
 import { buildUsageTrend, type UsageTrendPoint } from '../../shared/observabilityRuntime';
-import type { GatewayApiKey, UsageRecord } from '../../shared/types';
+import type { GatewayApiKey, UsageTrendBucket } from '../../shared/types';
 import { GATEWAY_DOCS, FORM_DEFAULTS } from '../../shared/uiCopy';
 import { ActivityList, CommandButton, ConfigDetail, ConfigList, CopyableCommand, DataRows, EmptyBlock, Field, InlineNotice, PageHeader, StatusPillLite, ToolSection } from '../components/AppFrame';
 import { useI18n } from '../i18n';
+import { markPerformance, measurePerformance } from '../performanceMarks';
 import { formatDate, getDefaultModel, healthState, statusLabel, TabPanel, type TabPageProps } from './shared';
 import { useLocalPending } from './useLocalPending';
 
@@ -14,10 +15,47 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
   const defaultModel = getDefaultModel(snapshot);
   const [keyName, setKeyName] = useState<string>(FORM_DEFAULTS.gatewayKeyName);
   const [oneTimeKey, setOneTimeKey] = useState<string | null>(null);
+  const [gatewayLogsPage, setGatewayLogsPage] = useState({ items: snapshot.gatewayLogs, total: snapshot.gatewayLogs.length, hasMore: false, loading: false, error: null as string | null });
+  const [usageTrend, setUsageTrend] = useState<UsageTrendBucket[]>([]);
   const pending = useLocalPending();
   const endpointBase = `${snapshot.dashboard.gatewayStatus.bindHost}:${snapshot.dashboard.gatewayStatus.port}`;
   const gatewayStatus = snapshot.dashboard.gatewayStatus;
   const chatCommand = `curl http://${endpointBase}${GATEWAY_ENDPOINT.chatCompletions} -H "Authorization: Bearer ${GATEWAY_DOCS.bearerPlaceholder}" -H "Content-Type: application/json" -d "{\\"model\\":\\"${defaultModel?.modelNameSnapshot ?? GATEWAY_DOCS.sampleModelPlaceholder}\\",\\"messages\\":[{\\"role\\":\\"user\\",\\"content\\":\\"${GATEWAY_DOCS.sampleUserMessage}\\"}]}"`;
+
+  useEffect(() => {
+    setGatewayLogsPage((current) => ({ ...current, items: snapshot.gatewayLogs, total: snapshot.gatewayLogs.length }));
+  }, [snapshot.gatewayLogs]);
+
+  const loadGatewayLogs = async (reset = false) => {
+    setGatewayLogsPage((current) => ({ ...current, loading: true, error: null }));
+    markPerformance('gateway logs query start');
+    try {
+      const offset = reset ? 0 : gatewayLogsPage.items.length;
+      const page = await api.listGatewayLogs({ limit: 24, offset });
+      setGatewayLogsPage((current) => ({
+        items: reset ? page.items : [...current.items, ...page.items],
+        total: page.total,
+        hasMore: page.hasMore,
+        loading: false,
+        error: null,
+      }));
+    } catch (error) {
+      setGatewayLogsPage((current) => ({ ...current, loading: false, error: error instanceof Error ? error.message : String(error) }));
+    } finally {
+      markPerformance('gateway logs query end');
+      measurePerformance('gateway logs query', 'gateway logs query start', 'gateway logs query end');
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab.id !== 'logs' && activeTab.id !== 'usage') {
+      return;
+    }
+    void loadGatewayLogs(true);
+    void api.getUsageTrend({ limit: 14, bucketMs: 24 * 60 * 60 * 1000 })
+      .then(setUsageTrend)
+      .catch((error) => setGatewayLogsPage((current) => ({ ...current, error: error instanceof Error ? error.message : String(error) })));
+  }, [activeTab.id]);
 
   const createKey = async () => {
     const created = await api.createGatewayKey({
@@ -81,14 +119,34 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
   }
 
   if (activeTab.id === 'logs' || activeTab.id === 'usage') {
-    const usageTrend = buildUsageTrend(snapshot.usageRecords, { bucketSize: 'day' });
+    const effectiveUsageTrend = usageTrend.length > 0
+      ? usageTrend
+      : snapshot.usageRecords.map((record) => ({
+          bucketStart: record.createdAt,
+          requestCount: 1,
+          inputTokens: record.inputTokens,
+          outputTokens: record.outputTokens,
+          costEstimate: record.costEstimate,
+        }));
+    const trendRecords = effectiveUsageTrend.map((bucket) => ({
+      id: `trend_${bucket.bucketStart}`,
+      workspaceId: snapshot.dashboard.workspace.id,
+      providerId: null,
+      modelId: null,
+      requestLogId: null,
+      inputTokens: bucket.inputTokens,
+      outputTokens: bucket.outputTokens,
+      costEstimate: bucket.costEstimate,
+      createdAt: bucket.bucketStart,
+    }));
+    const usageTrendSummary = buildUsageTrend(trendRecords, { bucketSize: 'day' });
     const logItems = activeTab.id === 'usage'
-      ? snapshot.usageRecords.slice(0, 12).map((usage) => ({
+      ? effectiveUsageTrend.map((usage) => ({
           title: t('common.valueSeparator', { left: usage.inputTokens + usage.outputTokens, right: t('knowledge.columns.tokens') }),
-          meta: formatDate(usage.createdAt, t),
+          meta: formatDate(usage.bucketStart, t),
           state: 'info' as const,
         }))
-      : snapshot.gatewayLogs.slice(0, 12).map((log) => ({
+      : gatewayLogsPage.items.slice(0, 24).map((log) => ({
           title: `${log.method} ${log.path}`,
           meta: `${log.statusCode} / ${formatDate(log.createdAt, t)}`,
           state: log.statusCode >= 400 ? 'danger' as const : 'ready' as const,
@@ -99,21 +157,27 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
           eyebrow={activeTab.id === 'usage' ? t('observability.usage.title') : t('nav.gateway.logs.label')}
           title={activeTab.label}
           description={activeTab.featureBoundary}
-          status={<StatusPillLite label={activeTab.id === 'usage' ? snapshot.dashboard.usageToday.requests : snapshot.gatewayLogs.length} state="info" />}
+          status={<StatusPillLite label={activeTab.id === 'usage' ? snapshot.dashboard.usageToday.requests : gatewayLogsPage.total} state="info" />}
         />
         <div className="tool-layout">
         <ConfigList title={activeTab.label} description={activeTab.featureBoundary}>
-          {activeTab.id === 'usage' ? <GatewayUsageTrendPanel usageRecords={snapshot.usageRecords} /> : null}
+          {activeTab.id === 'usage' ? <GatewayUsageTrendPanel usageTrend={effectiveUsageTrend} /> : null}
+          {gatewayLogsPage.error ? <InlineNotice tone="warning" title={t('app.action.failed')} detail={gatewayLogsPage.error} /> : null}
           <ActivityList empty={activeTab.id === 'usage' ? t('gateway.usage.empty') : t('app.recent.empty')} items={logItems} />
+          {activeTab.id === 'logs' && gatewayLogsPage.hasMore ? (
+            <CommandButton disabled={gatewayLogsPage.loading} onClick={() => loadGatewayLogs()}>
+              {gatewayLogsPage.loading ? t('app.status.busy') : t('common.loadMore')}
+            </CommandButton>
+          ) : null}
         </ConfigList>
         <ConfigDetail title={t('observability.usage.title')} description={t('gateway.overview.note', { host: snapshot.dashboard.gatewayStatus.bindHost, port: snapshot.dashboard.gatewayStatus.port })}>
           <InlineNotice tone="info" title={t('gateway.logs.depth')} detail={t('gateway.logs.depth.detail')} />
           <DataRows
             rows={[
-              { label: t('observability.summary.requests'), value: usageTrend.totals.requestCount },
-              { label: t('observability.summary.tokens'), value: usageTrend.totals.totalTokens },
-              { label: t('gateway.usage.inputTokens'), value: usageTrend.totals.inputTokens },
-              { label: t('gateway.usage.outputTokens'), value: usageTrend.totals.outputTokens },
+              { label: t('observability.summary.requests'), value: usageTrendSummary.totals.requestCount },
+              { label: t('observability.summary.tokens'), value: usageTrendSummary.totals.totalTokens },
+              { label: t('gateway.usage.inputTokens'), value: usageTrendSummary.totals.inputTokens },
+              { label: t('gateway.usage.outputTokens'), value: usageTrendSummary.totals.outputTokens },
               { label: t('gateway.recentError'), value: gatewayStatus.recentError ?? t('common.none') },
             ]}
           />
@@ -201,11 +265,25 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
   );
 }
 
-function GatewayUsageTrendPanel({ usageRecords }: { usageRecords: UsageRecord[] }) {
+function GatewayUsageTrendPanel({ usageTrend }: { usageTrend: UsageTrendBucket[] }) {
   const { t } = useI18n();
-  const trend = buildUsageTrend(usageRecords, { bucketSize: 'day' });
+  const trendRecords = usageTrend.map((bucket) => ({
+    id: `trend_${bucket.bucketStart}`,
+    workspaceId: 'trend',
+    providerId: null,
+    modelId: null,
+    requestLogId: null,
+    inputTokens: bucket.inputTokens,
+    outputTokens: bucket.outputTokens,
+    costEstimate: bucket.costEstimate,
+    createdAt: bucket.bucketStart,
+  }));
+  const trend = buildUsageTrend(trendRecords, { bucketSize: 'day' });
 
-  if (usageRecords.length === 0) {
+  const snapshotFallbackHasRecords = usageTrend.length === 0;
+  const hasOnlyZeroTokenBuckets = usageTrend.length > 0 && usageTrend.every((bucket) => bucket.inputTokens + bucket.outputTokens === 0);
+
+  if (snapshotFallbackHasRecords) {
     return (
       <ToolSection title={t('gateway.usage.trendTitle')} description={t('gateway.usage.trendSource')}>
         <EmptyBlock title={t('gateway.usage.empty')} detail={t('gateway.usage.empty.detail')} />
@@ -213,7 +291,7 @@ function GatewayUsageTrendPanel({ usageRecords }: { usageRecords: UsageRecord[] 
     );
   }
 
-  if (!trend.hasData) {
+  if (!trend.hasData || hasOnlyZeroTokenBuckets) {
     return (
       <ToolSection title={t('gateway.usage.trendTitle')} description={t('gateway.usage.trendSource')}>
         <InlineNotice tone="warning" title={t('gateway.usage.noTokenData')} detail={t('gateway.usage.noTokenData.detail')} />

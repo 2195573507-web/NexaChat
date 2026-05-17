@@ -5,11 +5,13 @@ import type {
   AuditExportResult,
   AuditIntegrityReport,
   AuditLog,
+  AuditLogPageInput,
   ChatResponse,
   CompareModelsInput,
   CompareModelsResponse,
   Conversation,
   ConversationExport,
+  ConversationPageInput,
   ExportConversationInput,
   ExecutionRun,
   ExecutionStartInput,
@@ -18,6 +20,8 @@ import type {
   GatewayKeyCreateInput,
   GatewayKeyRotateInput,
   GatewayKeyUpdateInput,
+  GatewayLog,
+  GatewayLogPageInput,
   GatewayStatus,
   ImportExportResult,
   DataBackupCreateInput,
@@ -32,11 +36,16 @@ import type {
   FeedbackItem,
   KnowledgeDeleteInput,
   KnowledgeFile,
+  KnowledgeFilePageInput,
+  KnowledgeChunk,
+  KnowledgeChunkPageInput,
   KnowledgeImportInput,
   KnowledgeRebuildInput,
   KnowledgeRetrievalInput,
   KnowledgeRetrievalResult,
   McpServer,
+  Message,
+  MessagePageInput,
   Model,
   ModelInput,
   Provider,
@@ -53,6 +62,10 @@ import type {
   ObservabilityPrivacySettings,
   ObservabilityQueryInput,
   ObservabilitySnapshot,
+  PageResult,
+  TaskCancelResult,
+  UsageTrendBucket,
+  UsageTrendInput,
 } from './types.js';
 import type { IpcEventChannel, IpcEventPayloads } from './ipc.js';
 
@@ -73,6 +86,14 @@ export interface AppApi {
   compareModels(input: CompareModelsInput): Promise<CompareModelsResponse>;
   exportConversation(input: ExportConversationInput): Promise<ConversationExport>;
   createConversation(title?: string): Promise<Conversation>;
+  listConversations(input?: ConversationPageInput): Promise<PageResult<Conversation>>;
+  listMessages(input: MessagePageInput): Promise<PageResult<Message>>;
+  listGatewayLogs(input?: GatewayLogPageInput): Promise<PageResult<GatewayLog>>;
+  listAuditLogs(input?: AuditLogPageInput): Promise<PageResult<AuditLog>>;
+  listKnowledgeFiles(input?: KnowledgeFilePageInput): Promise<PageResult<KnowledgeFile>>;
+  listKnowledgeChunks(input?: KnowledgeChunkPageInput): Promise<PageResult<KnowledgeChunk>>;
+  getUsageTrend(input?: UsageTrendInput): Promise<UsageTrendBucket[]>;
+  cancelTask(taskId: string): Promise<TaskCancelResult>;
   updateConversationFlags(
     conversationId: string,
     flags: Partial<Pick<Conversation, 'isPinned' | 'isFavorite' | 'status'>>,
@@ -129,6 +150,14 @@ export const APP_API_METHODS = [
   'compareModels',
   'exportConversation',
   'createConversation',
+  'listConversations',
+  'listMessages',
+  'listGatewayLogs',
+  'listAuditLogs',
+  'listKnowledgeFiles',
+  'listKnowledgeChunks',
+  'getUsageTrend',
+  'cancelTask',
   'updateConversationFlags',
   'createGatewayKey',
   'updateGatewayKey',

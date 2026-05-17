@@ -15,11 +15,18 @@ export const contextStrategies: Array<{ value: ContextStrategy; labelKey: Parame
 
 export type OpenModuleTarget = ModuleId | { moduleId: ModuleId; tabId?: string };
 
+export type ActionRefreshMode = 'none' | 'module' | 'full' | 'patch';
+
+export type ActionRunOptions = {
+  refresh?: ActionRefreshMode;
+  patch?: (snapshot: AppSnapshot) => AppSnapshot;
+};
+
 export type TabPageProps = {
   activeTab: NavTab;
   snapshot: AppSnapshot;
   api: AppApi;
-  onAction: (label: string, action: () => Promise<unknown>) => void;
+  onAction: (label: string, action: () => Promise<unknown>, options?: ActionRunOptions) => void;
   onOpenModule: (target: OpenModuleTarget) => void;
 };
 

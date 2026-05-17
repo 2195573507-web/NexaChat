@@ -29,6 +29,13 @@ import type {
   DataRollbackInput,
   ObservabilityPrivacySettings,
   ObservabilityQueryInput,
+  AuditLogPageInput,
+  ConversationPageInput,
+  GatewayLogPageInput,
+  KnowledgeChunkPageInput,
+  KnowledgeFilePageInput,
+  MessagePageInput,
+  UsageTrendInput,
 } from './types.js';
 
 export const IPC_CHANNELS = {
@@ -45,7 +52,15 @@ export const IPC_CHANNELS = {
   chatCancelMessage: 'chat:cancelMessage',
   chatCompareModels: 'chat:compareModels',
   chatExportConversation: 'chat:exportConversation',
+  chatListConversations: 'chat:listConversations',
+  chatListMessages: 'chat:listMessages',
   chatUpdateConversationFlags: 'chat:updateConversationFlags',
+  gatewayLogsList: 'gateway:logs:list',
+  auditLogsList: 'audit:logs:list',
+  knowledgeFilesList: 'knowledge:files:list',
+  knowledgeChunksList: 'knowledge:chunks:list',
+  usageTrendGet: 'usage:trend:get',
+  taskCancel: 'task:cancel',
   gatewayCreateKey: 'gateway:createKey',
   gatewayUpdateKey: 'gateway:updateKey',
   gatewayRotateKey: 'gateway:rotateKey',
@@ -168,6 +183,8 @@ export type IpcInvokeArgs = {
   [IPC_CHANNELS.chatCancelMessage]: [CancelMessageInput];
   [IPC_CHANNELS.chatCompareModels]: [CompareModelsInput];
   [IPC_CHANNELS.chatExportConversation]: [ExportConversationInput];
+  [IPC_CHANNELS.chatListConversations]: [ConversationPageInput?];
+  [IPC_CHANNELS.chatListMessages]: [MessagePageInput];
   [IPC_CHANNELS.chatUpdateConversationFlags]: [
     string,
     Partial<{
@@ -176,6 +193,12 @@ export type IpcInvokeArgs = {
       status: 'active' | 'archived' | 'deleted';
     }>,
   ];
+  [IPC_CHANNELS.gatewayLogsList]: [GatewayLogPageInput?];
+  [IPC_CHANNELS.auditLogsList]: [AuditLogPageInput?];
+  [IPC_CHANNELS.knowledgeFilesList]: [KnowledgeFilePageInput?];
+  [IPC_CHANNELS.knowledgeChunksList]: [KnowledgeChunkPageInput?];
+  [IPC_CHANNELS.usageTrendGet]: [UsageTrendInput?];
+  [IPC_CHANNELS.taskCancel]: [string];
   [IPC_CHANNELS.gatewayCreateKey]: [GatewayKeyCreateInput];
   [IPC_CHANNELS.gatewayUpdateKey]: [GatewayKeyUpdateInput];
   [IPC_CHANNELS.gatewayRotateKey]: [GatewayKeyRotateInput];
@@ -248,7 +271,15 @@ const ipcPayloadArity: Record<IpcChannel, { min: number; max: number }> = {
   [IPC_CHANNELS.chatCancelMessage]: { min: 1, max: 1 },
   [IPC_CHANNELS.chatCompareModels]: { min: 1, max: 1 },
   [IPC_CHANNELS.chatExportConversation]: { min: 1, max: 1 },
+  [IPC_CHANNELS.chatListConversations]: { min: 0, max: 1 },
+  [IPC_CHANNELS.chatListMessages]: { min: 1, max: 1 },
   [IPC_CHANNELS.chatUpdateConversationFlags]: { min: 2, max: 2 },
+  [IPC_CHANNELS.gatewayLogsList]: { min: 0, max: 1 },
+  [IPC_CHANNELS.auditLogsList]: { min: 0, max: 1 },
+  [IPC_CHANNELS.knowledgeFilesList]: { min: 0, max: 1 },
+  [IPC_CHANNELS.knowledgeChunksList]: { min: 0, max: 1 },
+  [IPC_CHANNELS.usageTrendGet]: { min: 0, max: 1 },
+  [IPC_CHANNELS.taskCancel]: { min: 1, max: 1 },
   [IPC_CHANNELS.gatewayCreateKey]: { min: 1, max: 1 },
   [IPC_CHANNELS.gatewayUpdateKey]: { min: 1, max: 1 },
   [IPC_CHANNELS.gatewayRotateKey]: { min: 1, max: 1 },

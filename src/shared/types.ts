@@ -400,6 +400,72 @@ export interface CompareModelsResponse {
   }>;
 }
 
+export interface PageInput {
+  limit?: number;
+  offset?: number;
+}
+
+export interface PageResult<T> {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}
+
+export interface ConversationPageInput extends PageInput {
+  query?: string;
+}
+
+export interface MessagePageInput extends PageInput {
+  conversationId: string;
+}
+
+export interface GatewayLogPageInput extends PageInput {
+  statusCode?: number;
+  since?: number;
+  until?: number;
+}
+
+export interface AuditLogPageInput extends PageInput {
+  query?: string;
+  action?: string;
+  userId?: string;
+  since?: number;
+  until?: number;
+}
+
+export interface KnowledgeFilePageInput extends PageInput {
+  status?: KnowledgeIndexStatus;
+}
+
+export interface KnowledgeChunkPageInput extends PageInput {
+  fileId?: string;
+}
+
+export interface UsageTrendInput {
+  workspaceId?: string;
+  providerId?: string;
+  modelId?: string;
+  since?: number;
+  until?: number;
+  bucketMs?: number;
+  limit?: number;
+}
+
+export interface UsageTrendBucket {
+  bucketStart: number;
+  requestCount: number;
+  inputTokens: number;
+  outputTokens: number;
+  costEstimate: number;
+}
+
+export interface TaskCancelResult {
+  taskId: string;
+  canceled: boolean;
+}
+
 export interface RouteDecision {
   providerId: string;
   modelId: string;

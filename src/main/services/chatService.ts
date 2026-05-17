@@ -11,10 +11,13 @@ import type {
   CompareModelsResponse,
   Conversation,
   ConversationExport,
+  ConversationPageInput,
   ExportConversationInput,
   Message,
+  MessagePageInput,
   MessageAttachment,
   MessageChunk,
+  PageResult,
   PromptTemplate,
   RegenerateMessageInput,
   RetryMessageInput,
@@ -36,9 +39,17 @@ export function ChatService<TBase extends ServiceConstructor<ServiceContext>>(Ba
     return this.repositories.chat.listConversations();
   }
 
+  listConversations(input: ConversationPageInput = {}): PageResult<Conversation> {
+    return this.repositories.chat.pageConversations(input);
+  }
+
 
   getMessages(conversationId?: string): Message[] {
     return this.repositories.chat.listMessages(conversationId);
+  }
+
+  listMessages(input: MessagePageInput): PageResult<Message> {
+    return this.repositories.chat.pageMessages(input);
   }
 
 

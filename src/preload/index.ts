@@ -35,6 +35,13 @@ import type {
   DataRollbackInput,
   ObservabilityPrivacySettings,
   ObservabilityQueryInput,
+  AuditLogPageInput,
+  ConversationPageInput,
+  GatewayLogPageInput,
+  KnowledgeChunkPageInput,
+  KnowledgeFilePageInput,
+  MessagePageInput,
+  UsageTrendInput,
 } from '../shared/types.js';
 
 function invoke<C extends IpcChannel>(channel: C, ...args: IpcInvokeArgs[C]) {
@@ -66,6 +73,14 @@ const api: AppApi = {
   compareModels: (input: CompareModelsInput) => invoke(IPC_CHANNELS.chatCompareModels, input),
   exportConversation: (input: ExportConversationInput) => invoke(IPC_CHANNELS.chatExportConversation, input),
   createConversation: (title?: string) => invoke(IPC_CHANNELS.chatCreateConversation, title),
+  listConversations: (input?: ConversationPageInput) => invoke(IPC_CHANNELS.chatListConversations, input),
+  listMessages: (input: MessagePageInput) => invoke(IPC_CHANNELS.chatListMessages, input),
+  listGatewayLogs: (input?: GatewayLogPageInput) => invoke(IPC_CHANNELS.gatewayLogsList, input),
+  listAuditLogs: (input?: AuditLogPageInput) => invoke(IPC_CHANNELS.auditLogsList, input),
+  listKnowledgeFiles: (input?: KnowledgeFilePageInput) => invoke(IPC_CHANNELS.knowledgeFilesList, input),
+  listKnowledgeChunks: (input?: KnowledgeChunkPageInput) => invoke(IPC_CHANNELS.knowledgeChunksList, input),
+  getUsageTrend: (input?: UsageTrendInput) => invoke(IPC_CHANNELS.usageTrendGet, input),
+  cancelTask: (taskId: string) => invoke(IPC_CHANNELS.taskCancel, taskId),
   updateConversationFlags: (conversationId, flags) => invoke(IPC_CHANNELS.chatUpdateConversationFlags, conversationId, flags),
   createGatewayKey: (input: GatewayKeyCreateInput) => invoke(IPC_CHANNELS.gatewayCreateKey, input),
   updateGatewayKey: (input: GatewayKeyUpdateInput) => invoke(IPC_CHANNELS.gatewayUpdateKey, input),
