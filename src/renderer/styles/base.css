@@ -2,6 +2,13 @@
   box-sizing: border-box;
 }
 
+html {
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
 body {
   margin: 0;
   min-height: 680px;
@@ -34,10 +41,13 @@ button {
   font-size: var(--font-size-control);
   line-height: var(--line-height-control);
   transition:
-    background var(--motion-base) var(--ease-out-standard),
-    border-color var(--motion-base) var(--ease-out-standard),
-    color var(--motion-base) var(--ease-out-standard),
-    transform var(--motion-fast) var(--ease-in-standard);
+    background-color var(--duration-normal) var(--easing-standard),
+    border-color var(--duration-normal) var(--easing-standard),
+    box-shadow var(--duration-normal) var(--easing-standard),
+    color var(--duration-normal) var(--easing-standard),
+    opacity var(--duration-fast) var(--easing-standard),
+    transform var(--duration-instant) var(--easing-emphasized);
+  will-change: auto;
 }
 
 button:hover {
@@ -46,7 +56,7 @@ button:hover {
 }
 
 button:active {
-  transform: translateY(1px);
+  transform: translateY(1px) scale(0.98);
 }
 
 button:disabled {
@@ -77,6 +87,11 @@ textarea {
   padding: 0 var(--space-3);
   font-size: var(--font-size-control);
   line-height: var(--line-height-control);
+  transition:
+    background-color var(--duration-normal) var(--easing-standard),
+    border-color var(--duration-normal) var(--easing-standard),
+    box-shadow var(--duration-normal) var(--easing-standard),
+    color var(--duration-normal) var(--easing-standard);
 }
 
 textarea {
@@ -123,6 +138,7 @@ code {
   display: grid;
   place-items: center;
   color: var(--color-text-muted);
+  animation: surface-fade-in var(--duration-slow) var(--easing-decelerate);
 }
 
 .primary-button {
@@ -146,13 +162,25 @@ code {
   background: var(--color-surface);
 }
 
+@keyframes surface-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     scroll-behavior: auto !important;
-    transition-duration: 1ms !important;
-    animation-duration: 1ms !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
 }
@@ -162,8 +190,8 @@ code {
 .motion-reduced *::before,
 .motion-reduced *::after {
   scroll-behavior: auto !important;
-  transition-duration: 1ms !important;
-  animation-duration: 1ms !important;
+  transition-duration: 0.01ms !important;
+  animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
 }
 

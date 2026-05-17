@@ -18,6 +18,7 @@ Renderer components should consume semantic CSS variables such as `--color-prima
 - Spacing tokens: shared small-to-large spacing steps.
 - Layout tokens: sidebar width and topbar height.
 - Typography tokens: sans/UI/mono/message-writing font stacks, fixed UI/chat type sizes, and semantic line-height steps.
+- Motion tokens: `--duration-instant`, `--duration-fast`, `--duration-normal`, `--duration-slow`, `--easing-standard`, `--easing-decelerate`, and `--easing-emphasized`. New UI motion must use these tokens rather than literal durations or ad hoc easing.
 
 ## Chain Review
 
@@ -30,6 +31,10 @@ The current UI/theme chain is:
 5. Shared primitives and module pages use only variables.
 6. `tests/theme-token-authority.test.ts` scans CSS for literal color, radius, raw font, raw font-size, and raw line-height regressions, verifies light/dark color-token parity, and covers theme resolver behavior.
 7. `tests/ui-smoke.spec.ts` verifies responsive shell readability, theme switching, system-theme changes, and captures ignored screenshots under `test-results/`.
+
+## Motion Rules
+
+NexaChat uses CSS-based, tokenized motion for the desktop shell. The allowed low-cost properties are opacity, transform, background-color, border-color, color, and box-shadow. Do not animate width, height, top, left, filter, backdrop-filter, or grid templates. Reduced motion keeps visible state changes but removes movement and long-running animations through both `prefers-reduced-motion` and the persisted `.motion-reduced` class.
 
 ## Deletion Rule
 

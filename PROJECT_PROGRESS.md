@@ -1902,3 +1902,61 @@ Honest limitations:
 Documentation:
 
 - Updated `docs/build-plans/00-modular-refactor-master-plan/long-run-dialog-scope-execution-report.md` with audit, implementation, downgrade, hallucination-guard, and verification notes.
+
+## 2026-05-17 CC Switch Reference Motion And Desktop Feel Round
+
+Time: 2026-05-17 22:28:19 +08:00.
+
+Project root:
+
+- Confirmed by `git rev-parse --show-toplevel`: `D:/NexaChat`.
+
+Round goal:
+
+- Use `farion1231/cc-switch` as a restrained desktop-tool reference for motion, font stack, button feedback, page/tab transitions, panel/list state changes, and Chat responsiveness.
+- Keep NexaChat's current chat-first `/chat/conversations` entry, 7 first-level modules, and existing architecture boundaries.
+- Avoid a large visual reskin, heavy UI framework, business-logic rewrite, or restoring old Workspace/Dashboard-first navigation.
+
+Reference checked:
+
+- `farion1231/cc-switch` `main` remote head: `4f0f103a8aaf9cf1f75abf7477a718cf53d828b9`.
+- Files reviewed: `tailwind.config.cjs`, `src/index.css`, `src/components/ui/button.tsx`, `src/components/AppSwitcher.tsx`, `src/App.tsx`, `src/components/providers/ProviderList.tsx`, `src/components/providers/ProviderCard.tsx`, and `CHANGELOG.md`.
+- Decision: do not introduce `framer-motion` for this round. NexaChat can meet the requested fade/cross-fade, button feedback, and reduced-motion behavior with CSS motion tokens and existing React boundaries.
+
+Actual changes:
+
+- Added `docs/build-plans/00-modular-refactor-master-plan/app-motion-ccswitch-reference-audit.md` with current issues, useful CC Switch patterns, non-goals, concrete change list, risk, and rollback plan.
+- Replaced legacy CSS motion tokens with the requested duration/easing contract in `src/renderer/styles/tokens.css` and `src/shared/theme.ts`.
+- Updated the renderer system font stack to `-apple-system`, `BlinkMacSystemFont`, `"Segoe UI"`, `Roboto`, `"Helvetica Neue"`, `Arial`, `"Noto Sans SC"`, `"Microsoft YaHei UI"`, and `sans-serif`, with root antialiasing.
+- Normalized button, rail item, top tab, page surface, panel, card, row, quick action, message bubble, generation progress, and provider-row feedback onto tokenized low-cost properties.
+- Preserved reduced-motion support through both `prefers-reduced-motion` and the persisted `.motion-reduced` class.
+- Extended token authority docs and tests to assert exact motion values, safe motion properties, no external font assets, and no legacy `--motion-*` / old easing tokens.
+
+Performance and rendering notes:
+
+- No global animation library was added.
+- No page remount strategy was introduced for animation, avoiding form-state resets and route-state churn.
+- Existing Chat optimistic user/assistant state, progressive reveal adapter, scroll-follow guard, memoized message/quick-action components, paged message/conversation loading, paged Gateway logs, and local pending states were preserved.
+- The UI feedback layer now gives visual response through CSS within the requested 80 ms to 160 ms token range without waiting on full snapshot refresh.
+
+Verification commands and results:
+
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd run test`: passed, 24 Vitest files / 99 tests. Existing Node `node:sqlite` experimental warnings appeared.
+- `npm.cmd run build`: passed.
+- `npm.cmd run test:ui-smoke`: initially timed out when run in parallel with Electron smoke due stale local Vite/Playwright processes, then passed on clean single rerun, 7 Playwright Chromium smoke tests.
+- `npm.cmd run test:electron-smoke`: passed; Electron shell rendered.
+- `git diff --check`: passed; Git only reported expected LF-to-CRLF working-copy warnings.
+
+Acceptance status:
+
+- Default entry remains `/chat/conversations`.
+- First-level modules remain Chat, Models, Knowledge Base, Tools, Gateway, Data, and Settings.
+- No font files were added.
+- No `framer-motion` dependency was added.
+- No database, IPC, Provider, Gateway, or Chat persistence contract was changed.
+
+Git commit hash:
+
+- Baseline before this round: `a9f04a2 docs: record app fluidity implementation progress`.
+- Implementation commit hash is recorded by the follow-up PROJECT_PROGRESS closeout entry after the implementation commit exists.

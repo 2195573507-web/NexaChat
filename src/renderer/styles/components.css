@@ -4,6 +4,7 @@
   flex: 0 0 auto;
   border-radius: var(--radius-pill);
   background: var(--color-text-subtle);
+  transition: background-color var(--duration-normal) var(--easing-standard);
 }
 
 .status-ready,
@@ -42,6 +43,11 @@
   font-size: var(--font-size-xs);
   line-height: var(--line-height-badge);
   white-space: nowrap;
+  transition:
+    background-color var(--duration-normal) var(--easing-standard),
+    border-color var(--duration-normal) var(--easing-standard),
+    color var(--duration-normal) var(--easing-standard),
+    opacity var(--duration-fast) var(--easing-standard);
 }
 
 .tool-pill.status-ready {
@@ -77,6 +83,12 @@
   padding: var(--space-3);
   background: var(--color-panel);
   min-width: 0;
+  animation: surface-fade-in var(--duration-normal) var(--easing-decelerate);
+  transition:
+    background-color var(--duration-normal) var(--easing-standard),
+    border-color var(--duration-normal) var(--easing-standard),
+    box-shadow var(--duration-normal) var(--easing-standard),
+    opacity var(--duration-fast) var(--easing-standard);
 }
 
 .notice-success {
@@ -104,6 +116,10 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
+  transition:
+    background-color var(--duration-normal) var(--easing-standard),
+    border-color var(--duration-normal) var(--easing-standard),
+    box-shadow var(--duration-normal) var(--easing-standard);
 }
 
 .config-list,
@@ -126,6 +142,11 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
+  animation: surface-fade-in var(--duration-normal) var(--easing-decelerate);
+  transition:
+    background-color var(--duration-normal) var(--easing-standard),
+    border-color var(--duration-normal) var(--easing-standard),
+    box-shadow var(--duration-normal) var(--easing-standard);
 }
 
 .page-header > div:first-child {
@@ -219,6 +240,21 @@
   border-radius: var(--radius-md);
   background: var(--color-panel);
   padding: var(--space-3);
+  transition:
+    background-color var(--duration-normal) var(--easing-standard),
+    border-color var(--duration-normal) var(--easing-standard),
+    box-shadow var(--duration-normal) var(--easing-standard),
+    opacity var(--duration-fast) var(--easing-standard),
+    transform var(--duration-fast) var(--easing-standard);
+}
+
+.config-row:hover,
+.activity-row:hover,
+.setting-row:hover,
+.approval-row:hover {
+  border-color: var(--color-border-strong);
+  background: color-mix(in srgb, var(--color-panel) 82%, var(--color-surface));
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--color-rail) 18%, transparent);
 }
 
 .config-row.is-active {
@@ -311,6 +347,9 @@
   border-radius: var(--radius-md);
   background: var(--color-code);
   padding: var(--space-2);
+  transition:
+    background-color var(--duration-normal) var(--easing-standard),
+    border-color var(--duration-normal) var(--easing-standard);
 }
 
 .copy-command code {
@@ -342,12 +381,29 @@
   border-radius: var(--radius-sm);
   padding: var(--space-2);
   background: var(--color-panel);
+  transition:
+    background-color var(--duration-normal) var(--easing-standard),
+    border-color var(--duration-normal) var(--easing-standard),
+    color var(--duration-normal) var(--easing-standard);
 }
 
 .segmented-list button.is-active {
   color: var(--color-primary);
   background: var(--color-primary-soft);
   border-color: color-mix(in srgb, var(--color-primary) 34%, var(--color-border));
+}
+
+.motion-reduced .inline-notice,
+.motion-reduced .empty-block,
+.motion-reduced .page-header {
+  animation: none;
+}
+
+.motion-reduced .config-row:hover,
+.motion-reduced .activity-row:hover,
+.motion-reduced .setting-row:hover,
+.motion-reduced .approval-row:hover {
+  transform: none;
 }
 
 .empty-line {

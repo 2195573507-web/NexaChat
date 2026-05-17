@@ -31,11 +31,13 @@ export const THEME_TOKEN_CATEGORIES = {
   shadow: ['--shadow-focus', '--shadow-panel'],
   layout: ['--rail-width'],
   motion: [
-    '--motion-fast',
-    '--motion-base',
-    '--motion-slow',
-    '--ease-out-standard',
-    '--ease-in-standard',
+    '--duration-instant',
+    '--duration-fast',
+    '--duration-normal',
+    '--duration-slow',
+    '--easing-standard',
+    '--easing-decelerate',
+    '--easing-emphasized',
   ],
   typography: [
     '--font-sans',

@@ -21,7 +21,7 @@
   --color-on-primary: oklch(0.16 0.018 225);
   --shadow-focus: 0 0 0 3px color-mix(in srgb, var(--color-primary) 28%, transparent);
   --shadow-panel: 0 16px 44px color-mix(in srgb, var(--color-rail) 42%, transparent);
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", "Microsoft YaHei UI", sans-serif;
   --font-ui: var(--font-sans);
   --font-mono: "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --font-message-writing: "KaiTi", "STKaiti", "Microsoft YaHei UI", "Microsoft YaHei", serif;
@@ -49,11 +49,13 @@
   --space-5: 20px;
   --space-6: 24px;
   --rail-width: 78px;
-  --motion-fast: 90ms;
-  --motion-base: 150ms;
-  --motion-slow: 240ms;
-  --ease-out-standard: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-in-standard: cubic-bezier(0.32, 0, 0.67, 0);
+  --duration-instant: 80ms;
+  --duration-fast: 120ms;
+  --duration-normal: 160ms;
+  --duration-slow: 220ms;
+  --easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --easing-decelerate: cubic-bezier(0, 0, 0.2, 1);
+  --easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
   font-family: var(--font-ui);
   color: var(--color-text);
   background: var(--color-bg);

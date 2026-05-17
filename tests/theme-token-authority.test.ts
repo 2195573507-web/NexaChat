@@ -73,14 +73,50 @@ describe('theme token authority', () => {
   it('defines motion tokens and uses them for component transitions', () => {
     const css = stylesCss();
 
-    for (const token of ['--motion-fast', '--motion-base', '--motion-slow', '--ease-out-standard', '--ease-in-standard']) {
+    const expectedTokens = [
+      '--duration-instant',
+      '--duration-fast',
+      '--duration-normal',
+      '--duration-slow',
+      '--easing-standard',
+      '--easing-decelerate',
+      '--easing-emphasized',
+    ];
+
+    for (const token of expectedTokens) {
       expect(THEME_TOKEN_NAMES).toContain(token);
       expect(css).toContain(token);
     }
+    expect(css).toContain('--duration-instant: 80ms;');
+    expect(css).toContain('--duration-fast: 120ms;');
+    expect(css).toContain('--duration-normal: 160ms;');
+    expect(css).toContain('--duration-slow: 220ms;');
+    expect(css).toContain('--easing-standard: cubic-bezier(0.2, 0, 0, 1);');
+    expect(css).toContain('--easing-decelerate: cubic-bezier(0, 0, 0.2, 1);');
+    expect(css).toContain('--easing-emphasized: cubic-bezier(0.2, 0, 0, 1);');
     expect(css).toContain('prefers-reduced-motion: reduce');
     expect(css).toContain('.motion-reduced');
     expect(css).toContain('transition:');
-    expect(css).not.toContain('150ms ease-out');
+    expect(css).not.toMatch(/--motion-|--ease-(out|in)-standard/);
+    expect(css).not.toMatch(/\b(80ms|120ms|160ms|220ms|150ms|200ms|240ms)\b(?!;)/);
+  });
+
+  it('keeps motion on composited and paint-safe properties only', () => {
+    const violations = styleLines()
+      .map((line, index) => ({ line, lineNumber: index + 1 }))
+      .filter(({ line }) => /transition:|animation:/.test(line))
+      .filter(({ line }) => /\b(width|height|top|left|right|bottom|margin|padding|filter|backdrop-filter|grid-template-columns)\b/.test(line));
+
+    expect(violations).toEqual([]);
+  });
+
+  it('keeps the requested desktop system font stack without external font assets', () => {
+    const css = stylesCss();
+
+    expect(css).toContain('--font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", "Microsoft YaHei UI", sans-serif;');
+    expect(css).not.toMatch(/@font-face|url\([^)]*\.(woff2?|ttf|otf)/);
+    expect(css).toContain('-webkit-font-smoothing: antialiased;');
+    expect(css).toContain('-moz-osx-font-smoothing: grayscale;');
   });
 
   it('does not leave renderer CSS tokens undeclared in the shared registry', () => {

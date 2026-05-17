@@ -78,6 +78,7 @@ describe('NexaChat renderer', () => {
     expect(document.querySelector('.chat-quick-actions')).toBeInTheDocument();
     expect(document.querySelector('.chat-detail-panel')).not.toBeInTheDocument();
     expect(document.querySelector('.app-frame')).toHaveAttribute('data-user-mode', 'ordinary');
+    expect(document.querySelector('.module-page')).toHaveClass('module-page');
 
     for (const module of navModules) {
       const rail = document.querySelector('.module-rail') as HTMLElement;
