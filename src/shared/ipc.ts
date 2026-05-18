@@ -261,7 +261,353 @@ export function assertIpcPayload<C extends IpcChannel>(channel: C, args: unknown
   if (!valid) {
     throw new Error(`Invalid IPC payload for ${channel}: expected ${expected.min}-${expected.max} arguments, received ${args.length}.`);
   }
+  const validator = ipcPayloadValidators[channel];
+  if (!validator) {
+    return;
+  }
+  const error = validator(args);
+  if (error) {
+    throw new Error(`Invalid IPC payload for ${channel}: ${error}.`);
+  }
 }
+
+type IpcPayloadValidator = (args: unknown[]) => string | null;
+
+const providerTypes = new Set<ProviderInput['type']>([
+  'openai-compatible',
+  'openai',
+  'anthropic',
+  'gemini',
+  'deepseek',
+  'qwen',
+  'ollama',
+  'lm-studio',
+  'custom',
+]);
+
+const gatewayScopes = new Set(['models:read', 'chat:write', 'embeddings:write']);
+const executionKinds = new Set(['agent', 'tool', 'mcp-tool', 'workflow']);
+const executionModes = new Set(['preview', 'execute']);
+const mcpTransports = new Set(['stdio', 'sse', 'http']);
+const mcpPermissionStates = new Set(['discovered', 'denied', 'granted']);
+const uiThemes = new Set(['light', 'dark', 'system']);
+const uiDensities = new Set(['comfortable', 'compact']);
+const uiFontModes = new Set(['system', 'kaiti']);
+const uiLanguages = new Set(['zh-CN', 'en-US']);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function unknownKeys(value: Record<string, unknown>, allowed: readonly string[]): string[] {
+  const allowedSet = new Set(allowed);
+  return Object.keys(value).filter((key) => !allowedSet.has(key));
+}
+
+function validateObject(value: unknown, label: string, allowed: readonly string[]): Record<string, unknown> | string {
+  if (!isRecord(value)) {
+    return `${label} must be an object`;
+  }
+  const extra = unknownKeys(value, allowed);
+  if (extra.length > 0) {
+    return `${label} contains unsupported fields: ${extra.join(', ')}`;
+  }
+  return value;
+}
+
+function requireString(value: Record<string, unknown>, key: string, options: { max?: number; allowEmpty?: boolean } = {}): string | null {
+  const current = value[key];
+  if (typeof current !== 'string') {
+    return `${key} must be a string`;
+  }
+  if (!options.allowEmpty && current.trim().length === 0) {
+    return `${key} must not be empty`;
+  }
+  if (options.max !== undefined && current.length > options.max) {
+    return `${key} must be at most ${options.max} characters`;
+  }
+  return null;
+}
+
+function optionalString(value: Record<string, unknown>, key: string, max: number): string | null {
+  const current = value[key];
+  if (current === undefined) return null;
+  if (typeof current !== 'string') {
+    return `${key} must be a string`;
+  }
+  if (current.length > max) {
+    return `${key} must be at most ${max} characters`;
+  }
+  return null;
+}
+
+function optionalBoolean(value: Record<string, unknown>, key: string): string | null {
+  const current = value[key];
+  return current === undefined || typeof current === 'boolean' ? null : `${key} must be a boolean`;
+}
+
+function optionalNumberOrNull(value: Record<string, unknown>, key: string, options: { min?: number; max?: number } = {}): string | null {
+  const current = value[key];
+  if (current === undefined || current === null) return null;
+  if (typeof current !== 'number' || !Number.isFinite(current)) {
+    return `${key} must be a finite number or null`;
+  }
+  if (options.min !== undefined && current < options.min) {
+    return `${key} must be at least ${options.min}`;
+  }
+  if (options.max !== undefined && current > options.max) {
+    return `${key} must be at most ${options.max}`;
+  }
+  return null;
+}
+
+function optionalStringArray(value: Record<string, unknown>, key: string, maxItems: number, maxItemLength: number): string | null {
+  const current = value[key];
+  if (current === undefined) return null;
+  if (!Array.isArray(current)) {
+    return `${key} must be an array`;
+  }
+  if (current.length > maxItems) {
+    return `${key} must contain at most ${maxItems} items`;
+  }
+  for (const item of current) {
+    if (typeof item !== 'string' || item.trim().length === 0 || item.length > maxItemLength) {
+      return `${key} must contain non-empty strings up to ${maxItemLength} characters`;
+    }
+  }
+  return null;
+}
+
+function validateProviderInput(input: unknown): string | null {
+  const value = validateObject(input, 'provider input', ['name', 'type', 'baseUrl', 'apiKey', 'proxyUrl', 'customHeadersJson']);
+  if (typeof value === 'string') return value;
+  return (
+    requireString(value, 'name', { max: 120 }) ??
+    requireString(value, 'baseUrl', { max: 2048 }) ??
+    (typeof value.type === 'string' && providerTypes.has(value.type as ProviderInput['type']) ? null : 'type must be a known provider type') ??
+    optionalString(value, 'apiKey', 4096) ??
+    optionalString(value, 'proxyUrl', 2048) ??
+    optionalString(value, 'customHeadersJson', 8192)
+  );
+}
+
+function validateProviderDiscoveryRequest(input: unknown): string | null {
+  const value = validateObject(input, 'provider discovery request', ['address', 'apiKey', 'providerName', 'providerType', 'baseUrl', 'customHeadersJson', 'timeoutMs']);
+  if (typeof value === 'string') return value;
+  return (
+    requireString(value, 'address', { max: 2048 }) ??
+    optionalString(value, 'apiKey', 4096) ??
+    optionalString(value, 'providerName', 120) ??
+    optionalString(value, 'baseUrl', 2048) ??
+    optionalString(value, 'customHeadersJson', 8192) ??
+    optionalNumberOrNull(value, 'timeoutMs', { min: 1, max: 120_000 }) ??
+    (value.providerType === undefined || (typeof value.providerType === 'string' && providerTypes.has(value.providerType as ProviderInput['type'])) ? null : 'providerType must be a known provider type')
+  );
+}
+
+function validateProviderSaveFromDiscovery(input: unknown): string | null {
+  const value = validateObject(input, 'provider discovery save request', ['providerName', 'providerType', 'baseUrl', 'apiKey', 'customHeadersJson', 'modelNames', 'capabilities']);
+  if (typeof value === 'string') return value;
+  return (
+    requireString(value, 'providerName', { max: 120 }) ??
+    requireString(value, 'baseUrl', { max: 2048 }) ??
+    (typeof value.providerType === 'string' && providerTypes.has(value.providerType as ProviderInput['type']) ? null : 'providerType must be a known provider type') ??
+    optionalString(value, 'apiKey', 4096) ??
+    optionalString(value, 'customHeadersJson', 8192) ??
+    optionalStringArray(value, 'modelNames', 200, 180) ??
+    (value.capabilities === undefined || isRecord(value.capabilities) ? null : 'capabilities must be an object')
+  );
+}
+
+function validateModelInput(input: unknown): string | null {
+  const value = validateObject(input, 'model input', ['providerId', 'name', 'displayName', 'contextWindow', 'supportsStreaming', 'supportsTools', 'supportsVision', 'supportsEmbeddings']);
+  if (typeof value === 'string') return value;
+  return (
+    requireString(value, 'providerId', { max: 120 }) ??
+    requireString(value, 'name', { max: 180 }) ??
+    optionalString(value, 'displayName', 180) ??
+    optionalNumberOrNull(value, 'contextWindow', { min: 1, max: 10_000_000 }) ??
+    optionalBoolean(value, 'supportsStreaming') ??
+    optionalBoolean(value, 'supportsTools') ??
+    optionalBoolean(value, 'supportsVision') ??
+    optionalBoolean(value, 'supportsEmbeddings')
+  );
+}
+
+function validateGatewayScopes(value: Record<string, unknown>, key: string): string | null {
+  const current = value[key];
+  if (current === undefined) return null;
+  if (!Array.isArray(current)) return `${key} must be an array`;
+  for (const scope of current) {
+    if (typeof scope !== 'string' || !gatewayScopes.has(scope)) {
+      return `${key} contains an unsupported scope`;
+    }
+  }
+  return null;
+}
+
+function validateGatewayCreateKey(input: unknown): string | null {
+  const value = validateObject(input, 'gateway key create input', ['name', 'scopes', 'quotaLimit', 'rateLimitPerMinute', 'expiresAt']);
+  if (typeof value === 'string') return value;
+  return (
+    requireString(value, 'name', { max: 120 }) ??
+    validateGatewayScopes(value, 'scopes') ??
+    optionalNumberOrNull(value, 'quotaLimit', { min: 1 }) ??
+    optionalNumberOrNull(value, 'rateLimitPerMinute', { min: 1 }) ??
+    optionalNumberOrNull(value, 'expiresAt', { min: 0 })
+  );
+}
+
+function validateGatewayUpdateKey(input: unknown): string | null {
+  const value = validateObject(input, 'gateway key update input', ['gatewayKeyId', 'name', 'disabled', 'scopes', 'quotaLimit', 'rateLimitPerMinute', 'expiresAt']);
+  if (typeof value === 'string') return value;
+  return (
+    requireString(value, 'gatewayKeyId', { max: 120 }) ??
+    optionalString(value, 'name', 120) ??
+    optionalBoolean(value, 'disabled') ??
+    validateGatewayScopes(value, 'scopes') ??
+    optionalNumberOrNull(value, 'quotaLimit', { min: 1 }) ??
+    optionalNumberOrNull(value, 'rateLimitPerMinute', { min: 1 }) ??
+    optionalNumberOrNull(value, 'expiresAt', { min: 0 })
+  );
+}
+
+function validateIdObject(input: unknown, label: string, key: string): string | null {
+  const value = validateObject(input, label, [key]);
+  return typeof value === 'string' ? value : requireString(value, key, { max: 120 });
+}
+
+function validateUiPreferences(input: unknown): string | null {
+  const value = validateObject(input, 'UI preferences', ['theme', 'density', 'fontMode', 'language', 'reducedMotion', 'advancedMode']);
+  if (typeof value === 'string') return value;
+  return (
+    (typeof value.theme === 'string' && uiThemes.has(value.theme) ? null : 'theme must be light, dark, or system') ??
+    (typeof value.density === 'string' && uiDensities.has(value.density) ? null : 'density must be comfortable or compact') ??
+    (typeof value.fontMode === 'string' && uiFontModes.has(value.fontMode) ? null : 'fontMode must be system or kaiti') ??
+    (typeof value.language === 'string' && uiLanguages.has(value.language) ? null : 'language must be zh-CN or en-US') ??
+    (typeof value.reducedMotion === 'boolean' ? null : 'reducedMotion must be a boolean') ??
+    (typeof value.advancedMode === 'boolean' ? null : 'advancedMode must be a boolean')
+  );
+}
+
+function validateExecutionStart(input: unknown): string | null {
+  const value = validateObject(input, 'execution start input', ['kind', 'mode', 'agentId', 'toolId', 'mcpServerId', 'workflowId', 'inputJson']);
+  if (typeof value === 'string') return value;
+  return (
+    (typeof value.kind === 'string' && executionKinds.has(value.kind) ? null : 'kind must be a known execution kind') ??
+    (value.mode === undefined || (typeof value.mode === 'string' && executionModes.has(value.mode)) ? null : 'mode must be preview or execute') ??
+    optionalString(value, 'agentId', 120) ??
+    optionalString(value, 'toolId', 160) ??
+    optionalString(value, 'mcpServerId', 120) ??
+    optionalString(value, 'workflowId', 120) ??
+    optionalString(value, 'inputJson', 32_000)
+  );
+}
+
+function validateApprovalDecision(input: unknown): string | null {
+  const value = validateObject(input, 'approval decision input', ['approvalId', 'decision', 'reason']);
+  if (typeof value === 'string') return value;
+  return (
+    requireString(value, 'approvalId', { max: 120 }) ??
+    (value.decision === 'approved' || value.decision === 'denied' ? null : 'decision must be approved or denied') ??
+    optionalString(value, 'reason', 1000)
+  );
+}
+
+function validateDataBackup(input: unknown): string | null {
+  const value = validateObject(input, 'data backup input', ['profile', 'passphrase']);
+  if (typeof value === 'string') return value;
+  return requireString(value, 'passphrase', { max: 4096 });
+}
+
+function validateRestorePreflight(input: unknown): string | null {
+  const value = validateObject(input, 'data restore preflight input', ['backupId', 'packageText', 'passphrase']);
+  if (typeof value === 'string') return value;
+  return (
+    optionalString(value, 'backupId', 120) ??
+    optionalString(value, 'packageText', 5_000_000) ??
+    optionalString(value, 'passphrase', 4096)
+  );
+}
+
+function validateDataRollback(input: unknown): string | null {
+  const value = validateObject(input, 'data rollback input', ['rollbackId', 'confirmationPhrase']);
+  if (typeof value === 'string') return value;
+  return requireString(value, 'rollbackId', { max: 120 }) ?? optionalString(value, 'confirmationPhrase', 120);
+}
+
+function validateMcpCreate(args: unknown[]): string | null {
+  const [name, transport, commandOrUrl] = args;
+  if (typeof name !== 'string' || name.trim().length === 0 || name.length > 120) return 'name must be a non-empty string up to 120 characters';
+  if (typeof transport !== 'string' || !mcpTransports.has(transport)) return 'transport must be stdio, sse, or http';
+  if (typeof commandOrUrl !== 'string' || commandOrUrl.trim().length === 0 || commandOrUrl.length > 2048) return 'commandOrUrl must be a non-empty string up to 2048 characters';
+  return null;
+}
+
+function validateMcpPermission(args: unknown[]): string | null {
+  const [serverId, permissionState] = args;
+  if (typeof serverId !== 'string' || serverId.trim().length === 0 || serverId.length > 120) return 'serverId must be a non-empty string up to 120 characters';
+  if (typeof permissionState !== 'string' || !mcpPermissionStates.has(permissionState)) return 'permissionState must be discovered, denied, or granted';
+  return null;
+}
+
+const ipcPayloadValidators: Partial<Record<IpcChannel, IpcPayloadValidator>> = {
+  [IPC_CHANNELS.providerDiscover]: ([input]) => validateProviderDiscoveryRequest(input),
+  [IPC_CHANNELS.providerSaveFromDiscovery]: ([input]) => validateProviderSaveFromDiscovery(input),
+  [IPC_CHANNELS.providerCreate]: ([input]) => validateProviderInput(input),
+  [IPC_CHANNELS.modelCreate]: ([input]) => validateModelInput(input),
+  [IPC_CHANNELS.gatewayCreateKey]: ([input]) => validateGatewayCreateKey(input),
+  [IPC_CHANNELS.gatewayUpdateKey]: ([input]) => validateGatewayUpdateKey(input),
+  [IPC_CHANNELS.gatewayRotateKey]: ([input]) => validateIdObject(input, 'gateway key rotate input', 'gatewayKeyId'),
+  [IPC_CHANNELS.gatewayRevokeKey]: ([gatewayKeyId]) => typeof gatewayKeyId === 'string' && gatewayKeyId.trim().length > 0 && gatewayKeyId.length <= 120 ? null : 'gatewayKeyId must be a non-empty string up to 120 characters',
+  [IPC_CHANNELS.gatewayToggle]: ([enabled]) => typeof enabled === 'boolean' ? null : 'enabled must be a boolean',
+  [IPC_CHANNELS.settingsSaveUiPreferences]: ([input]) => validateUiPreferences(input),
+  [IPC_CHANNELS.mcpCreateServer]: validateMcpCreate,
+  [IPC_CHANNELS.mcpUpdatePermission]: validateMcpPermission,
+  [IPC_CHANNELS.agentCreate]: ([name, goal]) => (
+    typeof name === 'string' && name.trim().length > 0 && name.length <= 120 &&
+    typeof goal === 'string' && goal.trim().length > 0 && goal.length <= 4000
+      ? null
+      : 'agent name and goal must be non-empty strings within length limits'
+  ),
+  [IPC_CHANNELS.agentPreviewRun]: ([agentId]) => typeof agentId === 'string' && agentId.trim().length > 0 && agentId.length <= 120 ? null : 'agentId must be a non-empty string up to 120 characters',
+  [IPC_CHANNELS.executionStartRun]: ([input]) => validateExecutionStart(input),
+  [IPC_CHANNELS.executionDecideApproval]: ([input]) => validateApprovalDecision(input),
+  [IPC_CHANNELS.dataValidateImportManifest]: ([manifestText]) => typeof manifestText === 'string' && manifestText.length <= 5_000_000 ? null : 'manifestText must be a string up to 5000000 characters',
+  [IPC_CHANNELS.dataApplyImportPlan]: ([resultId, options]) => {
+    if (typeof resultId !== 'string' || resultId.trim().length === 0 || resultId.length > 120) return 'resultId must be a non-empty string up to 120 characters';
+    if (options === undefined) return null;
+    const value = validateObject(options, 'import plan options', ['mode', 'conflictStrategy', 'confirmationPhrase']);
+    return typeof value === 'string' ? value : optionalString(value, 'confirmationPhrase', 120);
+  },
+  [IPC_CHANNELS.dataRestoreSnapshot]: ([snapshotId, options]) => {
+    if (typeof snapshotId !== 'string' || snapshotId.trim().length === 0 || snapshotId.length > 120) return 'snapshotId must be a non-empty string up to 120 characters';
+    if (options === undefined) return null;
+    const value = validateObject(options, 'restore snapshot options', ['mode', 'confirmationPhrase']);
+    return typeof value === 'string' ? value : optionalString(value, 'confirmationPhrase', 120);
+  },
+  [IPC_CHANNELS.dataExportPackage]: ([options]) => {
+    if (options === undefined) return null;
+    const value = validateObject(options, 'data export options', ['profile']);
+    return typeof value === 'string' ? value : null;
+  },
+  [IPC_CHANNELS.dataCreateEncryptedBackup]: ([input]) => validateDataBackup(input),
+  [IPC_CHANNELS.dataCreateRestorePreflight]: ([input]) => validateRestorePreflight(input),
+  [IPC_CHANNELS.dataApplyRollback]: ([input]) => validateDataRollback(input),
+  [IPC_CHANNELS.observabilityCreateFeedback]: ([input]) => {
+    const value = validateObject(input, 'feedback input', ['label', 'notes', 'route', 'severity']);
+    return typeof value === 'string' ? value : requireString(value, 'label', { max: 80 }) ?? optionalString(value, 'notes', 4000);
+  },
+  [IPC_CHANNELS.observabilityRunEval]: ([input]) => {
+    const value = validateObject(input, 'eval run input', ['evalSetId', 'modelId']);
+    return typeof value === 'string' ? value : requireString(value, 'evalSetId', { max: 120 }) ?? optionalString(value, 'modelId', 120);
+  },
+  [IPC_CHANNELS.observabilitySavePrivacy]: ([input]) => {
+    const value = validateObject(input, 'observability privacy input', ['includePromptSnippets', 'includeErrorDetails', 'retentionDays', 'updatedAt']);
+    if (typeof value === 'string') return value;
+    return optionalBoolean(value, 'includePromptSnippets') ?? optionalBoolean(value, 'includeErrorDetails') ?? optionalNumberOrNull(value, 'retentionDays', { min: 1, max: 3650 }) ?? optionalNumberOrNull(value, 'updatedAt', { min: 0 });
+  },
+};
 
 const ipcPayloadArity: Record<IpcChannel, { min: number; max: number }> = {
   [IPC_CHANNELS.appGetSnapshot]: { min: 0, max: 0 },

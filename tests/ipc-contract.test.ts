@@ -61,6 +61,37 @@ describe('IPC contract authority', () => {
     expect(() => assertIpcPayload(IPC_CHANNELS.observabilityExport, [])).not.toThrow();
   });
 
+  it('rejects malformed high-risk IPC payload shapes before service handlers run', () => {
+    expect(() => assertIpcPayload(IPC_CHANNELS.providerCreate, [{ name: 'Provider', type: 'unknown', baseUrl: 'https://api.example.com/v1' }]))
+      .toThrow(/known provider type/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.providerCreate, [{ name: 'Provider', type: 'openai-compatible', baseUrl: 'https://api.example.com/v1', unsafe: true }]))
+      .toThrow(/unsupported fields: unsafe/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.providerDiscover, [{ address: 'https://api.example.com/v1', timeoutMs: 999_999 }]))
+      .toThrow(/timeoutMs/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.providerSaveFromDiscovery, [{ providerName: 'Detected', providerType: 'openai-compatible', baseUrl: 'https://api.example.com/v1', modelNames: Array.from({ length: 201 }, (_, index) => `m${index}`) }]))
+      .toThrow(/modelNames/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.gatewayCreateKey, [{ name: 'Gateway Key', scopes: ['responses:write'] }]))
+      .toThrow(/unsupported scope/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.gatewayUpdateKey, [{ gatewayKeyId: 'gkey_1', quotaLimit: -1 }]))
+      .toThrow(/quotaLimit/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.gatewayRotateKey, [{ gatewayKeyId: 'gkey_1', extra: true }]))
+      .toThrow(/unsupported fields: extra/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.settingsSaveUiPreferences, [{ theme: 'dark', density: 'compact', fontMode: 'system', language: 'zh-CN', reducedMotion: 'no', advancedMode: false }]))
+      .toThrow(/reducedMotion/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.executionStartRun, [{ kind: 'shell', mode: 'execute' }]))
+      .toThrow(/known execution kind/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.executionDecideApproval, [{ approvalId: 'approval_1', decision: 'maybe' }]))
+      .toThrow(/approved or denied/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.dataCreateEncryptedBackup, [{ profile: 'metadata-redacted' }]))
+      .toThrow(/passphrase/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.dataApplyRollback, [{ rollbackId: 'rollback_1', confirmationPhrase: 'ROLLBACK DATA', fullRestore: true }]))
+      .toThrow(/unsupported fields: fullRestore/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.mcpCreateServer, ['MCP', 'ftp', 'http://127.0.0.1:9']))
+      .toThrow(/transport/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.observabilitySavePrivacy, [{ includePromptSnippets: false, retentionDays: 0 }]))
+      .toThrow(/retentionDays/);
+  });
+
   it('keeps chat stream and task progress payloads typed around request identity and progress', () => {
     const chunk: ChatStreamEventPayload = {
       type: 'chat.stream.chunk',
