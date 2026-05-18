@@ -57,4 +57,15 @@ describe('main-process service boundaries', () => {
       }
     }
   });
+
+  it('keeps secret storage policy in a focused security helper', () => {
+    const serviceContext = readFileSync(join(servicesDir, 'serviceContext.ts'), 'utf8');
+    const secretStorage = readFileSync(join(projectRoot, 'src/main/security/secretStorage.ts'), 'utf8');
+
+    expect(serviceContext).toContain("../security/secretStorage.js");
+    expect(serviceContext).not.toMatch(/function (encodeSecretValue|decodeSecretValue|canUseDevelopmentSecretFallback)\(/);
+    expect(secretStorage).toContain('safeStorage:v1:');
+    expect(secretStorage).toContain('local-dev:v1:');
+    expect(secretStorage).toContain('Secure secret storage is unavailable');
+  });
 });
