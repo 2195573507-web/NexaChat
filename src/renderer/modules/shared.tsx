@@ -19,7 +19,7 @@ export type ActionRefreshMode = 'none' | 'module' | 'full' | 'patch';
 
 export type ActionRunOptions = {
   refresh?: ActionRefreshMode;
-  patch?: (snapshot: AppSnapshot) => AppSnapshot;
+  patch?: (snapshot: AppSnapshot, result: unknown) => AppSnapshot;
 };
 
 export type TabPageProps = {

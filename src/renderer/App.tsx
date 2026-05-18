@@ -75,10 +75,10 @@ function App() {
     setBusy(true);
     setNotice(null);
     try {
-      await action();
+      const result = await action();
       const refreshMode = options.refresh ?? 'full';
       if (options.patch) {
-        setSnapshot((current) => current ? options.patch?.(current) ?? current : current);
+        setSnapshot((current) => current ? options.patch?.(current, result) ?? current : current);
       }
       if (refreshMode === 'full' || refreshMode === 'module') {
         await refresh();

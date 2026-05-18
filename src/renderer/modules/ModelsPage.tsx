@@ -1,6 +1,6 @@
 import { Activity, ChevronDown, DownloadCloud, Pencil, Plus, Power, SearchCheck, Server, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import type { Model, ProviderDiscoveryResult, ProviderModelOption, ProviderType } from '../../shared/types';
+import type { AppSnapshot, Model, ProviderDiscoveryResult, ProviderModelOption, ProviderType } from '../../shared/types';
 import { DEFAULT_MODEL_FORM, DEFAULT_PROVIDER_FORM, PROVIDER_CATALOG } from '../../shared/providerCatalog';
 import { ActivityList, CommandButton, ConfigDetail, ConfigList, DataRows, EmptyBlock, Field, InlineNotice, PageHeader, StatusPillLite, ToolSection } from '../components/AppFrame';
 import { useI18n } from '../i18n';
@@ -118,12 +118,13 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
   };
 
   const saveEditedModel = async (modelId: string) => {
-    await api.updateModel({
+    const updated = await api.updateModel({
       modelId,
       name: editingModelName.trim(),
       displayName: editingModelDisplayName.trim() || editingModelName.trim(),
     });
     setEditingModelId(null);
+    return updated;
   };
 
   const detectProvider = async () => {
@@ -450,6 +451,52 @@ function ModelFetchNotice({
   return null;
 }
 
+function isModelResult(result: unknown): result is Model {
+  return typeof result === 'object' && result !== null && 'id' in result && 'providerId' in result && 'deletedAt' in result;
+}
+
+function patchModelSnapshot(snapshot: AppSnapshot, result: unknown): AppSnapshot {
+  if (!isModelResult(result)) {
+    return snapshot;
+  }
+
+  const activeModels = result.enabled && !result.deletedAt
+    ? [result, ...snapshot.models.filter((model) => model.id !== result.id)]
+    : snapshot.models.filter((model) => model.id !== result.id);
+  const disabledModels = !result.enabled || result.deletedAt
+    ? [result, ...snapshot.disabledModels.filter((model) => model.id !== result.id)]
+    : snapshot.disabledModels.filter((model) => model.id !== result.id);
+  const dashboardModels = result.enabled && !result.deletedAt
+    ? [result, ...snapshot.dashboard.models.filter((model) => model.id !== result.id)]
+    : snapshot.dashboard.models.filter((model) => model.id !== result.id);
+  const shouldClearDefaultModel = snapshot.dashboard.workspace.defaultModelId === result.id && (!result.enabled || result.deletedAt);
+  const workspace = shouldClearDefaultModel
+    ? {
+        ...snapshot.dashboard.workspace,
+        defaultModelId: null,
+      }
+    : snapshot.dashboard.workspace;
+  const conversations = shouldClearDefaultModel
+    ? snapshot.conversations.map((conversation) => (
+        conversation.defaultModelId === result.id
+          ? { ...conversation, defaultModelId: null }
+          : conversation
+      ))
+    : snapshot.conversations;
+
+  return {
+    ...snapshot,
+    conversations,
+    models: activeModels,
+    disabledModels,
+    dashboard: {
+      ...snapshot.dashboard,
+      workspace,
+      models: dashboardModels,
+    },
+  };
+}
+
 function ProviderDiscoveryPreview({
   result,
   saveDisabled,
@@ -527,7 +574,7 @@ function ModelRow({
   setEditingModelDisplayName: (value: string) => void;
   onBeginEdit: (model: Model) => void;
   onCancelEdit: () => void;
-  onSaveEdit: (modelId: string) => Promise<void>;
+  onSaveEdit: (modelId: string) => Promise<Model>;
   api: TabPageProps['api'];
   pending: ReturnType<typeof useLocalPending>;
   onAction: TabPageProps['onAction'];
@@ -559,7 +606,7 @@ function ModelRow({
             <CommandButton
               icon={<Pencil size={14} />}
               disabled={!editingModelName.trim() || pending.isPending(updateKey)}
-              onClick={() => onAction(t('models.toast.updated'), () => pending.runPending(updateKey, () => onSaveEdit(model.id)))}
+              onClick={() => onAction(t('models.toast.updated'), () => pending.runPending(updateKey, () => onSaveEdit(model.id)), { refresh: 'patch', patch: patchModelSnapshot })}
             >
               {pending.isPending(updateKey) ? t('app.status.busy') : t('common.saved')}
             </CommandButton>
@@ -568,8 +615,8 @@ function ModelRow({
         ) : (
           <>
             <CommandButton icon={<Pencil size={14} />} onClick={() => onBeginEdit(model)}>{t('models.edit')}</CommandButton>
-            <CommandButton icon={<Power size={14} />} disabled={pending.isPending(disableKey)} onClick={() => onAction(t('models.toast.disabled'), () => pending.runPending(disableKey, () => api.disableModel({ modelId: model.id })))}>{pending.isPending(disableKey) ? t('app.status.busy') : t('models.disable')}</CommandButton>
-            <CommandButton variant="danger" icon={<Trash2 size={14} />} disabled={pending.isPending(deleteKey)} onClick={() => onAction(t('models.toast.modelDeleted'), () => pending.runPending(deleteKey, () => api.deleteModel({ modelId: model.id })))}>{pending.isPending(deleteKey) ? t('app.status.busy') : t('models.deleteModel')}</CommandButton>
+            <CommandButton icon={<Power size={14} />} disabled={pending.isPending(disableKey)} onClick={() => onAction(t('models.toast.disabled'), () => pending.runPending(disableKey, () => api.disableModel({ modelId: model.id })), { refresh: 'patch', patch: patchModelSnapshot })}>{pending.isPending(disableKey) ? t('app.status.busy') : t('models.disable')}</CommandButton>
+            <CommandButton variant="danger" icon={<Trash2 size={14} />} disabled={pending.isPending(deleteKey)} onClick={() => onAction(t('models.toast.modelDeleted'), () => pending.runPending(deleteKey, () => api.deleteModel({ modelId: model.id })), { refresh: 'patch', patch: patchModelSnapshot })}>{pending.isPending(deleteKey) ? t('app.status.busy') : t('models.deleteModel')}</CommandButton>
           </>
         )}
       </span>
@@ -604,7 +651,7 @@ function DisabledModelRow({
           icon={<Power size={14} />}
           disabled={isDeleted || pending.isPending(enableKey)}
           disabledReason={isDeleted ? t('models.deleted.restoreBlocked') : undefined}
-          onClick={() => onAction(t('models.toast.enabled'), () => pending.runPending(enableKey, () => api.enableModel({ modelId: model.id })))}
+          onClick={() => onAction(t('models.toast.enabled'), () => pending.runPending(enableKey, () => api.enableModel({ modelId: model.id })), { refresh: 'patch', patch: patchModelSnapshot })}
         >
           {pending.isPending(enableKey) ? t('app.status.busy') : t('models.enable')}
         </CommandButton>
