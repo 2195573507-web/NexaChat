@@ -703,6 +703,49 @@
   opacity: 1;
 }
 
+.advanced-settings-block,
+.discovery-preview,
+.discovery-issues {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.advanced-settings-block,
+.discovery-preview {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+  padding: var(--space-3);
+}
+
+.discovery-preview-head {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.discovery-preview-head span:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.discovery-preview-head strong,
+.discovery-preview-head small {
+  overflow-wrap: anywhere;
+}
+
+.discovery-partial {
+  border-color: color-mix(in srgb, var(--color-warning) 38%, var(--color-border));
+}
+
+.discovery-failed {
+  border-color: color-mix(in srgb, var(--color-danger) 38%, var(--color-border));
+}
+
 .font-kaiti .message-content p,
 .font-kaiti .chat-composer textarea {
   font-family: var(--font-message-writing);

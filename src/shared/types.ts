@@ -199,6 +199,76 @@ export interface ProviderInput {
   customHeadersJson?: string;
 }
 
+export type ProviderDiscoveryStatus = 'idle' | 'detecting' | 'success' | 'partial' | 'failed';
+export type ProviderDiscoveryCapability = 'supported' | 'unsupported' | 'unknown' | 'not_tested';
+
+export interface ProviderDiscoveryRequest {
+  address: string;
+  apiKey?: string;
+  providerName?: string;
+  providerType?: ProviderType;
+  baseUrl?: string;
+  customHeadersJson?: string;
+  timeoutMs?: number;
+}
+
+export interface ProviderDiscoveryCapabilities {
+  openAiCompatible: ProviderDiscoveryCapability;
+  models: ProviderDiscoveryCapability;
+  chatCompletions: ProviderDiscoveryCapability;
+  streaming: ProviderDiscoveryCapability;
+  tokenUsage: ProviderDiscoveryCapability;
+  embeddings: ProviderDiscoveryCapability;
+}
+
+export interface ProviderDiscoveryIssue {
+  code: string;
+  message: string;
+  status?: number | null;
+  candidateBaseUrl?: string;
+  endpoint?: string;
+  retryable?: boolean;
+}
+
+export interface ProviderDiscoveryCandidate {
+  baseUrl: string;
+  modelsEndpoint: string;
+  chatEndpoint: string;
+  embeddingsEndpoint: string;
+}
+
+export interface ProviderDiscoveryResult {
+  status: Exclude<ProviderDiscoveryStatus, 'idle' | 'detecting'>;
+  inputAddress: string;
+  normalizedBaseUrl: string | null;
+  suggestedProviderName: string;
+  providerType: ProviderType;
+  compatibility: 'openai-compatible' | 'unknown' | 'failed';
+  capabilities: ProviderDiscoveryCapabilities;
+  models: ProviderModelOption[];
+  modelExamples: string[];
+  warnings: ProviderDiscoveryIssue[];
+  errors: ProviderDiscoveryIssue[];
+  testedCandidates: ProviderDiscoveryCandidate[];
+  selectedCandidateBaseUrl: string | null;
+  latencyMs: number | null;
+}
+
+export interface ProviderSaveFromDiscoveryRequest {
+  providerName: string;
+  providerType: ProviderType;
+  baseUrl: string;
+  apiKey?: string;
+  customHeadersJson?: string;
+  modelNames: string[];
+  capabilities?: ProviderDiscoveryCapabilities;
+}
+
+export interface ProviderSaveFromDiscoveryResult {
+  provider: Provider;
+  models: Model[];
+}
+
 export interface Model {
   id: string;
   providerId: string;

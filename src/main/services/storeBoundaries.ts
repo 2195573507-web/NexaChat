@@ -28,6 +28,8 @@ export const STORE_BOUNDARY_MAP = [
   { method: 'cancelMessage', targetService: 'ChatService', currentOwner: 'ChatService', migrationState: 'service-implemented' },
   { method: 'exportConversation', targetService: 'ChatService', currentOwner: 'ChatService', migrationState: 'service-implemented' },
   { method: 'compareModels', targetService: 'ChatService', currentOwner: 'ChatService', migrationState: 'service-implemented' },
+  { method: 'discoverProvider', targetService: 'ProviderService', currentOwner: 'ProviderService', migrationState: 'service-implemented' },
+  { method: 'saveProviderFromDiscovery', targetService: 'ProviderService', currentOwner: 'ProviderService', migrationState: 'service-implemented' },
   { method: 'createProvider', targetService: 'ProviderService', currentOwner: 'ProviderService', migrationState: 'service-implemented' },
   { method: 'deleteProvider', targetService: 'ProviderService', currentOwner: 'ProviderService', migrationState: 'service-implemented' },
   { method: 'testProvider', targetService: 'ProviderService', currentOwner: 'ProviderService', migrationState: 'service-implemented' },

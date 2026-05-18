@@ -125,6 +125,10 @@ test('core management pages keep real contracts behind lightweight tabs', async 
 
   await openFeature(page, models, models.tabs.find((tab) => tab.id === 'providers')!);
   await expect(page.locator('main [data-tab="providers"] .current-config-strip')).toBeVisible();
+  await expect(page.locator('main [data-tab="providers"]').getByLabel(translate('zh-CN', 'models.smartAdd.address'))).toBeVisible();
+  await expect(page.locator('main [data-tab="providers"]').getByLabel(translate('zh-CN', 'models.apiKey'))).toBeVisible();
+  await expect(page.locator('main [data-tab="providers"]').getByRole('button', { name: translate('zh-CN', 'models.smartAdd.detect') }).first()).toBeVisible();
+  await expect(page.locator('main [data-tab="providers"]').getByLabel(translate('zh-CN', 'models.name'))).toHaveCount(0);
   await expect(page.locator('main [data-tab="providers"] .provider-switch-list')).toBeVisible();
   await expect(page.locator('main [data-tab="providers"] .provider-row-actions').first().getByRole('button', { name: translate('zh-CN', 'models.fetchModels') })).toBeVisible();
   await expect(page.locator('main [data-tab="providers"] .provider-row-actions').first().getByRole('button', { name: translate('zh-CN', 'models.deleteProvider') })).toBeVisible();

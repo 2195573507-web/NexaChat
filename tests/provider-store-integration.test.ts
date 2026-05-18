@@ -158,6 +158,33 @@ describe('provider invocation through NexaStore', () => {
     await expect(store.fetchProviderModels(unsupported.id)).rejects.toMatchObject({ code: 'provider_unsupported' });
     expect(store.getProviderHealthRecords()[0]).toMatchObject({ providerId: unsupported.id, status: 'error' });
   });
+
+  it('saves Provider and discovered models through the canonical creation paths without leaking API keys', async () => {
+    const { store } = await import('../src/main/services/store');
+    const discovery = await store.discoverProvider({
+      address: baseUrl,
+      apiKey: 'sk-smart-add-secret',
+      providerName: 'Smart Add Upstream',
+    });
+
+    expect(discovery.models.map((model) => model.id)).toEqual(['round-06-chat']);
+    expect(JSON.stringify(discovery)).not.toContain('sk-smart-add-secret');
+
+    const saved = await store.saveProviderFromDiscovery({
+      providerName: discovery.suggestedProviderName,
+      providerType: discovery.providerType,
+      baseUrl: discovery.normalizedBaseUrl ?? baseUrl,
+      apiKey: 'sk-smart-add-secret',
+      modelNames: discovery.models.map((model) => model.id),
+      capabilities: discovery.capabilities,
+    });
+
+    expect(saved.provider.secretRef).toMatch(/^secret_/);
+    expect(saved.models.map((model) => model.name)).toEqual(['round-06-chat']);
+    expect(store.getProviders().some((provider) => provider.id === saved.provider.id)).toBe(true);
+    expect(store.getModels().some((model) => model.providerId === saved.provider.id && model.name === 'round-06-chat')).toBe(true);
+    expect(JSON.stringify(store.exportDiagnostics())).not.toContain('sk-smart-add-secret');
+  });
 });
 
 function handleRequest(request: IncomingMessage, response: ServerResponse): void {

@@ -16,7 +16,9 @@ import type {
   KnowledgeRetrievalInput,
   McpServer,
   ModelInput,
+  ProviderDiscoveryRequest,
   ProviderInput,
+  ProviderSaveFromDiscoveryRequest,
   RegenerateMessageInput,
   RetryMessageInput,
   SendMessageInput,
@@ -40,6 +42,8 @@ import type {
 
 export const IPC_CHANNELS = {
   appGetSnapshot: 'app:getSnapshot',
+  providerDiscover: 'provider:discover',
+  providerSaveFromDiscovery: 'provider:saveFromDiscovery',
   providerCreate: 'provider:create',
   providerDelete: 'provider:delete',
   providerModelsFetch: 'provider:models:fetch',
@@ -171,6 +175,8 @@ export const IPC_EVENT_CHANNEL_LIST = Object.values(IPC_EVENT_CHANNELS);
 
 export type IpcInvokeArgs = {
   [IPC_CHANNELS.appGetSnapshot]: [];
+  [IPC_CHANNELS.providerDiscover]: [ProviderDiscoveryRequest];
+  [IPC_CHANNELS.providerSaveFromDiscovery]: [ProviderSaveFromDiscoveryRequest];
   [IPC_CHANNELS.providerCreate]: [ProviderInput];
   [IPC_CHANNELS.providerDelete]: [string];
   [IPC_CHANNELS.providerModelsFetch]: [string];
@@ -259,6 +265,8 @@ export function assertIpcPayload<C extends IpcChannel>(channel: C, args: unknown
 
 const ipcPayloadArity: Record<IpcChannel, { min: number; max: number }> = {
   [IPC_CHANNELS.appGetSnapshot]: { min: 0, max: 0 },
+  [IPC_CHANNELS.providerDiscover]: { min: 1, max: 1 },
+  [IPC_CHANNELS.providerSaveFromDiscovery]: { min: 1, max: 1 },
   [IPC_CHANNELS.providerCreate]: { min: 1, max: 1 },
   [IPC_CHANNELS.providerDelete]: { min: 1, max: 1 },
   [IPC_CHANNELS.providerModelsFetch]: { min: 1, max: 1 },

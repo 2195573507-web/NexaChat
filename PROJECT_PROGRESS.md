@@ -1,5 +1,60 @@
 # NexaChat 项目进度
 
+## 2026-05-18 Provider Smart Add
+### 实际根目录
+- `D:/NexaChat`
+
+### 已完成
+- 在 Models / Providers 区域实现 CCS-style Provider Smart Add：默认只显示 Provider 网站/API 地址、API Key 和“检测 Provider”。
+- 检测预览在用户确认前展示规范化 Base URL、兼容性、模型数量、模型示例、Chat/Embedding/Streaming/Usage 能力状态、警告和错误。
+- 高级设置默认折叠，保留真实已接线字段：Provider name、Provider type、Base URL、Custom headers JSON、手动保存。
+- Renderer 不直接请求外部 Provider；所有探测通过 main process Provider discovery service。
+- 保存检测结果时复用现有 `createProvider` 和 `createModel` 路径，继续走 secret_ref、权限、审计和现有模型持久化逻辑。
+- 未声称不可验证能力：Embeddings 保持 `not_tested`，Streaming 检测结果保持 `unknown/not_tested`，Token usage 只在轻量 Chat 测试返回 usage 时标记 supported。
+
+### 文件变更
+- `src/main/services/providerDiscovery.ts`
+- `src/main/services/providerService.ts`
+- `src/main/services/serviceContext.ts`
+- `src/main/services/storeBoundaries.ts`
+- `src/main/ipc.ts`
+- `src/preload/index.ts`
+- `src/shared/types.ts`
+- `src/shared/api.ts`
+- `src/shared/ipc.ts`
+- `src/shared/securityRuntime.ts`
+- `src/shared/i18n.ts`
+- `src/renderer/modules/ModelsPage.tsx`
+- `src/renderer/styles/pages.css`
+- `src/renderer/mockApi.ts`
+- `tests/provider-discovery.test.ts`
+- `tests/provider-store-integration.test.ts`
+- `tests/app.test.tsx`
+- `tests/ipc-contract.test.ts`
+- `tests/ui-smoke.spec.ts`
+- `task_plan.md`
+- `findings.md`
+- `progress.md`
+
+### 已验证
+- `git rev-parse --show-toplevel` -> `D:/NexaChat`
+- `git status --short` -> 初始干净
+- `npm.cmd run typecheck` -> 通过
+- `npm.cmd run test` -> 25 files / 108 tests 通过
+- `npm.cmd run build` -> 通过
+- `npm.cmd run test:ui-smoke` -> 7 tests 通过
+- `npm.cmd run test:electron-smoke` -> 通过
+- `git diff --check` -> 通过，仅 Windows 行尾提示
+- 脱敏补丁后复验：`npm.cmd run typecheck`、`npm.cmd run test -- tests/provider-discovery.test.ts tests/provider-store-integration.test.ts tests/app.test.tsx`、`git diff --check` -> 通过
+
+### Commit / Push
+- 待提交后回填最终 commit hash 和 push 结果。
+
+### 遗留风险
+- 当前 Provider discovery 只实现 OpenAI-compatible 安全探测；不加入 provider-specific hacks。
+- Embeddings upstream detection 未接入现有 Provider adapter，因此预览中保持未测试。
+- Streaming 只根据现有 chat adapter 能力边界保守展示，不伪造支持结论。
+
 ## 2026-05-18 架构与维护性清理
 
 ### 已完成

@@ -3,8 +3,19 @@ import { createId, now } from '../utils/ids.js';
 import { translate } from '../../shared/i18n.js';
 import { PROVIDER_RUNTIME_ERROR_CODES, PROVIDER_RUNTIME_POLICY, getProviderAdapterName } from '../../shared/providerRuntime.js';
 import { SECURITY_ACTION_PERMISSIONS } from '../../shared/securityRuntime.js';
-import type { Provider, ProviderHealthRecord, ProviderInput } from '../../shared/types.js';
+import type {
+  Provider,
+  ProviderDiscoveryRequest,
+  ProviderDiscoveryResult,
+  ProviderHealthRecord,
+  ProviderInput,
+  ProviderSaveFromDiscoveryRequest,
+  ProviderSaveFromDiscoveryResult,
+  Model,
+  ModelInput,
+} from '../../shared/types.js';
 import { testOpenAiCompatibleProvider } from '../adapters/openAiCompatibleAdapter.js';
+import { discoverProvider } from './providerDiscovery.js';
 import { ServiceContext, type ServiceConstructor } from './serviceContext.js';
 
 const t = (key: Parameters<typeof translate>[1], params?: Parameters<typeof translate>[2]) => translate('zh-CN', key, params);
@@ -50,6 +61,39 @@ export function ProviderService<TBase extends ServiceConstructor<ServiceContext>
       );
     this.audit('provider.created', 'provider', providerId, { name: input.name, baseUrl: this.normalizeBaseUrl(input.baseUrl) });
     return this.requireProvider(providerId);
+  }
+
+  async discoverProvider(input: ProviderDiscoveryRequest): Promise<ProviderDiscoveryResult> {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.providerTest, 'provider', null);
+    return discoverProvider(input);
+  }
+
+
+  async saveProviderFromDiscovery(input: ProviderSaveFromDiscoveryRequest): Promise<ProviderSaveFromDiscoveryResult> {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.providerWrite, 'provider', null);
+    const uniqueModelNames = Array.from(new Set(input.modelNames.map((name) => name.trim()).filter(Boolean))).slice(0, 200);
+    if (uniqueModelNames.length > 0) {
+      this.requirePermission(SECURITY_ACTION_PERMISSIONS.modelWrite, 'model', null);
+    }
+    const provider = this.createProvider({
+      name: input.providerName,
+      type: input.providerType,
+      baseUrl: input.baseUrl,
+      apiKey: input.apiKey,
+      customHeadersJson: input.customHeadersJson,
+    });
+    const modelCreator = this as ServiceContext & { createModel(input: ModelInput): Model };
+    const models = uniqueModelNames.map((name) => modelCreator.createModel({
+      providerId: provider.id,
+      name,
+      supportsStreaming: input.capabilities?.streaming === 'unsupported' ? false : true,
+      supportsEmbeddings: input.capabilities?.embeddings === 'supported',
+    }));
+    this.audit('provider.discovery.saved', 'provider', provider.id, {
+      modelCount: models.length,
+      baseUrl: provider.baseUrl,
+    }, SECURITY_ACTION_PERMISSIONS.providerWrite);
+    return { provider, models };
   }
 
 

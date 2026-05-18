@@ -1,6 +1,6 @@
-import { Activity, DownloadCloud, Plus, Server, ShieldCheck, Trash2 } from 'lucide-react';
+import { Activity, ChevronDown, DownloadCloud, Plus, SearchCheck, Server, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import type { ProviderModelOption, ProviderType } from '../../shared/types';
+import type { ProviderDiscoveryResult, ProviderModelOption, ProviderType } from '../../shared/types';
 import { DEFAULT_MODEL_FORM, DEFAULT_PROVIDER_FORM, PROVIDER_CATALOG } from '../../shared/providerCatalog';
 import { ActivityList, CommandButton, ConfigDetail, ConfigList, DataRows, EmptyBlock, Field, InlineNotice, PageHeader, StatusPillLite, ToolSection } from '../components/AppFrame';
 import { useI18n } from '../i18n';
@@ -22,6 +22,11 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
   const [providerType, setProviderType] = useState<ProviderType>(DEFAULT_PROVIDER_FORM.type);
   const [baseUrl, setBaseUrl] = useState(DEFAULT_PROVIDER_FORM.baseUrl);
   const [apiKey, setApiKey] = useState(DEFAULT_PROVIDER_FORM.apiKey);
+  const [customHeadersJson, setCustomHeadersJson] = useState('');
+  const [advancedProviderSettingsOpen, setAdvancedProviderSettingsOpen] = useState(false);
+  const [discoveryResult, setDiscoveryResult] = useState<ProviderDiscoveryResult | null>(null);
+  const [discoveryState, setDiscoveryState] = useState<'idle' | 'detecting' | 'success' | 'partial' | 'failed'>('idle');
+  const [discoveryError, setDiscoveryError] = useState('');
   const [modelName, setModelName] = useState(DEFAULT_MODEL_FORM.name);
   const [selectedProviderId, setSelectedProviderId] = useState(snapshot.providers[0]?.id ?? '');
   const [modelOptions, setModelOptions] = useState<ProviderModelOption[]>([]);
@@ -101,6 +106,71 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
   const createSelectedModel = async () => {
     await api.createModel({ providerId: selectedProviderId, name: modelName.trim() });
     setModelName('');
+  };
+
+  const detectProvider = async () => {
+    setDiscoveryState('detecting');
+    setDiscoveryError('');
+    setDiscoveryResult(null);
+    const result = await api.discoverProvider({
+      address: baseUrl.trim(),
+      apiKey: apiKey.trim() || undefined,
+      providerName: providerName.trim() || undefined,
+      providerType,
+      baseUrl: baseUrl.trim() || undefined,
+      customHeadersJson: customHeadersJson.trim() || undefined,
+    });
+    setDiscoveryResult(result);
+    setDiscoveryState(result.status);
+    if (result.normalizedBaseUrl) {
+      setBaseUrl(result.normalizedBaseUrl);
+    }
+    if (result.suggestedProviderName && !providerName.trim()) {
+      setProviderName(result.suggestedProviderName);
+    }
+    if (result.errors[0]) {
+      setDiscoveryError(result.errors[0].message);
+    }
+    if (result.status === 'failed') {
+      setAdvancedProviderSettingsOpen(true);
+    }
+  };
+
+  const saveDetectedProvider = async () => {
+    if (!discoveryResult?.normalizedBaseUrl) return;
+    await api.saveProviderFromDiscovery({
+      providerName: providerName.trim() || discoveryResult.suggestedProviderName,
+      providerType,
+      baseUrl: discoveryResult.normalizedBaseUrl,
+      apiKey: apiKey.trim() || undefined,
+      customHeadersJson: customHeadersJson.trim() || undefined,
+      modelNames: discoveryResult.models.map((model) => model.id),
+      capabilities: discoveryResult.capabilities,
+    });
+    setProviderName('');
+    setBaseUrl('');
+    setApiKey('');
+    setCustomHeadersJson('');
+    setDiscoveryResult(null);
+    setDiscoveryState('idle');
+    setDiscoveryError('');
+  };
+
+  const saveManualProvider = async () => {
+    await api.createProvider({
+      name: providerName.trim() || t('models.smartAdd.untitledProvider'),
+      type: providerType,
+      baseUrl: baseUrl.trim(),
+      apiKey: apiKey.trim() || undefined,
+      customHeadersJson: customHeadersJson.trim() || undefined,
+    });
+    setProviderName('');
+    setBaseUrl('');
+    setApiKey('');
+    setCustomHeadersJson('');
+    setDiscoveryResult(null);
+    setDiscoveryState('idle');
+    setDiscoveryError('');
   };
 
   if (activeTab.id === 'catalog') {
@@ -220,7 +290,7 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
         title={t('models.provider.title')}
         description={activeTab.featureBoundary}
         status={<StatusPillLite label={defaultProvider?.name ?? t('common.notConfigured')} state={defaultProvider?.secretRef ? 'ready' : 'warning'} />}
-        actions={<CommandButton variant="primary" icon={<Server size={15} />} disabled={!providerName.trim() || !baseUrl.trim()} onClick={() => onAction(t('models.toast.saved'), () => api.createProvider({ name: providerName.trim(), type: providerType, baseUrl: baseUrl.trim(), apiKey: apiKey.trim() || undefined }))}>{t('models.addProvider')}</CommandButton>}
+        actions={<CommandButton variant="primary" icon={<SearchCheck size={15} />} disabled={!baseUrl.trim() || discoveryState === 'detecting'} onClick={() => onAction(t('models.smartAdd.detected'), detectProvider)}>{discoveryState === 'detecting' ? t('app.status.busy') : t('models.smartAdd.detect')}</CommandButton>}
       />
       <div className="tool-layout">
       <ConfigList title={t('models.provider.title')} description={activeTab.featureBoundary}>
@@ -242,24 +312,48 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
           </div>
         </section>
 
-        <ToolSection title={t('models.provider.title')} description={t('models.provider.note')}>
+        <ToolSection title={t('models.smartAdd.title')} description={t('models.smartAdd.note')}>
           <div className="form-stack">
-            <Field label={t('models.name')}>
-              <input value={providerName} onChange={(event) => setProviderName(event.target.value)} placeholder={t('models.name.placeholder')} />
-            </Field>
-            <Field label={t('models.type')}>
-              <select value={providerType} onChange={(event) => setProviderType(event.target.value as ProviderType)}>
-                {PROVIDER_CATALOG.map((entry) => (
-                  <option key={entry.type} value={entry.type}>{t(entry.labelKey)}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label={t('models.baseUrl')}>
+            <Field label={t('models.smartAdd.address')}>
               <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder={t('models.baseUrl.placeholder')} />
             </Field>
             <Field label={t('models.apiKey')}>
               <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={t('models.apiKey.placeholder')} type="password" />
             </Field>
+            <div className="field-action-row">
+              <CommandButton variant="primary" icon={<SearchCheck size={14} />} disabled={!baseUrl.trim() || discoveryState === 'detecting'} onClick={() => onAction(t('models.smartAdd.detected'), detectProvider)}>{discoveryState === 'detecting' ? t('app.status.busy') : t('models.smartAdd.detect')}</CommandButton>
+              <CommandButton variant="ghost" icon={<ChevronDown size={14} />} onClick={() => setAdvancedProviderSettingsOpen(!advancedProviderSettingsOpen)}>{advancedProviderSettingsOpen ? t('models.smartAdd.advancedHide') : t('models.smartAdd.advancedShow')}</CommandButton>
+            </div>
+            {discoveryState === 'detecting' ? <InlineNotice tone="info" title={t('models.smartAdd.detecting')} detail={t('models.smartAdd.detecting.detail')} /> : null}
+            {discoveryState === 'failed' ? <InlineNotice tone="warning" title={t('models.smartAdd.failed')} detail={discoveryError || t('models.fetch.failed')} /> : null}
+            {advancedProviderSettingsOpen ? (
+              <section className="advanced-settings-block">
+                <Field label={t('models.name')}>
+                  <input value={providerName} onChange={(event) => setProviderName(event.target.value)} placeholder={t('models.name.placeholder')} />
+                </Field>
+                <Field label={t('models.type')}>
+                  <select value={providerType} onChange={(event) => setProviderType(event.target.value as ProviderType)}>
+                    {PROVIDER_CATALOG.map((entry) => (
+                      <option key={entry.type} value={entry.type}>{t(entry.labelKey)}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label={t('models.baseUrl')}>
+                  <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder={t('models.baseUrl.placeholder')} />
+                </Field>
+                <Field label={t('models.smartAdd.customHeaders')}>
+                  <textarea value={customHeadersJson} onChange={(event) => setCustomHeadersJson(event.target.value)} placeholder={t('models.smartAdd.customHeaders.placeholder')} rows={3} />
+                </Field>
+                <CommandButton icon={<Server size={14} />} disabled={!baseUrl.trim()} onClick={() => onAction(t('models.toast.saved'), saveManualProvider)}>{t('models.smartAdd.manualSave')}</CommandButton>
+              </section>
+            ) : null}
+            {discoveryResult ? (
+              <ProviderDiscoveryPreview
+                result={discoveryResult}
+                saveDisabled={!discoveryResult.normalizedBaseUrl || discoveryResult.models.length === 0}
+                onSave={() => onAction(t('models.toast.saved'), saveDetectedProvider)}
+              />
+            ) : null}
           </div>
         </ToolSection>
 
@@ -318,6 +412,59 @@ function ModelFetchNotice({
     return <InlineNotice tone={options.length > 0 ? 'success' : 'muted'} title={t(options.length > 0 ? 'models.fetch.ready' : 'models.fetch.empty', { count: options.length })} />;
   }
   return null;
+}
+
+function ProviderDiscoveryPreview({
+  result,
+  saveDisabled,
+  onSave,
+}: {
+  result: ProviderDiscoveryResult;
+  saveDisabled: boolean;
+  onSave: () => void;
+}) {
+  const { t } = useI18n();
+  const capabilityRows = [
+    { label: t('models.smartAdd.capability.compatible'), value: t(`models.smartAdd.capability.${result.capabilities.openAiCompatible}`) },
+    { label: t('models.smartAdd.capability.chat'), value: t(`models.smartAdd.capability.${result.capabilities.chatCompletions}`) },
+    { label: t('models.smartAdd.capability.embeddings'), value: t(`models.smartAdd.capability.${result.capabilities.embeddings}`) },
+    { label: t('models.smartAdd.capability.streaming'), value: t(`models.smartAdd.capability.${result.capabilities.streaming}`) },
+    { label: t('models.smartAdd.capability.usage'), value: t(`models.smartAdd.capability.${result.capabilities.tokenUsage}`) },
+  ];
+  const issues = [...result.warnings, ...result.errors];
+  return (
+    <section className={`discovery-preview discovery-${result.status}`}>
+      <div className="discovery-preview-head">
+        <span>
+          <strong>{t(result.status === 'failed' ? 'models.smartAdd.previewFailed' : 'models.smartAdd.previewReady')}</strong>
+          <small>{result.normalizedBaseUrl ?? t('common.notConfigured')}</small>
+        </span>
+        <StatusPillLite label={t(`models.smartAdd.status.${result.status}`)} state={result.status === 'success' ? 'ready' : result.status === 'partial' ? 'warning' : 'danger'} />
+      </div>
+      <DataRows
+        rows={[
+          { label: t('models.smartAdd.normalizedBaseUrl'), value: result.normalizedBaseUrl ?? t('common.notConfigured') },
+          { label: t('models.smartAdd.providerName'), value: result.suggestedProviderName },
+          { label: t('models.smartAdd.compatibility'), value: result.compatibility },
+          { label: t('models.smartAdd.modelCount'), value: result.models.length },
+          { label: t('models.smartAdd.modelExamples'), value: result.modelExamples.length ? result.modelExamples.join(', ') : t('models.fetch.empty') },
+          ...capabilityRows,
+        ]}
+      />
+      {issues.length > 0 ? (
+        <div className="discovery-issues">
+          {issues.slice(0, 4).map((issue, index) => (
+            <InlineNotice key={`${issue.code}-${index}`} tone={result.status === 'failed' ? 'warning' : 'muted'} title={issue.code} detail={issue.message} />
+          ))}
+        </div>
+      ) : null}
+      {result.status !== 'failed' ? (
+        <CommandButton variant="primary" icon={<Plus size={14} />} disabled={saveDisabled} onClick={onSave}>{t('models.smartAdd.saveDetected')}</CommandButton>
+      ) : (
+        <InlineNotice tone="warning" title={t('models.smartAdd.nextAction')} detail={t('models.smartAdd.nextAction.detail')} />
+      )}
+    </section>
+  );
 }
 
 function ProviderRow({

@@ -22,7 +22,9 @@ import type {
   KnowledgeRebuildInput,
   KnowledgeRetrievalInput,
   ModelInput,
+  ProviderDiscoveryRequest,
   ProviderInput,
+  ProviderSaveFromDiscoveryRequest,
   RegenerateMessageInput,
   RetryMessageInput,
   SendMessageInput,
@@ -61,6 +63,8 @@ function subscribe<C extends IpcEventChannel>(channel: C, handler: (payload: Ipc
 
 const api: AppApi = {
   getSnapshot: () => invoke(IPC_CHANNELS.appGetSnapshot),
+  discoverProvider: (input: ProviderDiscoveryRequest) => invoke(IPC_CHANNELS.providerDiscover, input),
+  saveProviderFromDiscovery: (input: ProviderSaveFromDiscoveryRequest) => invoke(IPC_CHANNELS.providerSaveFromDiscovery, input),
   createProvider: (input: ProviderInput) => invoke(IPC_CHANNELS.providerCreate, input),
   deleteProvider: (providerId: string) => invoke(IPC_CHANNELS.providerDelete, providerId),
   fetchProviderModels: (providerId: string) => invoke(IPC_CHANNELS.providerModelsFetch, providerId),

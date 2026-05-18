@@ -48,8 +48,12 @@ import type {
   PageResult,
   PromptTemplate,
   Provider,
+  ProviderDiscoveryRequest,
+  ProviderDiscoveryResult,
   ProviderInput,
   ProviderModelOption,
+  ProviderSaveFromDiscoveryRequest,
+  ProviderSaveFromDiscoveryResult,
   RegenerateMessageInput,
   RequestLog,
   RetryMessageInput,
@@ -1026,6 +1030,92 @@ export function createMockApi(): AppApi {
   const api: AppApi = {
     async getSnapshot() {
       return clone(buildSnapshot(state));
+    },
+
+    async discoverProvider(input: ProviderDiscoveryRequest): Promise<ProviderDiscoveryResult> {
+      const address = input.baseUrl?.trim() || input.address.trim();
+      const capabilities = {
+        openAiCompatible: 'unknown' as const,
+        models: 'unknown' as const,
+        chatCompletions: 'not_tested' as const,
+        streaming: 'not_tested' as const,
+        tokenUsage: 'not_tested' as const,
+        embeddings: 'not_tested' as const,
+      };
+      if (!address) {
+        return clone({
+          status: 'failed',
+          inputAddress: input.address.trim(),
+          normalizedBaseUrl: null,
+          suggestedProviderName: input.providerName?.trim() || 'OpenAI-compatible Provider',
+          providerType: input.providerType ?? 'openai-compatible',
+          compatibility: 'failed',
+          capabilities,
+          models: [],
+          modelExamples: [],
+          warnings: [],
+          errors: [{ code: 'provider_invalid_base_url', message: t('models.errors.invalidBaseUrl'), status: null }],
+          testedCandidates: [],
+          selectedCandidateBaseUrl: null,
+          latencyMs: 1,
+        });
+      }
+      const normalized = /^https?:\/\//i.test(address) ? address.replace(/\/+$/, '') : `https://${address.replace(/\/+$/, '')}`;
+      const baseUrl = normalized.endsWith('/v1') ? normalized : `${normalized}/v1`;
+      const providerName = input.providerName?.trim() || `${new URL(baseUrl).hostname.replace(/^api\./, '').split('.')[0] || 'Mock'} Provider`;
+      const slug = providerName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'provider';
+      const models = [`${slug}-chat`, `${slug}-fast`, `${slug}-embed`].map((name) => ({ id: name, name }));
+      pushAudit('provider.discovery.preview', 'provider', null, { modelCount: models.length });
+      return clone({
+        status: 'success',
+        inputAddress: input.address.trim(),
+        normalizedBaseUrl: baseUrl,
+        suggestedProviderName: providerName,
+        providerType: input.providerType ?? 'openai-compatible',
+        compatibility: 'openai-compatible',
+        capabilities: {
+          openAiCompatible: 'supported',
+          models: 'supported',
+          chatCompletions: 'supported',
+          streaming: 'unknown',
+          tokenUsage: 'supported',
+          embeddings: 'not_tested',
+        },
+        models,
+        modelExamples: models.slice(0, 3).map((model) => model.name),
+        warnings: [],
+        errors: [],
+        testedCandidates: [{
+          baseUrl,
+          modelsEndpoint: '/models',
+          chatEndpoint: '/chat/completions',
+          embeddingsEndpoint: '/embeddings',
+        }],
+        selectedCandidateBaseUrl: baseUrl,
+        latencyMs: 38,
+      });
+    },
+
+    async saveProviderFromDiscovery(input: ProviderSaveFromDiscoveryRequest): Promise<ProviderSaveFromDiscoveryResult> {
+      const provider = await api.createProvider({
+        name: input.providerName,
+        type: input.providerType,
+        baseUrl: input.baseUrl,
+        apiKey: input.apiKey,
+        customHeadersJson: input.customHeadersJson,
+      });
+      const models = [];
+      const uniqueModelNames = Array.from(new Set(input.modelNames.map((name) => name.trim()).filter(Boolean))).slice(0, 200);
+      for (const name of uniqueModelNames) {
+        models.push(await api.createModel({
+          providerId: provider.id,
+          name,
+          supportsStreaming: input.capabilities?.streaming === 'unsupported' ? false : true,
+          supportsEmbeddings: input.capabilities?.embeddings === 'supported',
+        }));
+      }
+      pushAudit('provider.discovery.saved', 'provider', provider.id, { modelCount: models.length });
+      return clone({ provider, models });
     },
 
     subscribe(channel, handler) {

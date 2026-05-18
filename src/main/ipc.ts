@@ -35,7 +35,9 @@ import type {
   KnowledgeRetrievalInput,
   McpServer,
   ModelInput,
+  ProviderDiscoveryRequest,
   ProviderInput,
+  ProviderSaveFromDiscoveryRequest,
   RegenerateMessageInput,
   RetryMessageInput,
   SendMessageInput,
@@ -64,6 +66,8 @@ function safeSendEvent<C extends IpcEventChannel>(
 
 export function registerIpcHandlers(): void {
   handleIpc(IPC_CHANNELS.appGetSnapshot, () => measureMainIpc('getSnapshot', () => store.getSnapshot()));
+  handleIpc(IPC_CHANNELS.providerDiscover, (input: ProviderDiscoveryRequest) => store.discoverProvider(input));
+  handleIpc(IPC_CHANNELS.providerSaveFromDiscovery, (input: ProviderSaveFromDiscoveryRequest) => store.saveProviderFromDiscovery(input));
   handleIpc(IPC_CHANNELS.providerCreate, (input: ProviderInput) => store.createProvider(input));
   handleIpc(IPC_CHANNELS.providerDelete, (providerId: string) => store.deleteProvider(providerId));
   handleIpc(IPC_CHANNELS.providerModelsFetch, (providerId: string) => store.fetchProviderModels(providerId));

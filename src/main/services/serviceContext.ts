@@ -193,8 +193,12 @@ import type {
   PageResult,
   PromptTemplate,
   Provider,
+  ProviderDiscoveryRequest,
+  ProviderDiscoveryResult,
   ProviderHealthRecord,
   ProviderInput,
+  ProviderSaveFromDiscoveryRequest,
+  ProviderSaveFromDiscoveryResult,
   RegenerateMessageInput,
   RequestLog,
   MigrationRun,
@@ -1759,6 +1763,8 @@ export interface ServiceContext {
   getDashboardSummary(): DashboardSummary;
   getProviders(): Provider[];
   getProviderHealthRecords(): ProviderHealthRecord[];
+  discoverProvider(input: ProviderDiscoveryRequest): Promise<ProviderDiscoveryResult>;
+  saveProviderFromDiscovery(input: ProviderSaveFromDiscoveryRequest): Promise<ProviderSaveFromDiscoveryResult>;
   createProvider(input: ProviderInput): Provider;
   deleteProvider(providerId: string): Provider;
   testProvider(providerId: string): Promise<Provider>;

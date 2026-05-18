@@ -49,8 +49,12 @@ import type {
   Model,
   ModelInput,
   Provider,
+  ProviderDiscoveryRequest,
+  ProviderDiscoveryResult,
   ProviderInput,
   ProviderModelOption,
+  ProviderSaveFromDiscoveryRequest,
+  ProviderSaveFromDiscoveryResult,
   SendMessageInput,
   UiPreferences,
   CancelMessageInput,
@@ -74,6 +78,8 @@ export type AppEventUnsubscribe = () => void;
 
 export interface AppApi {
   getSnapshot(): Promise<AppSnapshot>;
+  discoverProvider(input: ProviderDiscoveryRequest): Promise<ProviderDiscoveryResult>;
+  saveProviderFromDiscovery(input: ProviderSaveFromDiscoveryRequest): Promise<ProviderSaveFromDiscoveryResult>;
   createProvider(input: ProviderInput): Promise<Provider>;
   deleteProvider(providerId: string): Promise<Provider>;
   fetchProviderModels(providerId: string): Promise<ProviderModelOption[]>;
@@ -138,6 +144,8 @@ export interface AppApi {
 
 export const APP_API_METHODS = [
   'getSnapshot',
+  'discoverProvider',
+  'saveProviderFromDiscovery',
   'createProvider',
   'deleteProvider',
   'fetchProviderModels',

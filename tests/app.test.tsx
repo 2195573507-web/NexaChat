@@ -347,6 +347,34 @@ describe('NexaChat renderer', () => {
     expect(activePanel()).not.toHaveTextContent('Local Mock Provider');
   });
 
+  it('detects and confirms a Provider through the simple Smart Add flow', async () => {
+    await renderApp();
+
+    const models = navModules.find((module) => module.id === 'models')!;
+    openFeature(models, models.tabs.find((tab) => tab.id === 'providers')!);
+
+    expect(within(activePanel()).queryByLabelText(translate('zh-CN', 'models.name'))).not.toBeInTheDocument();
+    fireEvent.change(within(activePanel()).getByLabelText(translate('zh-CN', 'models.smartAdd.address')), { target: { value: 'api.smartadd.test' } });
+    fireEvent.change(within(activePanel()).getByLabelText(translate('zh-CN', 'models.apiKey')), { target: { value: 'sk-ui-smart-add-secret' } });
+    fireEvent.click(within(activePanel()).getAllByRole('button', { name: translate('zh-CN', 'models.smartAdd.detect') })[0]);
+
+    await waitFor(() => {
+      expect(activePanel()).toHaveTextContent(translate('zh-CN', 'models.smartAdd.previewReady'));
+    });
+    expect(activePanel()).toHaveTextContent('https://api.smartadd.test/v1');
+    expect(activePanel()).not.toHaveTextContent('sk-ui-smart-add-secret');
+
+    fireEvent.click(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'models.smartAdd.saveDetected') }));
+
+    await waitFor(() => {
+      expect(activePanel()).toHaveTextContent('smartadd Provider');
+    });
+    openFeature(models, models.tabs.find((tab) => tab.id === 'catalog')!);
+    await waitFor(() => {
+      expect(activePanel()).toHaveTextContent('smartadd-provider-chat');
+    });
+  });
+
   it('shows provider row-local pending without locking the whole model page', async () => {
     const baseApi = createMockApi();
     const pending = deferred<Awaited<ReturnType<AppApi['testProvider']>>>();
