@@ -2,8 +2,9 @@ import { Copy, RefreshCw, RotateCcw, XCircle } from 'lucide-react';
 import { memo } from 'react';
 import type { ContextStrategy, KnowledgeCitation, Message } from '../../../shared/types';
 import { MessageBubble } from '../../components/AppFrame';
+import { copyText } from '../../clipboard';
 import { useI18n } from '../../i18n';
-import { copyText, formatDate, formatMessageMetadata, statusLabel, type TabPageProps } from '../shared';
+import { formatDate, formatMessageMetadata, statusLabel, type TabPageProps } from '../shared';
 
 export const ChatMessageBubble = memo(function ChatMessageBubble({
   message,

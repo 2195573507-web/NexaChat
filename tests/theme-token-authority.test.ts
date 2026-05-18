@@ -48,6 +48,58 @@ function selectorBlock(selector: string) {
   return match[1];
 }
 
+function colorTokenMap(selector: string) {
+  const block = selectorBlock(selector);
+  return new Map(
+    Array.from(block.matchAll(/(--color-[\w-]+):\s*(oklch\(([^)]+)\));/g)).map((match) => [match[1], match[2]]),
+  );
+}
+
+function oklchToLinearSrgb(value: string): [number, number, number] {
+  const match = value.match(/oklch\(\s*([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s*\)/);
+  if (!match) {
+    throw new Error(`Unsupported color token value: ${value}`);
+  }
+  const l = Number.parseFloat(match[1]);
+  const c = Number.parseFloat(match[2]);
+  const h = (Number.parseFloat(match[3]) * Math.PI) / 180;
+  const a = c * Math.cos(h);
+  const b = c * Math.sin(h);
+  const lPrime = l + 0.3963377774 * a + 0.2158037573 * b;
+  const mPrime = l - 0.1055613458 * a - 0.0638541728 * b;
+  const sPrime = l - 0.0894841775 * a - 1.291485548 * b;
+  const lValue = lPrime ** 3;
+  const mValue = mPrime ** 3;
+  const sValue = sPrime ** 3;
+  return [
+    4.0767416621 * lValue - 3.3077115913 * mValue + 0.2309699292 * sValue,
+    -1.2684380046 * lValue + 2.6097574011 * mValue - 0.3413193965 * sValue,
+    -0.0041960863 * lValue - 0.7034186147 * mValue + 1.707614701 * sValue,
+  ].map((channel) => Math.min(1, Math.max(0, channel))) as [number, number, number];
+}
+
+function relativeLuminance(value: string) {
+  const [r, g, b] = oklchToLinearSrgb(value);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function contrastRatio(foreground: string, background: string) {
+  const foregroundLuminance = relativeLuminance(foreground);
+  const backgroundLuminance = relativeLuminance(background);
+  const lighter = Math.max(foregroundLuminance, backgroundLuminance);
+  const darker = Math.min(foregroundLuminance, backgroundLuminance);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function expectTokenContrast(tokens: Map<string, string>, foreground: string, background: string, minimum: number) {
+  const foregroundValue = tokens.get(foreground);
+  const backgroundValue = tokens.get(background);
+  if (!foregroundValue || !backgroundValue) {
+    throw new Error(`Missing contrast token pair: ${foreground} on ${background}`);
+  }
+  expect(contrastRatio(foregroundValue, backgroundValue), `${foreground} on ${background}`).toBeGreaterThanOrEqual(minimum);
+}
+
 describe('theme token authority', () => {
   it('normalizes and resolves light dark and system theme modes', () => {
     expect(normalizeThemeMode('light')).toBe('light');
@@ -125,14 +177,46 @@ describe('theme token authority', () => {
     expect(cssTokens.sort()).toEqual([...THEME_TOKEN_NAMES].sort());
   });
 
-  it('defines every color token in both light root and dark override scopes', () => {
+  it('defines every color token in root light and dark scopes', () => {
     const rootBlock = selectorBlock(':root');
     const darkBlock = selectorBlock('.theme-dark');
+    const lightBlock = selectorBlock('.theme-light');
     const colorTokens = THEME_TOKEN_NAMES.filter((token) => token.startsWith('--color-'));
 
     for (const token of colorTokens) {
       expect(rootBlock, `:root should define ${token}`).toContain(`${token}:`);
       expect(darkBlock, `.theme-dark should define ${token}`).toContain(`${token}:`);
+      expect(lightBlock, `.theme-light should define ${token}`).toContain(`${token}:`);
+    }
+  });
+
+  it('keeps semantic color token pairs above WCAG readability floors', () => {
+    const scopes = [':root', '.theme-dark', '.theme-light'];
+    const textBackgroundPairs: Array<[string, string, number]> = [
+      ['--color-text', '--color-bg', 4.5],
+      ['--color-text', '--color-surface', 4.5],
+      ['--color-text', '--color-panel', 4.5],
+      ['--color-text-muted', '--color-bg', 4.5],
+      ['--color-text-muted', '--color-surface', 4.5],
+      ['--color-text-muted', '--color-panel', 4.5],
+      ['--color-text-subtle', '--color-bg', 4.5],
+      ['--color-text-placeholder', '--color-surface', 4.5],
+      ['--color-text-disabled', '--color-surface', 3],
+      ['--color-on-primary', '--color-primary', 4.5],
+      ['--color-code-text', '--color-code', 4.5],
+      ['--color-selected-text', '--color-selected-bg', 4.5],
+      ['--color-primary-text', '--color-primary-soft', 4.5],
+      ['--color-success-text', '--color-success-bg', 4.5],
+      ['--color-warning-text', '--color-warning-bg', 4.5],
+      ['--color-danger-text', '--color-danger-bg', 4.5],
+      ['--color-info-text', '--color-info-bg', 4.5],
+    ];
+
+    for (const scope of scopes) {
+      const tokens = colorTokenMap(scope);
+      for (const [foreground, background, minimum] of textBackgroundPairs) {
+        expectTokenContrast(tokens, foreground, background, minimum);
+      }
     }
   });
 

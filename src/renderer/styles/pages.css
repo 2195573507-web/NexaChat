@@ -80,7 +80,7 @@
   display: grid;
   place-items: center;
   background: var(--color-primary-soft);
-  color: var(--color-primary);
+  color: var(--color-primary-text);
 }
 
 .switch-tile span:nth-child(2) {
@@ -107,7 +107,7 @@
   display: grid;
   place-items: center;
   background: var(--color-primary-soft);
-  color: var(--color-primary);
+  color: var(--color-primary-text);
   font-weight: 800;
 }
 
@@ -305,9 +305,13 @@
 }
 
 .conversation-tile.is-active {
-  color: var(--color-primary);
-  background: var(--color-primary-soft);
+  color: var(--color-selected-text);
+  background: var(--color-selected-bg);
   border-color: color-mix(in srgb, var(--color-primary) 34%, var(--color-border));
+}
+
+.conversation-tile.is-active small {
+  color: color-mix(in srgb, var(--color-selected-text) 78%, var(--color-text-muted));
 }
 
 .chat-column {
@@ -514,7 +518,7 @@
   place-items: center;
   border-radius: var(--radius-md);
   background: var(--color-surface);
-  color: var(--color-primary);
+  color: var(--color-primary-text);
 }
 
 .chat-quick-action span:last-child {
@@ -765,6 +769,11 @@
 .motion-reduced .conversation-tile:hover,
 .motion-reduced .chat-quick-action:hover {
   transform: none;
+}
+
+.app-frame,
+.app-frame * {
+  transition-property: border-color, box-shadow, opacity, transform;
 }
 
 @media (max-width: 1320px) {

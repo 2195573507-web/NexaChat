@@ -5,6 +5,7 @@ import { buildUsageTrend, type UsageTrendPoint } from '../../shared/observabilit
 import type { GatewayApiKey, UsageTrendBucket } from '../../shared/types';
 import { GATEWAY_DOCS, FORM_DEFAULTS } from '../../shared/uiCopy';
 import { ActivityList, CommandButton, ConfigDetail, ConfigList, CopyableCommand, DataRows, EmptyBlock, Field, InlineNotice, PageHeader, StatusPillLite, ToolSection } from '../components/AppFrame';
+import { copyText } from '../clipboard';
 import { useI18n } from '../i18n';
 import { markPerformance, measurePerformance } from '../performanceMarks';
 import { formatDate, getDefaultModel, healthState, statusLabel, TabPanel, type TabPageProps } from './shared';
@@ -195,7 +196,7 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
           title={t('gateway.docs.example')}
           description={activeTab.featureBoundary}
           status={<StatusPillLite label={defaultModel?.displayName ?? t('common.notConfigured')} state={defaultModel ? 'ready' : 'warning'} />}
-          actions={<CommandButton icon={<Copy size={15} />} onClick={() => void navigator.clipboard?.writeText(chatCommand)}>{t('app.error.copy')}</CommandButton>}
+          actions={<CommandButton icon={<Copy size={15} />} onClick={() => copyText(chatCommand)}>{t('app.error.copy')}</CommandButton>}
         />
         <div className="tool-layout">
         <ConfigList title={t('gateway.docs.example')} description={activeTab.featureBoundary}>
@@ -212,7 +213,7 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
         <ConfigDetail title={t('nav.gateway.docs.label')} description={t('nav.gateway.docs.boundary')}>
           <InlineNotice tone="warning" title={t('gateway.reserved.title')} detail={GATEWAY_RESERVED_ENDPOINTS.join(', ')} />
           <InlineNotice tone="info" title={t('gateway.alias.boundary')} detail={t('gateway.alias.boundary.detail')} />
-          <CommandButton icon={<Copy size={15} />} onClick={() => void navigator.clipboard?.writeText(chatCommand)}>{t('app.error.copy')}</CommandButton>
+          <CommandButton icon={<Copy size={15} />} onClick={() => copyText(chatCommand)}>{t('app.error.copy')}</CommandButton>
         </ConfigDetail>
         </div>
       </TabPanel>

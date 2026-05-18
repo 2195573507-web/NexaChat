@@ -159,10 +159,6 @@ export function formatMessageMetadata(metadataJson: string, t: Translate): strin
   }
 }
 
-export function copyText(value: string): void {
-  void navigator.clipboard?.writeText(value);
-}
-
 export function truncate(value: string, max = 96) {
   return value.length > max ? `${value.slice(0, max - 1)}...` : value;
 }

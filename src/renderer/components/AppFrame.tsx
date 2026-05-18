@@ -37,6 +37,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { navModules } from '../../shared/navigation';
 import { getThemeClass, resolveThemeMode } from '../../shared/theme';
 import type { DashboardSummary, ModuleId, NavModule, NavTab, UiPreferences } from '../../shared/types';
+import { copyText } from '../clipboard';
 import { translateModule, useI18n } from '../i18n';
 
 const SYSTEM_DARK_QUERY = '(prefers-color-scheme: dark)';
@@ -450,7 +451,7 @@ export function CopyableCommand({ value, label }: { value: string; label: string
   return (
     <div className="copy-command">
       <code>{value}</code>
-      <button type="button" className="ghost-button" onClick={() => void navigator.clipboard?.writeText(value)}>
+      <button type="button" className="ghost-button" onClick={() => copyText(value)}>
         <Copy size={14} />
         {label}
       </button>

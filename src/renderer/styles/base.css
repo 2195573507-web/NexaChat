@@ -61,7 +61,6 @@ button:active {
 
 button:disabled {
   cursor: not-allowed;
-  opacity: 0.52;
   transform: none;
 }
 
@@ -99,6 +98,21 @@ textarea {
   padding: var(--space-3);
   line-height: var(--line-height-normal);
   resize: vertical;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-text-placeholder);
+  opacity: 1;
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled {
+  color: var(--color-text-disabled);
+  background: color-mix(in srgb, var(--color-muted) 58%, var(--color-surface));
+  border-color: var(--color-border);
+  cursor: not-allowed;
 }
 
 h1,
@@ -149,9 +163,9 @@ code {
 }
 
 .danger-button {
-  color: var(--color-danger);
+  color: var(--color-danger-text);
   border-color: color-mix(in srgb, var(--color-danger) 54%, var(--color-border));
-  background: color-mix(in srgb, var(--color-danger) 10%, var(--color-surface));
+  background: var(--color-danger-bg);
 }
 
 .ghost-button {
@@ -160,6 +174,14 @@ code {
 
 .default-button {
   background: var(--color-surface);
+}
+
+button:disabled,
+button:disabled:hover {
+  color: var(--color-text-disabled);
+  border-color: var(--color-border);
+  background: color-mix(in srgb, var(--color-muted) 58%, var(--color-surface));
+  box-shadow: none;
 }
 
 @keyframes surface-fade-in {

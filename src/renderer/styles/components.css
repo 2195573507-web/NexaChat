@@ -52,26 +52,26 @@
 
 .tool-pill.status-ready {
   border-color: color-mix(in srgb, var(--color-success) 36%, var(--color-border));
-  color: var(--color-success);
-  background: color-mix(in srgb, var(--color-success) 10%, var(--color-surface));
+  color: var(--color-success-text);
+  background: var(--color-success-bg);
 }
 
 .tool-pill.status-warning {
   border-color: color-mix(in srgb, var(--color-warning) 42%, var(--color-border));
-  color: var(--color-warning);
-  background: color-mix(in srgb, var(--color-warning) 12%, var(--color-surface));
+  color: var(--color-warning-text);
+  background: var(--color-warning-bg);
 }
 
 .tool-pill.status-danger {
   border-color: color-mix(in srgb, var(--color-danger) 38%, var(--color-border));
-  color: var(--color-danger);
-  background: color-mix(in srgb, var(--color-danger) 10%, var(--color-surface));
+  color: var(--color-danger-text);
+  background: var(--color-danger-bg);
 }
 
 .tool-pill.status-info {
   border-color: color-mix(in srgb, var(--color-info) 38%, var(--color-border));
-  color: var(--color-info);
-  background: color-mix(in srgb, var(--color-info) 10%, var(--color-surface));
+  color: var(--color-info-text);
+  background: var(--color-info-bg);
 }
 
 .inline-notice,
@@ -93,18 +93,46 @@
 
 .notice-success {
   border-color: color-mix(in srgb, var(--color-success) 34%, var(--color-border));
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
 }
 
 .notice-warning {
   border-color: color-mix(in srgb, var(--color-warning) 38%, var(--color-border));
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
 }
 
 .notice-danger {
   border-color: color-mix(in srgb, var(--color-danger) 38%, var(--color-border));
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
 }
 
 .notice-info {
   border-color: color-mix(in srgb, var(--color-info) 34%, var(--color-border));
+  background: var(--color-info-bg);
+  color: var(--color-info-text);
+}
+
+.notice-muted {
+  color: var(--color-text-muted);
+}
+
+.inline-notice strong,
+.inline-notice span,
+.inline-notice p,
+.inline-notice code {
+  color: inherit;
+}
+
+.eyebrow {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 720;
+  line-height: var(--line-height-badge);
+  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 .config-list,
@@ -259,7 +287,12 @@
 
 .config-row.is-active {
   border-color: color-mix(in srgb, var(--color-primary) 34%, var(--color-border));
-  background: var(--color-primary-soft);
+  background: var(--color-selected-bg);
+  color: var(--color-selected-text);
+}
+
+.config-row.is-active small {
+  color: color-mix(in srgb, var(--color-selected-text) 78%, var(--color-text-muted));
 }
 
 .config-row > span:first-child,
@@ -388,8 +421,8 @@
 }
 
 .segmented-list button.is-active {
-  color: var(--color-primary);
-  background: var(--color-primary-soft);
+  color: var(--color-selected-text);
+  background: var(--color-selected-bg);
   border-color: color-mix(in srgb, var(--color-primary) 34%, var(--color-border));
 }
 
