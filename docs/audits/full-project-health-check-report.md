@@ -29,21 +29,21 @@
 | 03 | P1 | 缺少当前架构/测试/设计 source-of-truth docs | 已新增 `docs/architecture/current-architecture.md`、`docs/testing/validation-checklist.md`、`docs/design/ui-product-boundary.md`。 |
 | 04 | P1 | `ServiceContext` 职责过宽 | 后续以小 helper 拆分和 characterization tests 简化，不改变 AppApi。 |
 | 05 | P1 | service registry 深层 mixin 组合可读性弱 | 后续保留 facade，收敛为更清晰 composition root。 |
-| 06 | P1 | IPC 运行期只做 arity 校验，缺少 payload shape validation | 后续新增轻量 runtime validators 和无效 payload 测试。 |
-| 07 | P1 | `safeStorage` 不可用时 base64 fallback 容易被误解为加密 | 后续改为生产阻断、开发/测试显式 fallback。 |
+| 06 | P1 | IPC 运行期只做 arity 校验，缺少 payload shape validation | 已新增高风险 IPC payload runtime validators 和无效 payload 测试。 |
+| 07 | P1 | `safeStorage` 不可用时 base64 fallback 容易被误解为加密 | 已改为生产阻断、开发/测试显式 fallback。 |
 | 08 | P1 | Gateway `/v1/chat/completions` 外部 streaming 缺失 | 后续仅为 `stream: true` 增加 SSE；`/v1/responses` 保持 501。 |
 | 09 | P1 | `/v1/responses` 需要持续标注 reserved | 已在 README/docs/UI 边界中明确 reserved 501。 |
 | 10 | P1 | Knowledge 容易被误解为完整 RAG | 已在 README/docs/UI 边界中限定 text-like/lexical/citations。 |
 | 11 | P1 | Tools/MCP/Agent 容易被误解为任意执行平台 | 已在 README/docs/UI 边界中限定 dry-run/fixture/approval/trace。 |
 | 12 | P1 | Data rollback 容易被误解为完整数据库恢复 | 已在 README/docs/UI 边界中限定为有限回滚记录。 |
 | 13 | P2 | Renderer 默认 full snapshot refresh 有性能风险 | 后续针对高频 action 改成局部 patch/targeted query。 |
-| 14 | P2 | Dashboard/Workspace 旧命名影响 chat-first 心智 | 后续清理用户可见旧标签，保留必要内部兼容。 |
+| 14 | P2 | Dashboard/Workspace 旧命名影响 chat-first 心智 | 已清理用户可见旧标签，保留内部兼容类型和历史数据结构。 |
 | 15 | P2 | Provider/Model 生命周期不完整 | 后续补 model update/enable/disable/soft delete，不硬删历史。 |
 | 16 | P2 | `src/renderer/mockApi.ts` 体量大且复制主进程语义 | 后续按领域拆分并保留 AppApi 覆盖测试。 |
-| 17 | P2 | `scan:quality` 被测试 secret 字面量和 long-click script child_process 阻断 | 后续替换 fake secret fixture，并把 controlled test tooling 纳入质量门 allowlist。 |
+| 17 | P2 | `scan:quality` 被测试 secret 字面量和 long-click script child_process 阻断 | 已替换 fake secret fixture，并把 controlled test tooling 纳入质量门 allowlist。 |
 | 18 | P2 | 根目录旧过程文档误导当前事实源 | 已判定 `task_plan.md`、`findings.md`、`progress.md` 为 stale process docs，后续移出 tracked root。 |
 | 19 | P2 | 本地生成产物存在，仓库卫生需复查 | 后续确认 `.gitignore` 与 tracked 状态，不 staging generated artifacts。 |
-| 20 | P2 | 最终 build/electron smoke/full matrix 未闭合 | 后续执行完整验证矩阵后再 commit/push。 |
+| 20 | P2 | 最终 build/electron smoke/full matrix 未闭合 | 仍需执行完整验证矩阵后再 push。 |
 
 ## 已验证命令
 
@@ -57,6 +57,10 @@
 - `npm.cmd run test:ui-smoke` -> 通过。
 - `node --check scripts/long-click-test.mjs` -> 通过。
 - `node scripts/long-click-test.mjs --minutes 1 --agents 2 --run-id 2026-05-18-reload-lifecycle-smoke` -> 通过，`issues: []`。
+- `npm.cmd run scan:quality` -> 通过。
+- `npm.cmd run test -- tests/ipc-contract.test.ts` -> 通过。
+- `npm.cmd run test -- tests/secret-storage.test.ts tests/redaction.test.ts` -> 通过。
+- `npm.cmd run test -- tests/i18n-authority.test.ts tests/app.test.tsx` -> 通过。
 
 ## 剩余验证
 

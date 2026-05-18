@@ -15,4 +15,6 @@
 - 当前 source-of-truth 文档：`README.md`、`docs/architecture/current-architecture.md`、`docs/testing/validation-checklist.md`、`docs/design/ui-product-boundary.md`。
 - 当前审计报告：`docs/audits/full-project-health-check-report.md`。
 - 根目录旧过程文件 `task_plan.md`、`findings.md`、`progress.md` 是 Provider Smart Add 历史过程产物，不再作为当前事实源保留。
+- 已完成质量门和安全边界修复：`scan:quality` 通过；高风险 IPC payload 已加入 runtime shape validation；`safeStorage` 不可用时生产环境阻断保存新 secret，开发/测试 fallback 有显式标记。
+- 已清理用户可见旧能力标签：Workspace/Dashboard 文案不再作为当前入口心智，夸大的 RAG 与 Agent 执行标签改为明确的能力边界标签。
 - 后续变更必须继续保持 chat-first 7 模块、`/ -> /chat/conversations`、本地优先、能力标签诚实和 preload IPC 隔离。
