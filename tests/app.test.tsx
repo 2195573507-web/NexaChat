@@ -355,14 +355,14 @@ describe('NexaChat renderer', () => {
 
     expect(within(activePanel()).queryByLabelText(translate('zh-CN', 'models.name'))).not.toBeInTheDocument();
     fireEvent.change(within(activePanel()).getByLabelText(translate('zh-CN', 'models.smartAdd.address')), { target: { value: 'api.smartadd.test' } });
-    fireEvent.change(within(activePanel()).getByLabelText(translate('zh-CN', 'models.apiKey')), { target: { value: 'sk-ui-smart-add-secret' } });
+    fireEvent.change(within(activePanel()).getByLabelText(translate('zh-CN', 'models.apiKey')), { target: { value: 'fake-ui-smart-add-key' } });
     fireEvent.click(within(activePanel()).getAllByRole('button', { name: translate('zh-CN', 'models.smartAdd.detect') })[0]);
 
     await waitFor(() => {
       expect(activePanel()).toHaveTextContent(translate('zh-CN', 'models.smartAdd.previewReady'));
     });
     expect(activePanel()).toHaveTextContent('https://api.smartadd.test/v1');
-    expect(activePanel()).not.toHaveTextContent('sk-ui-smart-add-secret');
+    expect(activePanel()).not.toHaveTextContent('fake-ui-smart-add-key');
 
     fireEvent.click(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'models.smartAdd.saveDetected') }));
 

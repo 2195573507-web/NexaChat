@@ -53,6 +53,11 @@ const SECURITY_PATTERN_ALLOWLIST = new Set([
   'scripts/quality-gates.mjs',
 ]);
 
+const SECRET_PATTERN_FILE_ALLOWLIST = new Set([
+  'scripts/long-click-test.mjs',
+  'scripts/quality-gates.mjs',
+]);
+
 const TEST_SECRET_ALLOWLIST = new Set([
   'tests/conversation-runtime.test.ts',
   'tests/data-runtime.test.ts',
@@ -61,6 +66,7 @@ const TEST_SECRET_ALLOWLIST = new Set([
   'tests/observability-runtime.test.ts',
   'tests/observability-store.test.ts',
   'tests/provider-adapter.test.ts',
+  'tests/provider-discovery.test.ts',
   'tests/provider-store-integration.test.ts',
   'tests/redaction.test.ts',
 ]);
@@ -69,6 +75,7 @@ const CHILD_PROCESS_ALLOWLIST = new Set([
   'scripts/create-installer-script.mjs',
   'scripts/desktop-entry.mjs',
   'scripts/installer-smoke.mjs',
+  'scripts/long-click-test.mjs',
   'scripts/shortcut-readback.mjs',
   'scripts/shortcut-update.mjs',
   'scripts/ui-smoke.mjs',
@@ -233,7 +240,7 @@ async function scanSecurity() {
     const source = read(rel);
     source.split(/\r?\n/).forEach((line, index) => {
       const trimmed = line.trim();
-      if (SECRET_VALUE_PATTERN.test(line) && !rel.endsWith('.md') && !TEST_SECRET_ALLOWLIST.has(rel)) {
+      if (SECRET_VALUE_PATTERN.test(line) && !rel.endsWith('.md') && !TEST_SECRET_ALLOWLIST.has(rel) && !SECRET_PATTERN_FILE_ALLOWLIST.has(rel)) {
         secretViolations.push(`${rel}:${index + 1}: ${trimmed}`);
       }
       if (UNSAFE_CODE_PATTERN.test(line) && !SECURITY_PATTERN_ALLOWLIST.has(rel)) {
@@ -373,6 +380,100 @@ async function scanDocs() {
   fail('Docs freshness gaps', violations);
 }
 
+async function scanCurrentDocs() {
+  const violations = [];
+  const readmePath = join(repoRoot, 'README.md');
+  if (!existsPath(readmePath)) {
+    violations.push('README.md: missing');
+    fail('Docs freshness gaps', violations);
+    return;
+  }
+
+  const readme = read('README.md');
+  const requiredText = [
+    'NexaChat 是本地优先、聊天优先的多模型 AI 桌面工作台。',
+    'Chat',
+    'Models',
+    'Knowledge Base',
+    'Tools',
+    'Gateway',
+    'Data',
+    'Settings',
+    '当前根路由 `/` 解析到 `/chat/conversations`',
+    'Electron',
+    'React 19',
+    'TypeScript',
+    'Vite',
+    'SQLite / `node:sqlite`',
+    '默认本地 Gateway 地址：`127.0.0.1:8787`',
+    'Knowledge Base 当前支持 text-like 导入',
+    '`/v1/responses` 当前为 reserved endpoint',
+    'Tools / Agent / MCP 当前支持注册、权限、dry-run、fixture execution、approval、trace/logging',
+    'npm.cmd run typecheck',
+    'npm.cmd run scan:quality',
+    'npm.cmd run test',
+    'npm.cmd run build',
+    'npm.cmd run test:ui-smoke',
+    'npm.cmd run test:electron-smoke',
+    '`src/main`',
+    '`src/preload`',
+    '`src/renderer`',
+    '`src/shared`',
+    '`tests`',
+  ];
+  for (const text of requiredText) {
+    if (!readme.includes(text)) {
+      violations.push(`README.md: missing "${text}"`);
+    }
+  }
+
+  const forbiddenReadmePatterns = [
+    /Workspace-first/i,
+    /Dashboard-first/i,
+    /\b8[- ]module\b/i,
+    /8\s*个顶层模块/,
+    /docs\/build-plans/i,
+    /docs\/iteration-plans/i,
+    /task_plan\.md/i,
+    /progress\.md/i,
+    /findings\.md/i,
+    /README\.zh-CN\.md/i,
+    /完整\s*PDF\/Office\/OCR\/vector DB RAG/,
+  ];
+  for (const pattern of forbiddenReadmePatterns) {
+    if (pattern.test(readme)) {
+      violations.push(`README.md: forbidden stale or overstated text matched ${pattern}`);
+    }
+  }
+
+  const requiredDocs = [
+    'docs/architecture/current-architecture.md',
+    'docs/testing/validation-checklist.md',
+    'docs/design/ui-product-boundary.md',
+  ];
+  for (const rel of requiredDocs) {
+    if (!existsPath(join(repoRoot, rel))) {
+      violations.push(`${rel}: missing current source-of-truth doc`);
+    }
+  }
+
+  const removedArtifacts = [
+    'README.zh-CN.md',
+    'task_plan.md',
+    'progress.md',
+    'findings.md',
+    'docs/build-plans',
+    'docs/iteration-plans',
+    'docs/implementation',
+  ];
+  for (const rel of removedArtifacts) {
+    if (existsPath(join(repoRoot, rel))) {
+      violations.push(`${rel}: stale planning/process artifact should not be present`);
+    }
+  }
+  fail('Docs freshness gaps', violations);
+}
+
 async function runCommandGate(command, args) {
   const spawnCommand = process.platform === 'win32' && command.endsWith('.cmd') ? 'cmd.exe' : command;
   const spawnArgs = process.platform === 'win32' && command.endsWith('.cmd') ? ['/d', '/s', '/c', command, ...args] : args;
@@ -407,14 +508,14 @@ async function main() {
       await scanDeadLinks();
       break;
     case 'docs':
-      await scanDocs();
+      await scanCurrentDocs();
       break;
     case 'all-scans':
       await scanHardcode();
       await scanDuplicates();
       await scanSecurity();
       await scanDeadLinks();
-      await scanDocs();
+      await scanCurrentDocs();
       break;
     case 'release':
       await runCommandGate('npm.cmd', ['run', 'typecheck']);
@@ -428,7 +529,7 @@ async function main() {
       await scanDuplicates();
       await scanSecurity();
       await scanDeadLinks();
-      await scanDocs();
+      await scanCurrentDocs();
       await runCommandGate('git', ['diff', '--check']);
       break;
     default:

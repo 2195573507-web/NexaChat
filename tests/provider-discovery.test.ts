@@ -58,25 +58,25 @@ describe('Provider discovery probing', () => {
     expect(parseOpenAiCompatibleModelsResponse({ object: 'list', data: [{ id: 'chat-a' }, { id: 'chat-a' }, { id: 'chat-b' }] }))
       .toEqual([{ id: 'chat-a', name: 'chat-a' }, { id: 'chat-b', name: 'chat-b' }]);
     expect(() => parseOpenAiCompatibleModelsResponse({ data: {} })).toThrow(/data array/);
-    expect(redactProviderDiscoveryIssue({ code: 'x', message: 'Bearer sk-test-secret failed' }).message).toBe('Bearer [REDACTED] failed');
-    expect(buildProviderDiscoveryHeadersForTesting('sk-test-secret').authorization).toBe('Bearer sk-test-secret');
+    expect(redactProviderDiscoveryIssue({ code: 'x', message: 'Bearer fake-provider-key failed' }).message).toBe('Bearer [REDACTED] failed');
+    expect(buildProviderDiscoveryHeadersForTesting('fake-provider-key').authorization).toBe('Bearer fake-provider-key');
   });
 
   it('detects an OpenAI-compatible provider and chat usage through main-process probing', async () => {
-    const result = await discoverProvider({ address: `${baseUrl}/v1`, apiKey: 'sk-test-secret' });
+    const result = await discoverProvider({ address: `${baseUrl}/v1`, apiKey: 'fake-provider-key' });
 
-    expect(lastAuth).toBe('Bearer sk-test-secret');
+    expect(lastAuth).toBe('Bearer fake-provider-key');
     expect(result.status).toBe('success');
     expect(result.normalizedBaseUrl).toBe(`${baseUrl}/v1`);
     expect(result.models).toEqual([{ id: 'test-chat', name: 'test-chat' }]);
     expect(result.capabilities.chatCompletions).toBe('supported');
     expect(result.capabilities.tokenUsage).toBe('supported');
-    expect(JSON.stringify(result)).not.toContain('sk-test-secret');
+    expect(JSON.stringify(result)).not.toContain('fake-provider-key');
   });
 
   it('chooses a root /models provider without forcing /v1', async () => {
     mode = 'root-models';
-    const result = await discoverProvider({ address: baseUrl, apiKey: 'sk-test-secret' });
+    const result = await discoverProvider({ address: baseUrl, apiKey: 'fake-provider-key' });
 
     expect(result.status).toBe('success');
     expect(result.normalizedBaseUrl).toBe(baseUrl);
@@ -85,21 +85,21 @@ describe('Provider discovery probing', () => {
 
   it('returns structured failures for auth missing path timeout and invalid JSON', async () => {
     mode = 'auth';
-    await expect(discoverProvider({ address: baseUrl, apiKey: 'sk-test-secret' })).resolves.toMatchObject({
+    await expect(discoverProvider({ address: baseUrl, apiKey: 'fake-provider-key' })).resolves.toMatchObject({
       status: 'failed',
       compatibility: 'failed',
     });
 
     mode = 'missing';
-    const missing = await discoverProvider({ address: baseUrl, apiKey: 'sk-test-secret' });
+    const missing = await discoverProvider({ address: baseUrl, apiKey: 'fake-provider-key' });
     expect(missing.errors.some((error) => error.status === 404)).toBe(true);
 
     mode = 'timeout';
-    const timeout = await discoverProvider({ address: baseUrl, apiKey: 'sk-test-secret', timeoutMs: 20 });
+    const timeout = await discoverProvider({ address: baseUrl, apiKey: 'fake-provider-key', timeoutMs: 20 });
     expect(timeout.errors.some((error) => error.code === 'provider_timeout')).toBe(true);
 
     mode = 'invalid-json';
-    const invalid = await discoverProvider({ address: baseUrl, apiKey: 'sk-test-secret' });
+    const invalid = await discoverProvider({ address: baseUrl, apiKey: 'fake-provider-key' });
     expect(invalid.errors.some((error) => error.code === 'provider_invalid_response')).toBe(true);
   });
 });
@@ -116,7 +116,7 @@ function handleRequest(request: IncomingMessage, response: ServerResponse): void
     return;
   }
   if (mode === 'auth') {
-    writeJson(response, 401, { error: { message: 'bad sk-test-secret' } });
+    writeJson(response, 401, { error: { message: 'bad fake-provider-key' } });
     return;
   }
   if (mode === 'missing') {
