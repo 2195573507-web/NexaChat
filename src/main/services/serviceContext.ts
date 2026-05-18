@@ -928,7 +928,7 @@ export class ServiceContext {
     ];
     for (const message of messages) {
       const content = redacted ? redactSensitive(message.content) : message.content;
-      lines.push(`## ${message.role} 路 ${message.status}`);
+      lines.push(`## ${message.role} - ${message.status}`);
       if (message.modelNameSnapshot) {
         lines.push(`_${message.modelNameSnapshot}_`);
       }

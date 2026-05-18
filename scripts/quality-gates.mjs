@@ -9,7 +9,7 @@ const repoRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.mjs', '.css', '.md', '.json']);
 const SOURCE_DIRS = ['src', 'tests', 'scripts', 'docs'];
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'dist-electron', 'release', 'test-results', 'coverage', 'playwright-report', '.git']);
-const TOP_LEVEL_ROUTE_PATTERN = /\/(workspace|chat|models|knowledge|tools|gateway|data|settings)\//;
+const TOP_LEVEL_ROUTE_PATTERN = /(?<![.\w-])\/(workspace|chat|models|knowledge|tools|gateway|data|settings)\//;
 const API_ENDPOINT_PATTERN = /\/v1\/(models|chat\/completions|embeddings|responses)|\/chat\/completions/;
 const CJK_PATTERN = /[\u4e00-\u9fff]/;
 const MOJIBAKE_PATTERN = /[鎴宸杩叿畬]/;
@@ -47,7 +47,6 @@ const ROUTE_TEXT_ALLOWLIST = new Set([
   'scripts/installer-smoke.mjs',
   'scripts/quality-gates.mjs',
   'tests/app.test.tsx',
-  'docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md',
 ]);
 
 const SECURITY_PATTERN_ALLOWLIST = new Set([
@@ -63,6 +62,7 @@ const TEST_SECRET_ALLOWLIST = new Set([
   'tests/observability-store.test.ts',
   'tests/provider-adapter.test.ts',
   'tests/provider-store-integration.test.ts',
+  'tests/redaction.test.ts',
 ]);
 
 const CHILD_PROCESS_ALLOWLIST = new Set([
@@ -98,7 +98,7 @@ function read(rel) {
 }
 
 function getFiles() {
-  return SOURCE_DIRS.flatMap((dir) => walk(dir));
+  return SOURCE_DIRS.filter((dir) => existsPath(join(repoRoot, dir))).flatMap((dir) => walk(dir));
 }
 
 function fail(title, violations) {
@@ -195,7 +195,7 @@ async function scanDuplicates() {
   fail('Browser mock missing AppApi methods', missingMockMethods);
 
   const preloadSource = read('src/preload/index.ts');
-  const missingPreloadMethods = apiMethods.filter((method) => !new RegExp(`\\b${method}\\s*[:(]`).test(preloadSource));
+  const missingPreloadMethods = apiMethods.filter((method) => !new RegExp(`\\b${method}\\s*(?:[:(,]|$)`).test(preloadSource));
   fail('Preload bridge missing AppApi methods', missingPreloadMethods);
 }
 
@@ -265,44 +265,87 @@ function existsPath(path) {
 }
 
 async function scanDocs() {
-  const requiredFiles = [
+  const violations = [];
+  const readmePath = join(repoRoot, 'README.md');
+  if (!existsPath(readmePath)) {
+    violations.push('README.md: missing');
+    fail('Docs freshness gaps', violations);
+    return;
+  }
+
+  const readme = read('README.md');
+  const requiredText = [
+    'NexaChat 是本地优先、多模型 AI 桌面聊天工作台。',
+    'Chat',
+    'Models',
+    'Knowledge Base',
+    'Tools',
+    'Gateway',
+    'Data',
+    'Settings',
+    '当前根路由 `/` 解析到：`/chat/conversations`',
+    'Electron',
+    'React',
+    'TypeScript',
+    'Vite',
+    'SQLite / `node:sqlite`',
+    '默认本地 Gateway 地址：`127.0.0.1:8787`',
+    'Knowledge Base 当前支持 text-like 文件。',
+    '`/v1/responses` 当前为保留端点',
+    'Tools / Agent / MCP 是受控实验能力',
+    'npm.cmd run typecheck',
+    'npm.cmd run test',
+    'npm.cmd run build',
+    'npm.cmd run test:ui-smoke',
+    'npm.cmd run test:electron-smoke',
+    '`src/main`',
+    '`src/preload`',
+    '`src/renderer`',
+    '`src/shared`',
+    '`tests`',
+  ];
+  for (const text of requiredText) {
+    if (!readme.includes(text)) {
+      violations.push(`README.md: missing "${text}"`);
+    }
+  }
+
+  const forbiddenReadmePatterns = [
+    /Workspace-first/i,
+    /Dashboard-first/i,
+    /\b8[- ]module\b/i,
+    /8\s*个模块/,
+    /docs\/build-plans/i,
+    /docs\/iteration-plans/i,
+    /PROJECT_PROGRESS\.md/i,
+    /task_plan\.md/i,
+    /progress\.md/i,
+    /findings\.md/i,
+    /README\.zh-CN\.md/i,
+    /PDF|Office|OCR|external vector database|外部向量数据库/,
+  ];
+  for (const pattern of forbiddenReadmePatterns) {
+    if (pattern.test(readme)) {
+      violations.push(`README.md: forbidden stale or overstated text matched ${pattern}`);
+    }
+  }
+
+  const removedArtifacts = [
+    'README.zh-CN.md',
     'PROJECT_PROGRESS.md',
     'task_plan.md',
     'progress.md',
     'findings.md',
-    'docs/implementation/full-app-round-execution-matrix.md',
-    'docs/implementation/full-app-final-acceptance-20260516.md',
-    'docs/implementation/round-14-desktop-packaging-shortcut-release-closure.md',
-    'docs/implementation/round-15-quality-gates-release-convergence-closure.md',
-    'docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md',
+    'docs/build-plans',
+    'docs/iteration-plans',
+    'docs/design',
+    'docs/implementation',
+    'docs/testing',
   ];
-  const violations = requiredFiles.filter((rel) => !existsPath(join(repoRoot, rel))).map((rel) => `${rel}: missing`);
-  const blueprint = read('docs/iteration-plans/NexaChat-Full-App-Multi-Round-Iteration-Plan-20260514.md');
-  const matrix = read('docs/implementation/full-app-round-execution-matrix.md');
-  const progress = read('PROJECT_PROGRESS.md');
-  const finalAcceptance = existsPath(join(repoRoot, 'docs/implementation/full-app-final-acceptance-20260516.md'))
-    ? read('docs/implementation/full-app-final-acceptance-20260516.md')
-    : '';
-  for (let round = 0; round <= 15; round += 1) {
-    const rowPattern = new RegExp(`\\| ${round} \\|[^\\n]+\\| Completed`);
-    if (!rowPattern.test(matrix)) {
-      violations.push(`matrix: Round ${round} completion row not found`);
+  for (const rel of removedArtifacts) {
+    if (existsPath(join(repoRoot, rel))) {
+      violations.push(`${rel}: planning/process artifact should not be present`);
     }
-  }
-  if (!blueprint.includes('Round 14 Execution Status')) {
-    violations.push('blueprint: Round 14 execution status missing');
-  }
-  if (!blueprint.includes('Round 15 Execution Status')) {
-    violations.push('blueprint: Round 15 execution status missing');
-  }
-  if (!progress.includes('Full App Round 14')) {
-    violations.push('PROJECT_PROGRESS.md: Round 14 section missing');
-  }
-  if (!progress.includes('Full App Round 15')) {
-    violations.push('PROJECT_PROGRESS.md: Round 15 section missing');
-  }
-  if (!finalAcceptance.includes('Final Acceptance Status: Completed')) {
-    violations.push('final acceptance: completed status missing');
   }
   fail('Docs freshness gaps', violations);
 }

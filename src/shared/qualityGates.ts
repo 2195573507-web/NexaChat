@@ -92,7 +92,7 @@ export const QUALITY_GATE_DEFINITIONS: QualityGateDefinition[] = [
     command: 'npm.cmd run scan:docs',
     status: 'configured',
     risk: 'docs',
-    protects: 'Blueprint, progress, execution matrix, and release checklist freshness.',
+    protects: 'Compact README accuracy and absence of stale planning/process artifacts.',
   },
   {
     id: 'diff-check',
