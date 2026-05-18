@@ -12,8 +12,18 @@ import {
   type GatewayScope,
 } from '../../shared/gatewayRuntime.js';
 import { KNOWLEDGE_RUNTIME_POLICY, lexicalEmbedding } from '../../shared/knowledgeRuntime.js';
+import type { ChatStreamEventPayload } from '../../shared/ipc.js';
+import type { ChatResponse } from '../../shared/types.js';
 
 let server: Server | null = null;
+const SSE_HEADERS = {
+  'content-type': 'text/event-stream; charset=utf-8',
+  'cache-control': 'no-cache, no-transform',
+  connection: 'keep-alive',
+  'access-control-allow-origin': 'http://127.0.0.1',
+  'access-control-allow-methods': 'GET,POST,OPTIONS',
+  'access-control-allow-headers': 'authorization,content-type',
+} as const;
 
 export async function startLocalGateway(): Promise<void> {
   if (server) {
@@ -133,6 +143,14 @@ async function handleChatCompletions(request: IncomingMessage, response: ServerR
   const lastUser = [...messages].reverse().find((message) => message?.role === 'user');
   const content = typeof lastUser?.content === 'string' ? lastUser.content : JSON.stringify(lastUser?.content ?? '');
   const modelId = store.resolveGatewayModelId(typeof body.model === 'string' ? body.model : undefined);
+  const stream = body.stream === true;
+  if (stream) {
+    await handleStreamingChatCompletions(request, response, startedAt, auth, {
+      content: content || 'External gateway request',
+      modelId,
+    });
+    return;
+  }
   const result = await store.sendMessage({
     content: content || 'External gateway request',
     modelId,
@@ -181,6 +199,128 @@ async function handleChatCompletions(request: IncomingMessage, response: ServerR
   }
   writeJson(response, 200, payload);
   recordGatewayEvent(request, GATEWAY_ENDPOINT.chatCompletions, 200, startedAt, auth.key, auth.scope, null, result.requestLog.id);
+}
+
+async function handleStreamingChatCompletions(
+  request: IncomingMessage,
+  response: ServerResponse,
+  startedAt: number,
+  auth: ReturnType<typeof authorize>,
+  input: { content: string; modelId?: string },
+): Promise<void> {
+  let streamOpened = false;
+  let requestLogId: string | null = null;
+  let completed = false;
+  const created = Math.floor(Date.now() / 1000);
+  const clientRequestId = `gwstream_${startedAt}_${Math.random().toString(16).slice(2)}`;
+
+  const openStream = () => {
+    if (streamOpened) return;
+    response.writeHead(200, SSE_HEADERS);
+    response.write(': nexachat stream\n\n');
+    streamOpened = true;
+  };
+
+  try {
+    const result = await store.sendMessage({
+      content: input.content,
+      modelId: input.modelId,
+      clientRequestId,
+      contextStrategy: 'recent_n',
+      metadata: {
+        gatewayStream: true,
+      },
+    }, {
+      onEvent(payload: unknown) {
+        const event = payload as Omit<ChatStreamEventPayload, 'requestId'>;
+        if (event.type === 'chat.stream.started') {
+          requestLogId = event.clientRequestId ?? requestLogId;
+          openStream();
+          return;
+        }
+        if (event.type === 'chat.stream.chunk' && event.chunk) {
+          openStream();
+          writeSse(response, {
+            id: event.clientRequestId ?? requestLogId ?? clientRequestId,
+            object: 'chat.completion.chunk',
+            created,
+            model: '',
+            choices: [
+              {
+                index: 0,
+                delta: {
+                  content: event.chunk,
+                },
+                finish_reason: null,
+              },
+            ],
+          });
+          return;
+        }
+        if (event.type === 'chat.stream.failed' || event.type === 'chat.stream.canceled') {
+          openStream();
+          writeSse(response, {
+            error: {
+              message: event.error ?? event.message ?? 'Provider invocation failed.',
+              type: event.type === 'chat.stream.canceled' ? 'cancelled' : 'provider_error',
+            },
+            nexachat: {
+              requestLogId: event.clientRequestId ?? requestLogId,
+              conversationId: event.conversationId,
+            },
+          }, 'error');
+        }
+      },
+    });
+
+    requestLogId = result.requestLog.id;
+    if (result.requestLog.status === 'failed') {
+      const errorPayload = {
+        error: {
+          message: result.requestLog.errorMessage ?? 'Provider invocation failed.',
+          type: result.requestLog.errorCode ?? 'provider_error',
+        },
+        nexachat: {
+          conversationId: result.conversation.id,
+          requestLogId: result.requestLog.id,
+          routeDecision: result.routeDecision,
+        },
+      };
+      if (!streamOpened) {
+        writeJson(response, 502, errorPayload);
+      } else {
+        writeSse(response, errorPayload, 'error');
+        endSse(response);
+      }
+      recordGatewayEvent(request, GATEWAY_ENDPOINT.chatCompletions, 502, startedAt, auth.key, auth.scope, 'provider_error', result.requestLog.id);
+      return;
+    }
+
+    openStream();
+    if ((result.chunks ?? []).length === 0) {
+      writeSse(response, buildStreamingChunk(result, '', null, created));
+    }
+    writeSse(response, buildStreamingChunk(result, '', result.assistantMessage.finishReason ?? 'stop', created));
+    writeSse(response, {
+      nexachat: {
+        conversationId: result.conversation.id,
+        requestLogId: result.requestLog.id,
+        routeDecision: result.routeDecision,
+      },
+      usage: {
+        prompt_tokens: result.assistantMessage.inputTokens ?? 0,
+        completion_tokens: result.assistantMessage.outputTokens ?? 0,
+        total_tokens: (result.assistantMessage.inputTokens ?? 0) + (result.assistantMessage.outputTokens ?? 0),
+      },
+    }, 'nexachat.completed');
+    endSse(response);
+    completed = true;
+    recordGatewayEvent(request, GATEWAY_ENDPOINT.chatCompletions, 200, startedAt, auth.key, auth.scope, null, result.requestLog.id);
+  } finally {
+    if (streamOpened && !completed && !response.writableEnded) {
+      endSse(response);
+    }
+  }
 }
 
 async function handleEmbeddings(request: IncomingMessage, response: ServerResponse, startedAt: number): Promise<void> {
@@ -250,6 +390,33 @@ function writeJson(response: ServerResponse, statusCode: number, payload: unknow
     'access-control-max-age': '600',
   });
   response.end(statusCode === 204 ? undefined : JSON.stringify(payload));
+}
+
+function writeSse(response: ServerResponse, payload: unknown, event?: string): void {
+  if (event) {
+    response.write(`event: ${event}\n`);
+  }
+  response.write(`data: ${JSON.stringify(payload)}\n\n`);
+}
+
+function endSse(response: ServerResponse): void {
+  response.end('data: [DONE]\n\n');
+}
+
+function buildStreamingChunk(result: ChatResponse, content: string, finishReason: string | null, created: number): Record<string, unknown> {
+  return {
+    id: result.requestLog.gatewayRequestId ?? result.requestLog.id,
+    object: 'chat.completion.chunk',
+    created,
+    model: result.routeDecision.modelNameSnapshot,
+    choices: [
+      {
+        index: 0,
+        delta: content ? { content } : {},
+        finish_reason: finishReason,
+      },
+    ],
+  };
 }
 
 function writeGatewayError(response: ServerResponse, code: GatewayErrorCode, message = GATEWAY_ERROR_MESSAGES[code]): void {

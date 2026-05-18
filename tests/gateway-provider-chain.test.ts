@@ -8,6 +8,7 @@ let gateway: Server | null = null;
 let upstreamBaseUrl = '';
 let dataDir = '';
 let upstreamStatus = 200;
+let upstreamMode: 'json' | 'stream' = 'json';
 
 vi.mock('electron', () => ({
   app: {
@@ -23,6 +24,7 @@ vi.mock('electron', () => ({
 beforeEach(async () => {
   vi.resetModules();
   upstreamStatus = 200;
+  upstreamMode = 'json';
   dataDir = join(process.cwd(), 'test-results', `round-06-gateway-${Date.now()}-${Math.random().toString(16).slice(2)}`);
   mkdirSync(dataDir, { recursive: true });
   process.env.NEXACHAT_DATA_DIR = dataDir;
@@ -114,6 +116,124 @@ describe('local gateway provider forwarding chain', () => {
     expect(body.nexachat?.requestLogId).toBeTruthy();
     expect(store.getGatewayLogs().some((entry) => entry.statusCode === 502)).toBe(true);
   });
+
+  it('streams /v1/chat/completions as OpenAI-compatible SSE chunks', async () => {
+    const { store } = await import('../src/main/services/store');
+    const { createLocalGatewayServer } = await import('../src/main/services/localGateway');
+    const provider = store.createProvider({
+      name: 'Gateway Streaming Upstream',
+      type: 'openai-compatible',
+      baseUrl: upstreamBaseUrl,
+      apiKey: 'sk-gateway-secret',
+    });
+    const model = store.createModel({ providerId: provider.id, name: 'gateway-chat', supportsStreaming: true });
+    const createdKey = store.createGatewayKey('Round streaming gateway smoke');
+    upstreamMode = 'stream';
+    gateway = createLocalGatewayServer();
+    const gatewayUrl = await listen(gateway);
+
+    const response = await fetch(`${gatewayUrl}/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${createdKey.key}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: model.name,
+        stream: true,
+        messages: [{ role: 'user', content: 'gateway should stream' }],
+      }),
+    });
+    const text = await response.text();
+    const events = parseSse(text);
+    const chunks = events
+      .filter((event) => event.data !== '[DONE]' && event.event === null)
+      .map((event) => JSON.parse(event.data) as { choices?: Array<{ delta?: { content?: string }; finish_reason?: string | null }> });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+    expect(chunks.map((chunk) => chunk.choices?.[0]?.delta?.content).filter(Boolean)).toEqual(['gateway ', 'streaming ', 'response']);
+    expect(chunks.some((chunk) => chunk.choices?.[0]?.finish_reason === 'stop')).toBe(true);
+    expect(events.some((event) => event.event === 'nexachat.completed')).toBe(true);
+    expect(events.at(-1)?.data).toBe('[DONE]');
+    expect(JSON.stringify(chunks)).not.toContain('Mock response');
+    expect(store.getUsageRecords()).toHaveLength(1);
+    expect(store.getGatewayLogs().some((entry) => entry.statusCode === 200 && entry.path === '/v1/chat/completions')).toBe(true);
+  });
+
+  it('rejects unauthorized streaming requests before opening SSE', async () => {
+    const { store } = await import('../src/main/services/store');
+    const { createLocalGatewayServer } = await import('../src/main/services/localGateway');
+    const provider = store.createProvider({
+      name: 'Gateway Unauthorized Streaming Upstream',
+      type: 'openai-compatible',
+      baseUrl: upstreamBaseUrl,
+      apiKey: 'sk-gateway-secret',
+    });
+    store.createModel({ providerId: provider.id, name: 'gateway-chat', supportsStreaming: true });
+    gateway = createLocalGatewayServer();
+    const gatewayUrl = await listen(gateway);
+
+    const response = await fetch(`${gatewayUrl}/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer nxk_invalid',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gateway-chat',
+        stream: true,
+        messages: [{ role: 'user', content: 'should not stream' }],
+      }),
+    });
+    const body = await response.json() as { error?: { type?: string } };
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get('content-type')).toContain('application/json');
+    expect(body.error?.type).toBe('invalid_key');
+    expect(store.getUsageRecords()).toHaveLength(0);
+    expect(store.getGatewayLogs().some((entry) => entry.statusCode === 401 && entry.errorCode === 'invalid_key')).toBe(true);
+  });
+
+  it('enforces streaming quota before opening SSE', async () => {
+    const { store } = await import('../src/main/services/store');
+    const { createLocalGatewayServer } = await import('../src/main/services/localGateway');
+    const provider = store.createProvider({
+      name: 'Gateway Quota Streaming Upstream',
+      type: 'openai-compatible',
+      baseUrl: upstreamBaseUrl,
+      apiKey: 'sk-gateway-secret',
+    });
+    store.createModel({ providerId: provider.id, name: 'gateway-chat', supportsStreaming: true });
+    const createdKey = store.createGatewayKey({
+      name: 'Round streaming quota key',
+      scopes: ['chat:write'],
+      quotaLimit: 0,
+      rateLimitPerMinute: 10,
+    });
+    gateway = createLocalGatewayServer();
+    const gatewayUrl = await listen(gateway);
+
+    const response = await fetch(`${gatewayUrl}/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${createdKey.key}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gateway-chat',
+        stream: true,
+        messages: [{ role: 'user', content: 'quota should stop stream' }],
+      }),
+    });
+    const body = await response.json() as { error?: { type?: string } };
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get('content-type')).toContain('application/json');
+    expect(body.error?.type).toBe('quota_exceeded');
+    expect(store.getUsageRecords()).toHaveLength(0);
+    expect(store.getGatewayLogs().some((entry) => entry.statusCode === 429 && entry.errorCode === 'quota_exceeded')).toBe(true);
+  });
 });
 
 function handleUpstream(request: IncomingMessage, response: ServerResponse): void {
@@ -122,6 +242,14 @@ function handleUpstream(request: IncomingMessage, response: ServerResponse): voi
     return;
   }
   if (request.url === '/v1/chat/completions') {
+    if (upstreamMode === 'stream' && upstreamStatus === 200) {
+      response.writeHead(200, { 'content-type': 'text/event-stream' });
+      response.write('data: {"choices":[{"delta":{"content":"gateway "}}]}\n\n');
+      response.write('data: {"choices":[{"delta":{"content":"streaming "}}]}\n\n');
+      response.write('data: {"choices":[{"delta":{"content":"response"},"finish_reason":"stop"}],"usage":{"prompt_tokens":4,"completion_tokens":6,"total_tokens":10}}\n\n');
+      response.end('data: [DONE]\n\n');
+      return;
+    }
     writeJson(response, upstreamStatus, upstreamStatus === 200
       ? {
           id: 'gateway_chatcmpl_test',
@@ -139,6 +267,22 @@ function handleUpstream(request: IncomingMessage, response: ServerResponse): voi
 function writeJson(response: ServerResponse, statusCode: number, payload: unknown): void {
   response.writeHead(statusCode, { 'content-type': 'application/json; charset=utf-8' });
   response.end(JSON.stringify(payload));
+}
+
+function parseSse(text: string): Array<{ event: string | null; data: string }> {
+  return text
+    .split(/\n\n/)
+    .map((block) => block.trim())
+    .filter((block) => block && !block.startsWith(':'))
+    .map((block) => {
+      const eventLine = block.split(/\n/).find((line) => line.startsWith('event: '));
+      const dataLine = block.split(/\n/).find((line) => line.startsWith('data: '));
+      return {
+        event: eventLine ? eventLine.slice('event: '.length) : null,
+        data: dataLine ? dataLine.slice('data: '.length) : '',
+      };
+    })
+    .filter((event) => event.data);
 }
 
 async function listen(server: Server): Promise<string> {
