@@ -27,6 +27,10 @@ describe('IPC contract authority', () => {
     expect(() => assertIpcPayload(IPC_CHANNELS.providerSaveFromDiscovery, [{ providerName: 'Detected', providerType: 'openai-compatible', baseUrl: 'https://api.example.com/v1', modelNames: ['chat'] }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.providerDelete, ['provider_1'])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.providerModelsFetch, ['provider_1'])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.modelUpdate, [{ modelId: 'model_1', displayName: 'Updated model', supportsStreaming: true }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.modelDisable, [{ modelId: 'model_1' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.modelEnable, [{ modelId: 'model_1' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.modelDelete, [{ modelId: 'model_1' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.chatSendMessage, [])).toThrow(/Invalid IPC payload/);
     expect(() => assertIpcPayload(IPC_CHANNELS.chatListConversations, [])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.chatListConversations, [{ limit: 30, offset: 0 }])).not.toThrow();
@@ -70,6 +74,16 @@ describe('IPC contract authority', () => {
       .toThrow(/timeoutMs/);
     expect(() => assertIpcPayload(IPC_CHANNELS.providerSaveFromDiscovery, [{ providerName: 'Detected', providerType: 'openai-compatible', baseUrl: 'https://api.example.com/v1', modelNames: Array.from({ length: 201 }, (_, index) => `m${index}`) }]))
       .toThrow(/modelNames/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.modelUpdate, [{ modelId: 'model_1', displayName: 'Updated model', unsafe: true }]))
+      .toThrow(/unsupported fields: unsafe/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.modelUpdate, [{ modelId: 'model_1', contextWindow: 0 }]))
+      .toThrow(/contextWindow/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.modelDisable, [{}]))
+      .toThrow(/modelId/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.modelEnable, [{ modelId: 42 }]))
+      .toThrow(/modelId/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.modelDelete, [{ modelId: 'model_1', hardDelete: true }]))
+      .toThrow(/unsupported fields: hardDelete/);
     expect(() => assertIpcPayload(IPC_CHANNELS.gatewayCreateKey, [{ name: 'Gateway Key', scopes: ['responses:write'] }]))
       .toThrow(/unsupported scope/);
     expect(() => assertIpcPayload(IPC_CHANNELS.gatewayUpdateKey, [{ gatewayKeyId: 'gkey_1', quotaLimit: -1 }]))

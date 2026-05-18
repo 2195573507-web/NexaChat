@@ -285,6 +285,7 @@ export interface Model {
   healthStatus: HealthStatus;
   latencyMs: number | null;
   enabled: boolean;
+  deletedAt: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -298,6 +299,21 @@ export interface ModelInput {
   supportsTools?: boolean;
   supportsVision?: boolean;
   supportsEmbeddings?: boolean;
+}
+
+export interface ModelUpdateInput {
+  modelId: string;
+  name?: string;
+  displayName?: string;
+  contextWindow?: number;
+  supportsStreaming?: boolean;
+  supportsTools?: boolean;
+  supportsVision?: boolean;
+  supportsEmbeddings?: boolean;
+}
+
+export interface ModelStateInput {
+  modelId: string;
 }
 
 export interface ProviderModelOption {
@@ -1166,6 +1182,7 @@ export interface AppSnapshot {
   conversationExports: ConversationExport[];
   providers: Provider[];
   models: Model[];
+  disabledModels: Model[];
   requestLogs: RequestLog[];
   gatewayLogs: GatewayLog[];
   usageRecords: UsageRecord[];

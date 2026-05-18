@@ -48,6 +48,8 @@ import type {
   MessagePageInput,
   Model,
   ModelInput,
+  ModelStateInput,
+  ModelUpdateInput,
   Provider,
   ProviderDiscoveryRequest,
   ProviderDiscoveryResult,
@@ -84,6 +86,10 @@ export interface AppApi {
   deleteProvider(providerId: string): Promise<Provider>;
   fetchProviderModels(providerId: string): Promise<ProviderModelOption[]>;
   createModel(input: ModelInput): Promise<Model>;
+  updateModel(input: ModelUpdateInput): Promise<Model>;
+  disableModel(input: ModelStateInput): Promise<Model>;
+  enableModel(input: ModelStateInput): Promise<Model>;
+  deleteModel(input: ModelStateInput): Promise<Model>;
   testProvider(providerId: string): Promise<Provider>;
   sendMessage(input: SendMessageInput): Promise<ChatResponse>;
   retryMessage(input: RetryMessageInput): Promise<ChatResponse>;
@@ -150,6 +156,10 @@ export const APP_API_METHODS = [
   'deleteProvider',
   'fetchProviderModels',
   'createModel',
+  'updateModel',
+  'disableModel',
+  'enableModel',
+  'deleteModel',
   'testProvider',
   'sendMessage',
   'retryMessage',

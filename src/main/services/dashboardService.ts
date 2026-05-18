@@ -21,6 +21,7 @@ export function DashboardService<TBase extends ServiceConstructor<ServiceContext
       conversationExports: this.getConversationExports(),
       providers: this.getProviders(),
       models: this.getModels(),
+      disabledModels: this.getDisabledModels(),
       requestLogs: this.getRequestLogs().slice(0, 30),
       gatewayLogs: this.listGatewayLogs({ limit: 30 }).items,
       usageRecords: this.getUsageRecords().slice(0, 30),

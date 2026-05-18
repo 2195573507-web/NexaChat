@@ -5,6 +5,8 @@ import { SECURITY_ACTION_PERMISSIONS } from '../../shared/securityRuntime.js';
 import type {
   Model,
   ModelInput,
+  ModelStateInput,
+  ModelUpdateInput,
   Provider,
   ProviderModelOption
 } from '../../shared/types.js';
@@ -19,6 +21,10 @@ export function ModelService<TBase extends ServiceConstructor<ServiceContext>>(B
   return class ModelService extends Base {
   getModels(): Model[] {
     return this.repositories.model.listModels();
+  }
+
+  getDisabledModels(): Model[] {
+    return this.repositories.model.listDisabledModels();
   }
 
 
@@ -81,8 +87,8 @@ export function ModelService<TBase extends ServiceConstructor<ServiceContext>>(B
     const displayName = input.displayName?.trim() || input.name.trim();
     this.db
       .prepare(
-        `INSERT INTO models (id, provider_id, name, display_name, model_name_snapshot, context_window, supports_streaming, supports_tools, supports_vision, supports_embeddings, input_price, output_price, health_status, latency_ms, enabled, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'unknown', NULL, 1, ?, ?)`,
+        `INSERT INTO models (id, provider_id, name, display_name, model_name_snapshot, context_window, supports_streaming, supports_tools, supports_vision, supports_embeddings, input_price, output_price, health_status, latency_ms, enabled, deleted_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'unknown', NULL, 1, NULL, ?, ?)`,
       )
       .run(
         id,
@@ -112,6 +118,111 @@ export function ModelService<TBase extends ServiceConstructor<ServiceContext>>(B
     return this.requireModel(id);
   }
 
+  updateModel(input: ModelUpdateInput): Model {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.modelWrite, 'model', input.modelId);
+    const existing = this.requireModel(input.modelId);
+    if (existing.deletedAt !== null) {
+      throw new Error(`Model is deleted: ${input.modelId}`);
+    }
+    const name = input.name?.trim() || existing.name;
+    const displayName = input.displayName?.trim() || existing.displayName;
+    const timestamp = now();
+    this.db
+      .prepare(
+        `UPDATE models
+         SET name = ?,
+             display_name = ?,
+             context_window = ?,
+             supports_streaming = ?,
+             supports_tools = ?,
+             supports_vision = ?,
+             supports_embeddings = ?,
+             updated_at = ?
+         WHERE id = ?`,
+      )
+      .run(
+        name,
+        displayName,
+        input.contextWindow ?? existing.contextWindow,
+        input.supportsStreaming === undefined ? (existing.supportsStreaming ? 1 : 0) : input.supportsStreaming ? 1 : 0,
+        input.supportsTools === undefined ? (existing.supportsTools ? 1 : 0) : input.supportsTools ? 1 : 0,
+        input.supportsVision === undefined ? (existing.supportsVision ? 1 : 0) : input.supportsVision ? 1 : 0,
+        input.supportsEmbeddings === undefined ? (existing.supportsEmbeddings ? 1 : 0) : input.supportsEmbeddings ? 1 : 0,
+        timestamp,
+        input.modelId,
+      );
+    this.audit('model.updated', 'model', input.modelId, {
+      name,
+      displayName,
+      contextWindow: input.contextWindow ?? existing.contextWindow,
+    }, SECURITY_ACTION_PERMISSIONS.modelWrite);
+    return this.requireModel(input.modelId);
+  }
+
+  disableModel(input: ModelStateInput): Model {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.modelWrite, 'model', input.modelId);
+    return this.setModelAvailability(input.modelId, false, false);
+  }
+
+  enableModel(input: ModelStateInput): Model {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.modelWrite, 'model', input.modelId);
+    return this.setModelAvailability(input.modelId, true, false);
+  }
+
+  deleteModel(input: ModelStateInput): Model {
+    this.requirePermission(SECURITY_ACTION_PERMISSIONS.modelWrite, 'model', input.modelId);
+    return this.setModelAvailability(input.modelId, false, true);
+  }
+
+  private setModelAvailability(modelId: string, enabled: boolean, deleted: boolean): Model {
+    const existing = this.requireModel(modelId);
+    const provider = this.requireProvider(existing.providerId);
+    if (enabled && (!provider.enabled || existing.deletedAt !== null)) {
+      throw new Error(`Model cannot be enabled: ${modelId}`);
+    }
+    const timestamp = now();
+    const nextHealthStatus = enabled && existing.healthStatus !== 'error' ? existing.healthStatus : 'unknown';
+    try {
+      this.db.exec('BEGIN IMMEDIATE');
+      this.db
+        .prepare('UPDATE models SET enabled = ?, health_status = ?, latency_ms = NULL, deleted_at = CASE WHEN ? THEN ? ELSE NULL END, updated_at = ? WHERE id = ?')
+        .run(enabled ? 1 : 0, nextHealthStatus, deleted ? 1 : 0, deleted ? timestamp : null, timestamp, modelId);
+      this.db
+        .prepare('UPDATE model_aliases SET enabled = ?, updated_at = ? WHERE model_id = ?')
+        .run(enabled ? 1 : 0, timestamp, modelId);
+      if (!enabled) {
+        this.clearModelDefaults(modelId, timestamp);
+      }
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+
+    const action = deleted ? 'model.deleted' : enabled ? 'model.enabled' : 'model.disabled';
+    this.audit(action, 'model', modelId, {
+      providerId: existing.providerId,
+      mode: deleted ? 'soft-delete' : 'availability',
+    }, SECURITY_ACTION_PERMISSIONS.modelWrite);
+    return this.requireModel(modelId);
+  }
+
+  private clearModelDefaults(modelId: string, timestamp: number): void {
+    this.db
+      .prepare(
+        `UPDATE workspaces
+         SET default_model_id = NULL, updated_at = ?
+         WHERE default_model_id = ?`,
+      )
+      .run(timestamp, modelId);
+    this.db
+      .prepare(
+        `UPDATE conversations
+         SET default_model_id = NULL, updated_at = ?
+         WHERE default_model_id = ?`,
+      )
+      .run(timestamp, modelId);
+  }
 
   resolveGatewayModelId(modelName: string | undefined): string | undefined {
     if (!modelName) {

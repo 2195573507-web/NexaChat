@@ -273,6 +273,7 @@ function createSeedState(): MockState {
       healthStatus: 'healthy',
       latencyMs: 42,
       enabled: true,
+      deletedAt: null,
       createdAt: timestamp,
       updatedAt: timestamp,
     },
@@ -576,7 +577,8 @@ function buildSnapshot(state: MockState): AppSnapshot {
   const activeKnowledgeChunks = state.knowledgeChunks.filter((chunk) => chunk.status !== 'deleted' && activeKnowledgeFileIds.has(chunk.fileId));
   const activeKnowledgeCitations = state.knowledgeCitations.filter((citation) => activeKnowledgeFileIds.has(citation.fileId));
   const activeProviders = state.providers.filter((provider) => provider.enabled);
-  const activeModels = state.models.filter((model) => model.enabled && activeProviders.some((provider) => provider.id === model.providerId));
+  const activeModels = state.models.filter((model) => model.enabled && !model.deletedAt && activeProviders.some((provider) => provider.id === model.providerId));
+  const disabledModels = state.models.filter((model) => !model.enabled || Boolean(model.deletedAt));
   const dayStart = new Date();
   dayStart.setHours(0, 0, 0, 0);
   const usageToday = state.usageRecords
@@ -639,6 +641,7 @@ function buildSnapshot(state: MockState): AppSnapshot {
     conversationExports: state.conversationExports,
     providers: activeProviders,
     models: activeModels,
+    disabledModels,
     requestLogs: state.requestLogs,
     gatewayLogs: state.gatewayLogs.slice(0, 24),
     usageRecords: state.usageRecords.slice(0, 24),
@@ -977,6 +980,35 @@ export function createMockApi(): AppApi {
     state.workspace.updatedAt = now();
   }
 
+  function setMockModelAvailability(modelId: string, enabled: boolean, deleted: boolean): Model {
+    const model = findById(state.models, modelId, 'Model');
+    const provider = findById(state.providers, model.providerId, 'Provider');
+    if (enabled && (!provider.enabled || model.deletedAt)) {
+      throw new Error(`Model cannot be enabled: ${modelId}`);
+    }
+    const timestamp = now();
+    const previousHealth = model.healthStatus;
+    model.enabled = enabled;
+    model.deletedAt = deleted ? timestamp : null;
+    model.healthStatus = enabled ? previousHealth : 'unknown';
+    model.latencyMs = enabled ? model.latencyMs : null;
+    model.updatedAt = timestamp;
+    if (!enabled) {
+      if (state.workspace.defaultModelId === model.id) {
+        state.workspace.defaultModelId = null;
+      }
+      state.conversations.forEach((conversation) => {
+        if (conversation.defaultModelId === model.id) {
+          conversation.defaultModelId = null;
+          conversation.updatedAt = timestamp;
+        }
+      });
+      touchWorkspace();
+    }
+    pushAudit(deleted ? 'model.deleted' : enabled ? 'model.enabled' : 'model.disabled', 'model', model.id, { providerId: model.providerId });
+    return model;
+  }
+
   function createResult(action: ImportExportResult['action'], summary: string, redacted: boolean, options: { failed?: boolean; conflictCount?: number } = {}): ImportExportResult {
     const timestamp = now();
     const status: ImportExportResult['status'] = options.failed ? 'failed' : action === 'import' || action === 'restore-preflight' || action === 'cleanup-preview' ? 'ready' : 'completed';
@@ -1222,7 +1254,7 @@ export function createMockApi(): AppApi {
         createdAt: timestamp,
       });
       const options = [
-        ...state.models.filter((model) => model.providerId === provider.id && model.enabled).map((model) => model.name),
+        ...state.models.filter((model) => model.providerId === provider.id && model.enabled && !model.deletedAt).map((model) => model.name),
         `${slug}-chat`,
         `${slug}-fast`,
       ];
@@ -1253,6 +1285,7 @@ export function createMockApi(): AppApi {
         healthStatus: 'unknown',
         latencyMs: null,
         enabled: true,
+        deletedAt: null,
         createdAt: timestamp,
         updatedAt: timestamp,
       };
@@ -1264,6 +1297,36 @@ export function createMockApi(): AppApi {
       touchWorkspace();
       pushAudit('model.create', 'model', model.id, { providerId: model.providerId });
       return clone(model);
+    },
+
+    async updateModel(input) {
+      const model = findById(state.models, input.modelId, 'Model');
+      if (model.deletedAt) {
+        throw new Error(`Model is deleted: ${input.modelId}`);
+      }
+      const timestamp = now();
+      model.name = input.name?.trim() || model.name;
+      model.displayName = input.displayName?.trim() || model.displayName;
+      model.contextWindow = input.contextWindow ?? model.contextWindow;
+      model.supportsStreaming = input.supportsStreaming ?? model.supportsStreaming;
+      model.supportsTools = input.supportsTools ?? model.supportsTools;
+      model.supportsVision = input.supportsVision ?? model.supportsVision;
+      model.supportsEmbeddings = input.supportsEmbeddings ?? model.supportsEmbeddings;
+      model.updatedAt = timestamp;
+      pushAudit('model.update', 'model', model.id, { providerId: model.providerId });
+      return clone(model);
+    },
+
+    async disableModel(input) {
+      return clone(setMockModelAvailability(input.modelId, false, false));
+    },
+
+    async enableModel(input) {
+      return clone(setMockModelAvailability(input.modelId, true, false));
+    },
+
+    async deleteModel(input) {
+      return clone(setMockModelAvailability(input.modelId, false, true));
     },
 
     async testProvider(providerId: string) {

@@ -347,6 +347,37 @@ describe('NexaChat renderer', () => {
     expect(activePanel()).not.toHaveTextContent('Local Mock Provider');
   });
 
+  it('edits, disables, shows, and restores a model from the model catalog', async () => {
+    await renderApp();
+
+    const models = navModules.find((module) => module.id === 'models')!;
+    openFeature(models, models.tabs.find((tab) => tab.id === 'catalog')!);
+
+    fireEvent.click(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'models.edit') }));
+    fireEvent.change(within(activePanel()).getByLabelText(translate('zh-CN', 'models.displayName')), { target: { value: 'Readable Mock Model' } });
+    fireEvent.click(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'common.saved') }));
+
+    await waitFor(() => {
+      expect(activePanel()).toHaveTextContent('Readable Mock Model');
+    });
+
+    fireEvent.click(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'models.disable') }));
+
+    await waitFor(() => {
+      expect(activePanel()).toHaveTextContent(translate('zh-CN', 'models.disabled.title'));
+      expect(activePanel()).toHaveTextContent(`${translate('zh-CN', 'models.disabled')} / nexachat-mock`);
+    });
+    expect(within(activePanel()).queryByRole('button', { name: translate('zh-CN', 'models.disable') })).not.toBeInTheDocument();
+
+    fireEvent.click(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'models.enable') }));
+
+    await waitFor(() => {
+      expect(activePanel()).toHaveTextContent('Readable Mock Model');
+      expect(activePanel()).not.toHaveTextContent(translate('zh-CN', 'models.disabled.title'));
+    });
+    expect(within(activePanel()).getByRole('button', { name: translate('zh-CN', 'models.disable') })).toBeInTheDocument();
+  });
+
   it('detects and confirms a Provider through the simple Smart Add flow', async () => {
     await renderApp();
 

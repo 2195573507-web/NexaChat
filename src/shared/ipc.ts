@@ -16,6 +16,8 @@ import type {
   KnowledgeRetrievalInput,
   McpServer,
   ModelInput,
+  ModelStateInput,
+  ModelUpdateInput,
   ProviderDiscoveryRequest,
   ProviderInput,
   ProviderSaveFromDiscoveryRequest,
@@ -49,6 +51,10 @@ export const IPC_CHANNELS = {
   providerModelsFetch: 'provider:models:fetch',
   providerTest: 'provider:test',
   modelCreate: 'model:create',
+  modelUpdate: 'model:update',
+  modelDisable: 'model:disable',
+  modelEnable: 'model:enable',
+  modelDelete: 'model:delete',
   chatCreateConversation: 'chat:createConversation',
   chatSendMessage: 'chat:sendMessage',
   chatRetryMessage: 'chat:retryMessage',
@@ -182,6 +188,10 @@ export type IpcInvokeArgs = {
   [IPC_CHANNELS.providerModelsFetch]: [string];
   [IPC_CHANNELS.providerTest]: [string];
   [IPC_CHANNELS.modelCreate]: [ModelInput];
+  [IPC_CHANNELS.modelUpdate]: [ModelUpdateInput];
+  [IPC_CHANNELS.modelDisable]: [ModelStateInput];
+  [IPC_CHANNELS.modelEnable]: [ModelStateInput];
+  [IPC_CHANNELS.modelDelete]: [ModelStateInput];
   [IPC_CHANNELS.chatCreateConversation]: [string?];
   [IPC_CHANNELS.chatSendMessage]: [SendMessageInput];
   [IPC_CHANNELS.chatRetryMessage]: [RetryMessageInput];
@@ -434,6 +444,25 @@ function validateModelInput(input: unknown): string | null {
   );
 }
 
+function validateModelUpdateInput(input: unknown): string | null {
+  const value = validateObject(input, 'model update input', ['modelId', 'name', 'displayName', 'contextWindow', 'supportsStreaming', 'supportsTools', 'supportsVision', 'supportsEmbeddings']);
+  if (typeof value === 'string') return value;
+  return (
+    requireString(value, 'modelId', { max: 120 }) ??
+    optionalString(value, 'name', 180) ??
+    optionalString(value, 'displayName', 180) ??
+    optionalNumberOrNull(value, 'contextWindow', { min: 1, max: 10_000_000 }) ??
+    optionalBoolean(value, 'supportsStreaming') ??
+    optionalBoolean(value, 'supportsTools') ??
+    optionalBoolean(value, 'supportsVision') ??
+    optionalBoolean(value, 'supportsEmbeddings')
+  );
+}
+
+function validateModelStateInput(input: unknown, label = 'model state input'): string | null {
+  return validateIdObject(input, label, 'modelId');
+}
+
 function validateGatewayScopes(value: Record<string, unknown>, key: string): string | null {
   const current = value[key];
   if (current === undefined) return null;
@@ -556,6 +585,10 @@ const ipcPayloadValidators: Partial<Record<IpcChannel, IpcPayloadValidator>> = {
   [IPC_CHANNELS.providerSaveFromDiscovery]: ([input]) => validateProviderSaveFromDiscovery(input),
   [IPC_CHANNELS.providerCreate]: ([input]) => validateProviderInput(input),
   [IPC_CHANNELS.modelCreate]: ([input]) => validateModelInput(input),
+  [IPC_CHANNELS.modelUpdate]: ([input]) => validateModelUpdateInput(input),
+  [IPC_CHANNELS.modelDisable]: ([input]) => validateModelStateInput(input, 'model disable input'),
+  [IPC_CHANNELS.modelEnable]: ([input]) => validateModelStateInput(input, 'model enable input'),
+  [IPC_CHANNELS.modelDelete]: ([input]) => validateModelStateInput(input, 'model delete input'),
   [IPC_CHANNELS.gatewayCreateKey]: ([input]) => validateGatewayCreateKey(input),
   [IPC_CHANNELS.gatewayUpdateKey]: ([input]) => validateGatewayUpdateKey(input),
   [IPC_CHANNELS.gatewayRotateKey]: ([input]) => validateIdObject(input, 'gateway key rotate input', 'gatewayKeyId'),
@@ -618,6 +651,10 @@ const ipcPayloadArity: Record<IpcChannel, { min: number; max: number }> = {
   [IPC_CHANNELS.providerModelsFetch]: { min: 1, max: 1 },
   [IPC_CHANNELS.providerTest]: { min: 1, max: 1 },
   [IPC_CHANNELS.modelCreate]: { min: 1, max: 1 },
+  [IPC_CHANNELS.modelUpdate]: { min: 1, max: 1 },
+  [IPC_CHANNELS.modelDisable]: { min: 1, max: 1 },
+  [IPC_CHANNELS.modelEnable]: { min: 1, max: 1 },
+  [IPC_CHANNELS.modelDelete]: { min: 1, max: 1 },
   [IPC_CHANNELS.chatCreateConversation]: { min: 0, max: 1 },
   [IPC_CHANNELS.chatSendMessage]: { min: 1, max: 1 },
   [IPC_CHANNELS.chatRetryMessage]: { min: 1, max: 1 },

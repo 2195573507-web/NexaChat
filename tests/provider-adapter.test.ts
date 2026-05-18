@@ -49,6 +49,7 @@ const model: Model = {
   healthStatus: 'unknown',
   latencyMs: null,
   enabled: true,
+  deletedAt: null,
   createdAt: 1,
   updatedAt: 1,
 };

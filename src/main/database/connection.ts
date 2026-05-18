@@ -86,6 +86,7 @@ function runAdditiveMigrations(db: DatabaseSync): void {
   addColumnIfMissing(db, 'gateway_logs', 'error_code', 'TEXT');
   addColumnIfMissing(db, 'gateway_logs', 'latency_ms', 'INTEGER');
   addColumnIfMissing(db, 'gateway_logs', 'remote_address', 'TEXT');
+  addColumnIfMissing(db, 'models', 'deleted_at', 'INTEGER');
   addColumnIfMissing(db, 'config_snapshots', 'rollback_snapshot_id', 'TEXT');
   addColumnIfMissing(db, 'config_snapshots', 'source', 'TEXT');
   addColumnIfMissing(db, 'config_snapshots', 'applied_entity_ids_json', 'TEXT');

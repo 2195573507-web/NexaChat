@@ -132,6 +132,78 @@ describe('provider invocation through NexaStore', () => {
     expect(store.getAuditLogs().some((entry) => entry.action === 'provider.deleted')).toBe(true);
   });
 
+  it('updates, disables, re-enables, and soft-deletes models without breaking historical records', async () => {
+    const { store } = await import('../src/main/services/store');
+    const provider = store.createProvider({
+      name: 'Round 6 Model Lifecycle Upstream',
+      type: 'openai-compatible',
+      baseUrl,
+      apiKey: 'sk-round-06-secret',
+    });
+    const model = store.createModel({
+      providerId: provider.id,
+      name: 'round-06-lifecycle',
+      displayName: 'Round 6 Lifecycle',
+      supportsStreaming: false,
+    });
+    const conversation = store.createConversation('Model lifecycle history');
+    const rawDb = store.getRawDatabaseForTesting();
+    rawDb
+      .prepare('UPDATE workspaces SET default_provider_id = ?, default_model_id = ?, updated_at = ? WHERE id = ?')
+      .run(provider.id, model.id, Date.now(), conversation.workspaceId);
+    rawDb
+      .prepare('UPDATE conversations SET default_provider_id = ?, default_model_id = ?, updated_at = ? WHERE id = ?')
+      .run(provider.id, model.id, Date.now(), conversation.id);
+    await store.sendMessage({
+      conversationId: conversation.id,
+      content: 'keep model lifecycle trace',
+      modelId: model.id,
+    });
+
+    const updated = store.updateModel({
+      modelId: model.id,
+      name: 'round-06-renamed',
+      displayName: 'Round 6 Renamed',
+      supportsStreaming: true,
+      supportsTools: true,
+    });
+
+    expect(updated.name).toBe('round-06-renamed');
+    expect(updated.displayName).toBe('Round 6 Renamed');
+    expect(updated.modelNameSnapshot).toBe('round-06-lifecycle');
+    expect(store.getMessages(conversation.id).some((message) => message.modelId === model.id && message.modelNameSnapshot === 'round-06-lifecycle')).toBe(true);
+
+    const disabled = store.disableModel({ modelId: model.id });
+
+    expect(disabled.enabled).toBe(false);
+    expect(disabled.deletedAt).toBeNull();
+    expect(store.getModels().some((item) => item.id === model.id)).toBe(false);
+    expect(store.getDisabledModels().some((item) => item.id === model.id && !item.enabled)).toBe(true);
+    expect(store.resolveGatewayModelId(updated.name)).toBeUndefined();
+    expect(store.resolveGatewayModelId('nexachat-default')).toBeUndefined();
+    expect(store.getDashboardSummary().workspace.defaultModelId).toBeNull();
+    expect(store.getConversations().find((item) => item.id === conversation.id)?.defaultModelId).toBeNull();
+    expect(store.getMessages(conversation.id).some((message) => message.modelId === model.id && message.modelNameSnapshot === 'round-06-lifecycle')).toBe(true);
+
+    const enabled = store.enableModel({ modelId: model.id });
+
+    expect(enabled.enabled).toBe(true);
+    expect(enabled.deletedAt).toBeNull();
+    expect(store.getModels().some((item) => item.id === model.id)).toBe(true);
+    expect(store.resolveGatewayModelId(updated.name)).toBe(model.id);
+
+    const deleted = store.deleteModel({ modelId: model.id });
+
+    expect(deleted.enabled).toBe(false);
+    expect(deleted.deletedAt).toEqual(expect.any(Number));
+    expect(store.getModels().some((item) => item.id === model.id)).toBe(false);
+    expect(store.getDisabledModels().some((item) => item.id === model.id && item.deletedAt !== null)).toBe(true);
+    expect(store.resolveGatewayModelId(updated.name)).toBeUndefined();
+    expect(() => store.enableModel({ modelId: model.id })).toThrow(/cannot be enabled/i);
+    expect(store.getMessages(conversation.id).some((message) => message.modelId === model.id && message.modelNameSnapshot === 'round-06-lifecycle')).toBe(true);
+    expect(store.getAuditLogs().map((entry) => entry.action)).toEqual(expect.arrayContaining(['model.updated', 'model.disabled', 'model.enabled', 'model.deleted']));
+  });
+
   it('keeps provider model discovery failures and unsupported providers on the existing adapter path', async () => {
     const { store } = await import('../src/main/services/store');
     const provider = store.createProvider({

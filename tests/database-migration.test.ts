@@ -89,6 +89,40 @@ describe('database startup migrations', () => {
         position INTEGER NOT NULL,
         created_at INTEGER NOT NULL
       );
+      CREATE TABLE providers (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        base_url TEXT NOT NULL,
+        proxy_url TEXT,
+        auth_type TEXT NOT NULL,
+        secret_ref TEXT,
+        custom_headers_json TEXT,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        health_status TEXT NOT NULL,
+        last_checked_at INTEGER,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE TABLE models (
+        id TEXT PRIMARY KEY,
+        provider_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        display_name TEXT NOT NULL,
+        model_name_snapshot TEXT NOT NULL,
+        context_window INTEGER NOT NULL,
+        supports_streaming INTEGER NOT NULL DEFAULT 1,
+        supports_tools INTEGER NOT NULL DEFAULT 0,
+        supports_vision INTEGER NOT NULL DEFAULT 0,
+        supports_embeddings INTEGER NOT NULL DEFAULT 0,
+        input_price REAL,
+        output_price REAL,
+        health_status TEXT NOT NULL,
+        latency_ms INTEGER,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
     `);
     legacyDb.close();
 
@@ -100,6 +134,7 @@ describe('database startup migrations', () => {
     expect(getColumnNames(db, 'usage_records')).toContain('workspace_id');
     expect(getColumnNames(db, 'files')).toEqual(expect.arrayContaining(['workspace_id', 'index_status', 'deleted_at']));
     expect(getColumnNames(db, 'knowledge_chunks')).toContain('status');
+    expect(getColumnNames(db, 'models')).toContain('deleted_at');
     expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_conversations_workspace_updated'").get()).toBeTruthy();
     expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_files_workspace_status'").get()).toBeTruthy();
     for (const indexName of [

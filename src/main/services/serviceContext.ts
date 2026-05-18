@@ -188,6 +188,8 @@ import type {
   MessageChunk,
   Model,
   ModelInput,
+  ModelStateInput,
+  ModelUpdateInput,
   ObservabilityExportResult,
   ObservabilitySnapshot,
   PageResult,
@@ -1769,8 +1771,13 @@ export interface ServiceContext {
   deleteProvider(providerId: string): Provider;
   testProvider(providerId: string): Promise<Provider>;
   getModels(): Model[];
+  getDisabledModels(): Model[];
   fetchProviderModels(providerId: string): Promise<ProviderModelOption[]>;
   createModel(input: ModelInput): Model;
+  updateModel(input: ModelUpdateInput): Model;
+  disableModel(input: ModelStateInput): Model;
+  enableModel(input: ModelStateInput): Model;
+  deleteModel(input: ModelStateInput): Model;
   resolveGatewayModelId(modelName: string | undefined): string | undefined;
   getConversations(): Conversation[];
   listConversations(input?: ConversationPageInput): PageResult<Conversation>;

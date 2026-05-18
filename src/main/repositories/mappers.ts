@@ -98,6 +98,7 @@ export function mapModel(row: Row): Model {
     healthStatus: String(row.health_status) as Model['healthStatus'],
     latencyMs: nullableNumber(row.latency_ms),
     enabled: bool(row.enabled),
+    deletedAt: nullableNumber(row.deleted_at),
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
   };

@@ -1,6 +1,6 @@
-import { Activity, ChevronDown, DownloadCloud, Plus, SearchCheck, Server, Trash2 } from 'lucide-react';
+import { Activity, ChevronDown, DownloadCloud, Pencil, Plus, Power, SearchCheck, Server, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import type { ProviderDiscoveryResult, ProviderModelOption, ProviderType } from '../../shared/types';
+import type { Model, ProviderDiscoveryResult, ProviderModelOption, ProviderType } from '../../shared/types';
 import { DEFAULT_MODEL_FORM, DEFAULT_PROVIDER_FORM, PROVIDER_CATALOG } from '../../shared/providerCatalog';
 import { ActivityList, CommandButton, ConfigDetail, ConfigList, DataRows, EmptyBlock, Field, InlineNotice, PageHeader, StatusPillLite, ToolSection } from '../components/AppFrame';
 import { useI18n } from '../i18n';
@@ -32,6 +32,9 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
   const [modelOptions, setModelOptions] = useState<ProviderModelOption[]>([]);
   const [modelFetchState, setModelFetchState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [modelFetchError, setModelFetchError] = useState('');
+  const [editingModelId, setEditingModelId] = useState<string | null>(null);
+  const [editingModelName, setEditingModelName] = useState('');
+  const [editingModelDisplayName, setEditingModelDisplayName] = useState('');
   const [pendingDeleteProviderId, setPendingDeleteProviderId] = useState<string | null>(null);
   const pending = useLocalPending();
   const defaultModel = getDefaultModel(snapshot);
@@ -106,6 +109,21 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
   const createSelectedModel = async () => {
     await api.createModel({ providerId: selectedProviderId, name: modelName.trim() });
     setModelName('');
+  };
+
+  const beginEditModel = (model: Model) => {
+    setEditingModelId(model.id);
+    setEditingModelName(model.name);
+    setEditingModelDisplayName(model.displayName);
+  };
+
+  const saveEditedModel = async (modelId: string) => {
+    await api.updateModel({
+      modelId,
+      name: editingModelName.trim(),
+      displayName: editingModelDisplayName.trim() || editingModelName.trim(),
+    });
+    setEditingModelId(null);
   };
 
   const detectProvider = async () => {
@@ -232,15 +250,33 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
 
           <div className="config-items">
             {snapshot.models.length > 0 ? snapshot.models.map((model) => (
-              <div className={`config-row ${model.id === defaultModel?.id ? 'is-active' : ''}`} key={model.id}>
-                <span>
-                  <strong>{model.displayName}</strong>
-                  <small>{modelCapabilityLabels(model, t)}</small>
-                </span>
-                <StatusPillLite label={statusLabel(model.healthStatus, t)} state={healthState(model.healthStatus)} />
-              </div>
+              <ModelRow
+                key={model.id}
+                model={model}
+                isDefault={model.id === defaultModel?.id}
+                editingModelId={editingModelId}
+                editingModelName={editingModelName}
+                editingModelDisplayName={editingModelDisplayName}
+                setEditingModelName={setEditingModelName}
+                setEditingModelDisplayName={setEditingModelDisplayName}
+                onBeginEdit={beginEditModel}
+                onCancelEdit={() => setEditingModelId(null)}
+                onSaveEdit={saveEditedModel}
+                api={api}
+                pending={pending}
+                onAction={onAction}
+              />
             )) : <EmptyBlock title={t('common.notConfigured')} detail={t('models.create.note')} />}
           </div>
+          {snapshot.disabledModels.length > 0 ? (
+            <ToolSection title={t('models.disabled.title')} description={t('models.disabled.note')}>
+              <div className="config-items">
+                {snapshot.disabledModels.map((model) => (
+                  <DisabledModelRow key={model.id} model={model} api={api} pending={pending} onAction={onAction} />
+                ))}
+              </div>
+            </ToolSection>
+          ) : null}
         </ConfigList>
         <ConfigDetail title={t('models.router.title')} description={t('models.router.note')}>
           <DataRows
@@ -464,6 +500,117 @@ function ProviderDiscoveryPreview({
         <InlineNotice tone="warning" title={t('models.smartAdd.nextAction')} detail={t('models.smartAdd.nextAction.detail')} />
       )}
     </section>
+  );
+}
+
+function ModelRow({
+  model,
+  isDefault,
+  editingModelId,
+  editingModelName,
+  editingModelDisplayName,
+  setEditingModelName,
+  setEditingModelDisplayName,
+  onBeginEdit,
+  onCancelEdit,
+  onSaveEdit,
+  api,
+  pending,
+  onAction,
+}: {
+  model: Model;
+  isDefault: boolean;
+  editingModelId: string | null;
+  editingModelName: string;
+  editingModelDisplayName: string;
+  setEditingModelName: (value: string) => void;
+  setEditingModelDisplayName: (value: string) => void;
+  onBeginEdit: (model: Model) => void;
+  onCancelEdit: () => void;
+  onSaveEdit: (modelId: string) => Promise<void>;
+  api: TabPageProps['api'];
+  pending: ReturnType<typeof useLocalPending>;
+  onAction: TabPageProps['onAction'];
+}) {
+  const { t } = useI18n();
+  const editing = editingModelId === model.id;
+  const updateKey = `model.update.${model.id}`;
+  const disableKey = `model.disable.${model.id}`;
+  const deleteKey = `model.delete.${model.id}`;
+  return (
+    <div className={`config-row model-row ${isDefault ? 'is-active' : ''}`} key={model.id}>
+      {editing ? (
+        <span className="model-edit-fields">
+          <input value={editingModelName} onChange={(event) => setEditingModelName(event.target.value)} aria-label={t('models.modelName')} />
+          <input value={editingModelDisplayName} onChange={(event) => setEditingModelDisplayName(event.target.value)} aria-label={t('models.displayName')} />
+        </span>
+      ) : (
+        <span>
+          <strong>{model.displayName}</strong>
+          <small>{model.name} / {modelCapabilityLabels(model, t)}</small>
+        </span>
+      )}
+      <span className="provider-row-status">
+        <StatusPillLite label={statusLabel(model.healthStatus, t)} state={healthState(model.healthStatus)} />
+      </span>
+      <span className="provider-row-actions" aria-label={`${model.displayName} ${t('chat.message.actions.aria')}`}>
+        {editing ? (
+          <>
+            <CommandButton
+              icon={<Pencil size={14} />}
+              disabled={!editingModelName.trim() || pending.isPending(updateKey)}
+              onClick={() => onAction(t('models.toast.updated'), () => pending.runPending(updateKey, () => onSaveEdit(model.id)))}
+            >
+              {pending.isPending(updateKey) ? t('app.status.busy') : t('common.saved')}
+            </CommandButton>
+            <CommandButton variant="ghost" onClick={onCancelEdit}>{t('models.edit.cancel')}</CommandButton>
+          </>
+        ) : (
+          <>
+            <CommandButton icon={<Pencil size={14} />} onClick={() => onBeginEdit(model)}>{t('models.edit')}</CommandButton>
+            <CommandButton icon={<Power size={14} />} disabled={pending.isPending(disableKey)} onClick={() => onAction(t('models.toast.disabled'), () => pending.runPending(disableKey, () => api.disableModel({ modelId: model.id })))}>{pending.isPending(disableKey) ? t('app.status.busy') : t('models.disable')}</CommandButton>
+            <CommandButton variant="danger" icon={<Trash2 size={14} />} disabled={pending.isPending(deleteKey)} onClick={() => onAction(t('models.toast.modelDeleted'), () => pending.runPending(deleteKey, () => api.deleteModel({ modelId: model.id })))}>{pending.isPending(deleteKey) ? t('app.status.busy') : t('models.deleteModel')}</CommandButton>
+          </>
+        )}
+      </span>
+      {[updateKey, disableKey, deleteKey].map((key) => pending.errorFor(key) ? <InlineNotice key={key} tone="warning" title={t('app.action.failed')} detail={pending.errorFor(key)} /> : null)}
+    </div>
+  );
+}
+
+function DisabledModelRow({
+  model,
+  api,
+  pending,
+  onAction,
+}: {
+  model: Model;
+  api: TabPageProps['api'];
+  pending: ReturnType<typeof useLocalPending>;
+  onAction: TabPageProps['onAction'];
+}) {
+  const { t } = useI18n();
+  const enableKey = `model.enable.${model.id}`;
+  const isDeleted = Boolean(model.deletedAt);
+  return (
+    <div className="config-row model-row is-disabled">
+      <span>
+        <strong>{model.displayName}</strong>
+        <small>{isDeleted ? t('models.deleted') : t('models.disabled')} / {model.modelNameSnapshot}</small>
+      </span>
+      <StatusPillLite label={isDeleted ? t('common.deleted') : t('gateway.keyState.disabled')} state="warning" />
+      <span className="provider-row-actions" aria-label={`${model.displayName} ${t('chat.message.actions.aria')}`}>
+        <CommandButton
+          icon={<Power size={14} />}
+          disabled={isDeleted || pending.isPending(enableKey)}
+          disabledReason={isDeleted ? t('models.deleted.restoreBlocked') : undefined}
+          onClick={() => onAction(t('models.toast.enabled'), () => pending.runPending(enableKey, () => api.enableModel({ modelId: model.id })))}
+        >
+          {pending.isPending(enableKey) ? t('app.status.busy') : t('models.enable')}
+        </CommandButton>
+      </span>
+      {pending.errorFor(enableKey) ? <InlineNotice tone="warning" title={t('app.action.failed')} detail={pending.errorFor(enableKey)} /> : null}
+    </div>
   );
 }
 

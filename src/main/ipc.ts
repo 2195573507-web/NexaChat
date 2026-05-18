@@ -35,6 +35,8 @@ import type {
   KnowledgeRetrievalInput,
   McpServer,
   ModelInput,
+  ModelStateInput,
+  ModelUpdateInput,
   ProviderDiscoveryRequest,
   ProviderInput,
   ProviderSaveFromDiscoveryRequest,
@@ -73,6 +75,10 @@ export function registerIpcHandlers(): void {
   handleIpc(IPC_CHANNELS.providerModelsFetch, (providerId: string) => store.fetchProviderModels(providerId));
   handleIpc(IPC_CHANNELS.providerTest, (providerId: string) => store.testProvider(providerId));
   handleIpc(IPC_CHANNELS.modelCreate, (input: ModelInput) => store.createModel(input));
+  handleIpc(IPC_CHANNELS.modelUpdate, (input: ModelUpdateInput) => store.updateModel(input));
+  handleIpc(IPC_CHANNELS.modelDisable, (input: ModelStateInput) => store.disableModel(input));
+  handleIpc(IPC_CHANNELS.modelEnable, (input: ModelStateInput) => store.enableModel(input));
+  handleIpc(IPC_CHANNELS.modelDelete, (input: ModelStateInput) => store.deleteModel(input));
   handleIpc(IPC_CHANNELS.chatCreateConversation, (title?: string) => store.createConversation(title));
   ipcMain.handle(IPC_CHANNELS.chatSendMessage, async (event, input: SendMessageInput) => {
     const args = [input];

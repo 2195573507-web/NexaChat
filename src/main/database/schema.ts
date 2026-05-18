@@ -99,6 +99,7 @@ CREATE TABLE IF NOT EXISTS models (
   health_status TEXT NOT NULL DEFAULT 'unknown',
   latency_ms INTEGER,
   enabled INTEGER NOT NULL DEFAULT 1,
+  deleted_at INTEGER,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   FOREIGN KEY(provider_id) REFERENCES providers(id)
