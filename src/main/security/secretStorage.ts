@@ -33,6 +33,7 @@ function canUseDevelopmentSecretFallback(): boolean {
     process.env.NODE_ENV === 'development' ||
     Boolean(process.env.VITEST) ||
     Boolean(process.env.VITE_DEV_SERVER_URL) ||
+    process.env.NEXACHAT_ELECTRON_SMOKE === '1' ||
     process.env.NEXACHAT_ALLOW_INSECURE_SECRET_STORAGE === '1'
   );
 }

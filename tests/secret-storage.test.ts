@@ -8,6 +8,7 @@ let encryptionAvailable = false;
 let previousNodeEnv: string | undefined;
 let previousVitest: string | undefined;
 let previousDevServerUrl: string | undefined;
+let previousElectronSmoke: string | undefined;
 let previousFallbackFlag: string | undefined;
 
 vi.mock('electron', () => ({
@@ -27,6 +28,7 @@ beforeEach(() => {
   previousNodeEnv = process.env.NODE_ENV;
   previousVitest = process.env.VITEST;
   previousDevServerUrl = process.env.VITE_DEV_SERVER_URL;
+  previousElectronSmoke = process.env.NEXACHAT_ELECTRON_SMOKE;
   previousFallbackFlag = process.env.NEXACHAT_ALLOW_INSECURE_SECRET_STORAGE;
   dataDir = join(process.cwd(), 'test-results', `secret-storage-${Date.now()}-${Math.random().toString(16).slice(2)}`);
   mkdirSync(dataDir, { recursive: true });
@@ -40,6 +42,7 @@ afterEach(async () => {
   restoreEnv('NODE_ENV', previousNodeEnv);
   restoreEnv('VITEST', previousVitest);
   restoreEnv('VITE_DEV_SERVER_URL', previousDevServerUrl);
+  restoreEnv('NEXACHAT_ELECTRON_SMOKE', previousElectronSmoke);
   restoreEnv('NEXACHAT_ALLOW_INSECURE_SECRET_STORAGE', previousFallbackFlag);
   vi.resetModules();
 });
@@ -85,8 +88,24 @@ describe('secret storage fallback policy', () => {
     process.env.NODE_ENV = 'production';
     delete process.env.VITEST;
     delete process.env.VITE_DEV_SERVER_URL;
+    delete process.env.NEXACHAT_ELECTRON_SMOKE;
     delete process.env.NEXACHAT_ALLOW_INSECURE_SECRET_STORAGE;
     await expect(import('../src/main/services/store')).rejects.toThrow(/Secure secret storage is unavailable/);
+  });
+
+  it('allows the explicit Electron smoke fallback marker without weakening production default', async () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.VITEST;
+    delete process.env.VITE_DEV_SERVER_URL;
+    delete process.env.NEXACHAT_ALLOW_INSECURE_SECRET_STORAGE;
+    process.env.NEXACHAT_ELECTRON_SMOKE = '1';
+    const { store } = await import('../src/main/services/store');
+
+    const created = store.createGatewayKey('Smoke fallback gateway key');
+    const row = readStoredSecret(readGatewayKeySecretRef(created.record.id));
+
+    expect(row.encrypted_value).toMatch(/^local-dev:v1:/);
+    expect(row.encrypted_value).not.toContain(created.key);
   });
 
   it('keeps diagnostics and redaction free of raw fallback secrets', async () => {
@@ -122,6 +141,19 @@ function readStoredSecret(secretRef: string | null): { encrypted_value: string }
   const db = new DatabaseSync(join(dataDir, 'nexachat.sqlite'));
   try {
     return db.prepare('SELECT encrypted_value FROM secrets WHERE id = ?').get(secretRef) as { encrypted_value: string };
+  } finally {
+    db.close();
+  }
+}
+
+function readGatewayKeySecretRef(gatewayKeyId: string): string {
+  const db = new DatabaseSync(join(dataDir, 'nexachat.sqlite'));
+  try {
+    const row = db.prepare('SELECT secret_ref FROM gateway_api_keys WHERE id = ?').get(gatewayKeyId) as { secret_ref: string } | undefined;
+    if (!row?.secret_ref) {
+      throw new Error('Expected a gateway key secret ref.');
+    }
+    return row.secret_ref;
   } finally {
     db.close();
   }
