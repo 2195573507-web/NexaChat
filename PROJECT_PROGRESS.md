@@ -17,4 +17,7 @@
 - 根目录旧过程文件 `task_plan.md`、`findings.md`、`progress.md` 是 Provider Smart Add 历史过程产物，不再作为当前事实源保留。
 - 已完成质量门和安全边界修复：`scan:quality` 通过；高风险 IPC payload 已加入 runtime shape validation；`safeStorage` 不可用时生产环境阻断保存新 secret，开发/测试 fallback 有显式标记。
 - 已清理用户可见旧能力标签：Workspace/Dashboard 文案不再作为当前入口心智，夸大的 RAG 与 Agent 执行标签改为明确的能力边界标签。
+- 已完成模型生命周期、Gateway chat streaming、Knowledge/Data 边界、service helper 拆分、renderer snapshot 局部 patch、mock API 模型域拆分和 generated artifact 卫生检查。
+- 已完成最终验证矩阵：`git diff --check`、`npm.cmd run typecheck`、`npm.cmd run scan:quality`、`npm.cmd run test`、`npm.cmd run build`、`npm.cmd run test:ui-smoke`、`npm.cmd run test:electron-smoke`。
+- 已推送实现闭环到 `origin/main`，远端 `main` 确认为 `920e821127331778a1969159fb2de84a112f6053`；最终文档审计修正作为独立收尾提交记录。
 - 后续变更必须继续保持 chat-first 7 模块、`/ -> /chat/conversations`、本地优先、能力标签诚实和 preload IPC 隔离。

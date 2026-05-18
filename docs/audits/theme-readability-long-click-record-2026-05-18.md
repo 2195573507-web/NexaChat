@@ -107,8 +107,8 @@
 - Long-click process safety: the harness starts only its fixed Vite command through a controlled command allowlist and does not accept arbitrary user-provided commands.
 
 ## Deferred Issues And Risk
-- Final build, Electron smoke, final commit, and push were not completed in the interrupted earlier round; they are still required after the broader audit fixes.
-- `PROJECT_PROGRESS.md` and `docs/audits/full-project-health-check-report.md` contain unrelated audit changes from another process/user and were not reverted.
+- Final build, Electron smoke, final commit, and push were not completed in the interrupted earlier round; they were completed later in the broader audit closure.
+- `PROJECT_PROGRESS.md` and `docs/audits/full-project-health-check-report.md` were classified as audit/progress files and updated as current source-of-truth closure records.
 
 ## Interrupted Rerun
 - Second command started: `node scripts/long-click-test.mjs --minutes 121 --agents 6 --run-id 2026-05-18-theme-readability-2h-final`.
@@ -124,13 +124,13 @@
 - Root-cause theme/token remediation: complete for the recorded issue class. Evidence is explicit placeholder/disabled/selected/primary/status foreground-background pairs in shared tokens and CSS usage.
 - Real agent-driven functional click test for at least 2 hours: complete for one recorded run. Evidence is `test-results/long-click/2026-05-18-theme-readability-2h/results.json`, with 121.12 active minutes, 6 agents, max parallel 6, 99 functions, and all top-level modules covered.
 - Every module/function coverage record: complete as historical evidence with explicit unavailable/unsafe entries. The two P1 page lifecycle timeouts were closed by harness readiness/recovery fixes and verified by the short lifecycle smoke run.
-- Required validation commands: partially complete for this phase. Evidence: `git diff --check`, theme token test, typecheck, UI smoke, script syntax check, and short lifecycle smoke passed. Missing final-matrix commands remain `npm.cmd run build` and `npm.cmd run test:electron-smoke` after all audit work.
-- PROJECT_PROGRESS.md update: not safely completed. Evidence: a separate audit record was created because the existing progress file contained unrelated/encoding-damaged content and another process/user had appended unrelated audit notes. Remaining gap: if required, merge this record into `PROJECT_PROGRESS.md` with encoding care.
-- Commit and push: incomplete. Evidence: current worktree still has modified/untracked files; no final commit hash or push confirmation exists.
-- Final clean working tree: incomplete. Evidence: `git status --short` still reports modified source/test files, modified `PROJECT_PROGRESS.md`, untracked `docs/`, and untracked `scripts/long-click-test.mjs`.
-- Chinese final report: pending. Evidence: no final closeout report with final commit/push data can be truthful until validation/commit/push are completed or explicitly waived.
+- Required validation commands: complete in the broader audit closure. Evidence: final matrix includes `git diff --check`, typecheck, scan:quality, full test, build, UI smoke, and Electron smoke.
+- PROJECT_PROGRESS.md update: complete as a minimal UTF-8 current progress record.
+- Commit and push: complete for the implementation closure through `920e821127331778a1969159fb2de84a112f6053`; final documentation audit correction is tracked separately.
+- Final clean working tree: complete before this documentation correction, with `git status --short --untracked-files=all` returning no rows and `origin/main` matching `920e821127331778a1969159fb2de84a112f6053`.
+- Chinese final report: delivered in the final closeout response after documentation audit correction validation, commit, push, and remote verification.
 
 ## Current Objective Status
-- Overall status: not complete.
-- Reason: the user stopped further running, and the remaining validation, commit, push, final clean status, and final report requirements were not completed.
-- Goal completion was not marked because the objective still has missing required deliverables.
+- Overall status: implementation closure complete; documentation audit correction prepared for validation, commit, push, and final report.
+- Reason: stale interrupted-round status text was found during final completion audit and corrected.
+- Goal completion should be marked only after the documentation correction is validated, committed, pushed, and the final Chinese report is delivered.
