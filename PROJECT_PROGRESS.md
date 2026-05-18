@@ -50,7 +50,8 @@
 ### Commit / Push
 - 实现提交：`3426c6d88207d0a35ea0e0fecdcb5e5ad29e6e29`
 - Closeout 提交：`7c8bf9ab0f4aa1c390aa88764d6c29d987a7d77e`
-- Push 结果：`git push` 已成功，远端 `origin/main` 已确认到 `7c8bf9ab0f4aa1c390aa88764d6c29d987a7d77e`。
+- Push 确认提交：`fcc06248e096ac82b97752d64392fabe293dcfc8`
+- Push 结果：`git push` 已成功，远端 `origin/main` 已确认到 `fcc06248e096ac82b97752d64392fabe293dcfc8`。
 
 ### 遗留风险
 - 当前 Provider discovery 只实现 OpenAI-compatible 安全探测；不加入 provider-specific hacks。
