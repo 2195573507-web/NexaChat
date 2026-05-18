@@ -48,7 +48,8 @@
 - 脱敏补丁后复验：`npm.cmd run typecheck`、`npm.cmd run test -- tests/provider-discovery.test.ts tests/provider-store-integration.test.ts tests/app.test.tsx`、`git diff --check` -> 通过
 
 ### Commit / Push
-- 待提交后回填最终 commit hash 和 push 结果。
+- 实现提交：`3426c6d88207d0a35ea0e0fecdcb5e5ad29e6e29`
+- Push 结果：待推送后确认。
 
 ### 遗留风险
 - 当前 Provider discovery 只实现 OpenAI-compatible 安全探测；不加入 provider-specific hacks。
