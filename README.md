@@ -1,6 +1,6 @@
 # NexaChat
 
-NexaChat 是本地优先、多模型 AI 桌面聊天工作台。
+NexaChat 是本地优先的多模型 AI 桌面对话工作台。
 
 ## 当前模块
 

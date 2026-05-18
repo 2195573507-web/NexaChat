@@ -893,7 +893,7 @@ describe('navigation authority', () => {
       }),
     ]);
     expect(resolveNavigation('/').route).toBe('/chat/conversations');
-    expect(resolveNavigation('/dashboard/overview').route).toBe('/chat/conversations');
+    expect(resolveNavigation('/unknown/overview').route).toBe('/chat/conversations');
     expect(resolveNavigation('/settings/request-logs').route).toBe('/settings/preferences');
   });
 

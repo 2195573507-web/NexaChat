@@ -2,7 +2,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { extname, join, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 const repoRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 
@@ -115,11 +115,6 @@ function fail(title, violations) {
   process.exitCode = 1;
 }
 
-async function loadModule(relativePath) {
-  const moduleUrl = pathToFileURL(join(repoRoot, relativePath)).href;
-  return import(moduleUrl);
-}
-
 function assertUnique(values, label) {
   const seen = new Map();
   const duplicates = [];
@@ -131,6 +126,41 @@ function assertUnique(values, label) {
     }
   }
   fail(`${label} duplicates`, duplicates);
+}
+
+function collectObjectValues(source, exportName) {
+  const declaration = new RegExp(`export\\s+const\\s+${exportName}\\s*=\\s*\\{([\\s\\S]*?)\\}\\s+as\\s+const`, 'm').exec(source);
+  if (!declaration) {
+    throw new Error(`Unable to find exported const object ${exportName}.`);
+  }
+  return [...declaration[1].matchAll(/:\s*['"]([^'"]+)['"]/g)].map((match) => match[1]);
+}
+
+function collectArrayValues(source, exportName) {
+  const declaration = new RegExp(`export\\s+const\\s+${exportName}\\s*=\\s*\\[([\\s\\S]*?)\\]`, 'm').exec(source);
+  if (!declaration) {
+    throw new Error(`Unable to find exported const array ${exportName}.`);
+  }
+  return [...declaration[1].matchAll(/['"]([^'"]+)['"]/g)].map((match) => match[1]);
+}
+
+function collectNavigationFacts() {
+  const navigationSource = read('src/shared/navigation.ts');
+  const moduleIds = [...navigationSource.matchAll(/defineModule\(\{\s*id:\s*['"]([^'"]+)['"]/g)].map((match) => match[1]);
+  const routes = [];
+  for (const moduleId of moduleIds) {
+    const modulePattern = new RegExp(`defineModule\\(\\{\\s*id:\\s*['"]${moduleId}['"][\\s\\S]*?children:\\s*\\[([\\s\\S]*?)\\]\\s*,?\\s*\\}\\)`, 'm');
+    const moduleMatch = modulePattern.exec(navigationSource);
+    if (!moduleMatch) {
+      throw new Error(`Unable to parse navigation module ${moduleId}.`);
+    }
+    for (const childMatch of moduleMatch[1].matchAll(/id:\s*['"]([^'"]+)['"]/g)) {
+      routes.push(`/${moduleId}/${childMatch[1]}`);
+    }
+  }
+  const routeAliasSources = [...navigationSource.matchAll(/alias\(\s*['"]([^'"]+)['"]/g)].map((match) => match[1]);
+  const routeAliasTargets = [...navigationSource.matchAll(/alias\(\s*['"][^'"]+['"]\s*,\s*['"]([^'"]+)['"]/g)].map((match) => match[1]);
+  return { moduleIds, routes, routeAliasSources, routeAliasTargets };
 }
 
 async function scanHardcode() {
@@ -170,27 +200,22 @@ async function scanHardcode() {
 }
 
 async function scanDuplicates() {
-  const [{ IPC_CHANNEL_LIST }, { APP_API_METHODS }, { navModules, routeAliases }, { GATEWAY_ENDPOINT, GATEWAY_SCOPES }] = await Promise.all([
-    loadModule('dist-electron/shared/ipc.js'),
-    loadModule('dist-electron/shared/api.js'),
-    loadModule('dist-electron/shared/navigation.js'),
-    loadModule('dist-electron/shared/gatewayRuntime.js'),
-  ]);
-
-  assertUnique(IPC_CHANNEL_LIST, 'IPC channel');
-  assertUnique(APP_API_METHODS, 'App API method');
-  assertUnique(navModules.map((module) => module.id), 'Navigation module id');
-  assertUnique(navModules.flatMap((module) => module.tabs.map((tab) => tab.route)), 'Navigation route');
-  assertUnique(Object.keys(routeAliases), 'Route alias source');
-  assertUnique(Object.values(routeAliases), 'Route alias target');
-  assertUnique(Object.values(GATEWAY_ENDPOINT), 'Gateway endpoint');
-  assertUnique(GATEWAY_SCOPES, 'Gateway scope');
-
+  const apiMethods = collectArrayValues(read('src/shared/api.ts'), 'APP_API_METHODS');
+  const { moduleIds, routes, routeAliasSources, routeAliasTargets } = collectNavigationFacts();
+  const gatewaySource = read('src/shared/gatewayRuntime.ts');
   const packageJson = JSON.parse(read('package.json'));
+
+  assertUnique(collectObjectValues(read('src/shared/ipc.ts'), 'IPC_CHANNELS'), 'IPC channel');
+  assertUnique(apiMethods, 'App API method');
+  assertUnique(moduleIds, 'Navigation module id');
+  assertUnique(routes, 'Navigation route');
+  assertUnique(routeAliasSources, 'Route alias source');
+  assertUnique(routeAliasTargets, 'Route alias target');
+  assertUnique(collectObjectValues(gatewaySource, 'GATEWAY_ENDPOINT'), 'Gateway endpoint');
+  assertUnique(collectArrayValues(gatewaySource, 'GATEWAY_SCOPES'), 'Gateway scope');
   assertUnique(Object.keys(packageJson.scripts ?? {}), 'Package script');
 
   const mockSource = read('src/renderer/mockApi.ts');
-  const apiMethods = APP_API_METHODS;
   const missingMockMethods = apiMethods.filter((method) => !new RegExp(`\\b${method}\\s*[:(]`).test(mockSource));
   fail('Browser mock missing AppApi methods', missingMockMethods);
 
@@ -275,7 +300,7 @@ async function scanDocs() {
 
   const readme = read('README.md');
   const requiredText = [
-    'NexaChat 是本地优先、多模型 AI 桌面聊天工作台。',
+    'NexaChat 是本地优先的多模型 AI 桌面对话工作台。',
     'Chat',
     'Models',
     'Knowledge Base',
@@ -317,7 +342,6 @@ async function scanDocs() {
     /8\s*个模块/,
     /docs\/build-plans/i,
     /docs\/iteration-plans/i,
-    /PROJECT_PROGRESS\.md/i,
     /task_plan\.md/i,
     /progress\.md/i,
     /findings\.md/i,
@@ -332,7 +356,6 @@ async function scanDocs() {
 
   const removedArtifacts = [
     'README.zh-CN.md',
-    'PROJECT_PROGRESS.md',
     'task_plan.md',
     'progress.md',
     'findings.md',

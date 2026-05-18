@@ -83,6 +83,15 @@ function registerRendererProtocol(): void {
   });
 }
 
+function isSafeExternalUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'mailto:';
+  } catch {
+    return false;
+  }
+}
+
 async function createMainWindow(): Promise<void> {
   const window = new BrowserWindow({
     width: DESKTOP_ENTRY.window.width,
@@ -114,8 +123,23 @@ async function createMainWindow(): Promise<void> {
   });
 
   window.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url);
+    if (isSafeExternalUrl(url)) {
+      void shell.openExternal(url);
+    } else {
+      recordDesktopDiagnostic('window.external-url-blocked', { url });
+    }
     return { action: 'deny' };
+  });
+
+  window.webContents.on('will-navigate', (event, url) => {
+    if (url !== window.webContents.getURL()) {
+      event.preventDefault();
+      if (isSafeExternalUrl(url)) {
+        void shell.openExternal(url);
+      } else {
+        recordDesktopDiagnostic('window.navigation-blocked', { url });
+      }
+    }
   });
 
   if (isDev) {
