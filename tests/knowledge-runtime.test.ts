@@ -31,6 +31,32 @@ afterEach(async () => {
 });
 
 describe('Round 9 knowledge runtime', () => {
+  it('rejects unsupported binary and Office/OCR-style imports without creating chunks', async () => {
+    const { store } = await import('../src/main/services/store');
+
+    const unsupportedInputs = [
+      { name: 'source.pdf', type: 'application/pdf', content: '%PDF text placeholder' },
+      { name: 'meeting-notes.docx', type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', content: 'docx placeholder' },
+      { name: 'scan.png', type: 'image/png', content: 'ocr placeholder' },
+      { name: 'unknown.pdf', content: 'missing mime must still be rejected' },
+    ];
+
+    const unsupportedFileIds: string[] = [];
+    for (const input of unsupportedInputs) {
+      const file = store.createKnowledgeFile(input);
+      unsupportedFileIds.push(file.id);
+      expect(file.parseStatus).toBe('failed');
+      expect(file.indexStatus).toBe('failed');
+      expect(file.embeddingStatus).toBe('failed');
+      expect(file.parserType).toBe('unsupported');
+      expect(file.errorMessage).toContain('文本');
+      expect(store.getKnowledgeChunks(file.id)).toHaveLength(0);
+    }
+
+    const retrieval = store.previewKnowledgeRetrieval({ query: 'ocr placeholder' });
+    expect(retrieval.citations.some((citation) => unsupportedFileIds.includes(citation.fileId))).toBe(false);
+  });
+
   it('imports text content through parser chunk embedding index retrieval rebuild and delete', async () => {
     const { store } = await import('../src/main/services/store');
     const file = store.createKnowledgeFile({

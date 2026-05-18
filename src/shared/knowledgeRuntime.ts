@@ -7,6 +7,22 @@ export const KNOWLEDGE_SUPPORTED_MIME_TYPES = [
   'application/csv',
 ] as const;
 
+export const KNOWLEDGE_UNSUPPORTED_BINARY_EXTENSIONS = [
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.ppt',
+  '.pptx',
+  '.xls',
+  '.xlsx',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.webp',
+  '.tif',
+  '.tiff',
+] as const;
+
 export const KNOWLEDGE_RUNTIME_POLICY = {
   maxImportBytes: 512 * 1024,
   chunkTargetChars: 720,
@@ -195,7 +211,9 @@ function inferMimeType(name: string): string {
   if (lower.endsWith('.md') || lower.endsWith('.markdown')) return 'text/markdown';
   if (lower.endsWith('.json')) return 'application/json';
   if (lower.endsWith('.csv')) return 'text/csv';
-  return 'text/plain';
+  if (lower.endsWith('.txt') || lower.endsWith('.log')) return 'text/plain';
+  if (KNOWLEDGE_UNSUPPORTED_BINARY_EXTENSIONS.some((extension) => lower.endsWith(extension))) return 'application/octet-stream';
+  return 'application/octet-stream';
 }
 
 function findChunkBoundary(value: string): number {

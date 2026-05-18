@@ -407,7 +407,11 @@ export function DataService<TBase extends ServiceConstructor<ServiceContext>>(Ba
       source: 'nexachat',
       profile: 'metadata-redacted',
       summary: t('data.snapshot.summary.rollbackApplied', { count: affected.length }),
-      manifestJson: JSON.stringify({ affectedEntityIds: affected, rollbackRecordId: rollback.id }),
+      manifestJson: JSON.stringify({
+        affectedEntityIds: affected,
+        rollbackRecordId: rollback.id,
+        scope: 'import-created-metadata-only',
+      }),
       manifestHash: stableHash(affected),
       conflictCount: affected.length,
       requiresConfirmation: false,

@@ -90,6 +90,7 @@ describe('Round 12 data mobility runtime', () => {
   it('rolls back imported metadata without deleting existing local records', async () => {
     const { store } = await import('../src/main/services/store');
     const localProvider = store.createProvider({ name: 'Local Provider', type: 'openai-compatible', baseUrl: 'http://127.0.0.1:11434/v1' });
+    const localModel = store.createModel({ providerId: localProvider.id, name: 'local-stays-enabled' });
     const result = store.validateImportManifest(JSON.stringify({
       providers: [{ name: 'Rollback Imported Provider', baseUrl: 'http://127.0.0.1:11434/v1' }],
       models: [{ providerName: 'Rollback Imported Provider', name: 'rollback-model' }],
@@ -105,9 +106,12 @@ describe('Round 12 data mobility runtime', () => {
     const rollbackJob = store.applyDataRollback({ rollbackId: rollback!.id, confirmationPhrase: DATA_CONFIRMATION_PHRASES.rollback });
 
     expect(rollbackJob.status).toBe('completed');
+    expect(rollbackJob.manifestJson).toContain('import-created-metadata-only');
     expect(store.getProviders().find((provider) => provider.id === localProvider.id)?.enabled).toBe(true);
+    expect(store.getModels().find((model) => model.id === localModel.id)?.enabled).toBe(true);
     expect(store.getProviders().some((provider) => provider.name === 'Rollback Imported Provider' && provider.enabled)).toBe(false);
     expect(store.getModels().some((model) => model.name === 'rollback-model' && model.enabled)).toBe(false);
+    expect(store.getRollbackRecords().find((record) => record.id === rollback!.id)?.state).toBe('applied');
   });
 
   it('creates encrypted backup and restore preflight without plaintext secrets or local raw paths', async () => {
