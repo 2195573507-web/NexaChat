@@ -37,5 +37,17 @@ describe('renderer API boundary', () => {
 
     expect(typeof getAppApi().getSnapshot).toBe('function');
   });
-});
 
+  it('keeps browser mock API method coverage aligned with AppApi', async () => {
+    const { APP_API_METHODS } = await import('../src/shared/api');
+    const { createMockApi } = await import('../src/renderer/mockApi');
+    const api = createMockApi() as unknown as Record<string, unknown>;
+    const allowedMethods = new Set<string>(APP_API_METHODS);
+    const implementedMethods = Object.entries(api)
+      .filter(([, value]) => typeof value === 'function')
+      .map(([name]) => name);
+
+    expect(APP_API_METHODS.filter((method) => typeof api[method] !== 'function')).toEqual([]);
+    expect(implementedMethods.filter((method) => !allowedMethods.has(method))).toEqual([]);
+  });
+});

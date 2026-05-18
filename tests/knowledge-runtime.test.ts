@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { translate } from '../src/shared/i18n';
 
 let dataDir = '';
 
@@ -33,6 +34,7 @@ afterEach(async () => {
 describe('Round 9 knowledge runtime', () => {
   it('rejects unsupported binary and Office/OCR-style imports without creating chunks', async () => {
     const { store } = await import('../src/main/services/store');
+    const unsupportedParserMessage = translate('zh-CN', 'knowledge.errors.unsupportedParser');
 
     const unsupportedInputs = [
       { name: 'source.pdf', type: 'application/pdf', content: '%PDF text placeholder' },
@@ -49,7 +51,7 @@ describe('Round 9 knowledge runtime', () => {
       expect(file.indexStatus).toBe('failed');
       expect(file.embeddingStatus).toBe('failed');
       expect(file.parserType).toBe('unsupported');
-      expect(file.errorMessage).toContain('文本');
+      expect(file.errorMessage).toBe(unsupportedParserMessage);
       expect(store.getKnowledgeChunks(file.id)).toHaveLength(0);
     }
 
