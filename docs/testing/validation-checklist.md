@@ -1,4 +1,4 @@
-# 验证清单
+﻿# 验证清单
 
 ## 基线命令
 
@@ -14,6 +14,18 @@ npm.cmd run typecheck
 ```
 
 ## 最终验证矩阵
+
+```powershell
+git diff --check
+npm.cmd run typecheck
+npm.cmd test
+npm.cmd run build
+npm.cmd run test:ui-smoke
+npm.cmd run test:electron-smoke
+npm.cmd run scan:quality
+```
+
+历史审计矩阵也接受下面的等价顺序，但本轮集成质量迭代优先使用上方顺序，以便先暴露类型、单元和构建问题：
 
 ```powershell
 git diff --check

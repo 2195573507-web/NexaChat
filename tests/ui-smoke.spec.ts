@@ -184,6 +184,17 @@ async function expectReadableThemeSurface(page: Page) {
   await expectContrast(page, 'main [data-tab="preferences"] select', 4.5);
 }
 
+async function expectReadableKnowledgeSurface(page: Page) {
+  await expectContrast(page, 'main [data-tab="files"] .page-header .eyebrow', 4.5);
+  await expectContrast(page, 'main [data-tab="files"] .current-config-strip .eyebrow', 4.5);
+  await expectContrast(page, 'main [data-tab="files"] .current-config-strip small', 4.5);
+  await expectContrast(page, 'main [data-tab="files"] .field-row > span', 4.5);
+  await expectContrast(page, 'main [data-tab="files"] .inline-notice.notice-info span', 4.5);
+  await expectContrast(page, 'main [data-tab="files"] .inline-notice.notice-warning span', 4.5);
+  await expectContrast(page, 'main [data-tab="files"] .data-rows dt', 4.5);
+  await expectContrast(page, 'main [data-tab="files"] .data-rows dd', 4.5);
+}
+
 async function mockSystemTheme(page: Page, initialDark: boolean) {
   await page.addInitScript((dark) => {
     type Listener = (event: MediaQueryListEvent) => void;
@@ -316,6 +327,7 @@ test('core management pages keep real contracts behind lightweight tabs', async 
   await expect(page.locator('main [data-tab="files"]').getByLabel(translate('zh-CN', 'knowledge.import.content'))).toBeVisible();
   await expect(page.locator('main [data-tab="files"]').getByLabel(translate('zh-CN', 'knowledge.import.file'))).toBeVisible();
   await expect(page.locator('main [data-tab="files"]').getByText(translate('zh-CN', 'knowledge.import.unsupportedNote')).first()).toBeVisible();
+  await expectReadableKnowledgeSurface(page);
 
   await openFeature(page, tools, tools.tabs.find((tab) => tab.id === 'mcp')!);
   await expect(page.locator('main [data-tab="mcp"] .current-config-strip')).toBeVisible();

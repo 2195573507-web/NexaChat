@@ -79,6 +79,11 @@ describe('NexaChat renderer', () => {
     expect(document.querySelector('.chat-detail-panel')).not.toBeInTheDocument();
     expect(document.querySelector('.app-frame')).toHaveAttribute('data-user-mode', 'ordinary');
     expect(document.querySelector('.module-page')).toHaveClass('module-page');
+    const resolvedThemeLabel = translate('zh-CN', 'shell.resolvedColorScheme', {
+      scheme: translate('zh-CN', 'settings.preferences.theme.light'),
+    });
+    expect(screen.queryByRole('button', { name: resolvedThemeLabel })).not.toBeInTheDocument();
+    expect(screen.getByRole('status', { name: resolvedThemeLabel })).toBeInTheDocument();
 
     for (const module of navModules) {
       const rail = document.querySelector('.module-rail') as HTMLElement;
@@ -605,7 +610,15 @@ describe('NexaChat renderer', () => {
     expect(activePanel()).toHaveTextContent(translate('zh-CN', 'gateway.usage.trendTitle'));
     expect(activePanel()).toHaveTextContent(translate('zh-CN', 'gateway.usage.inputTokens'));
     expect(activePanel()).toHaveTextContent(translate('zh-CN', 'gateway.usage.outputTokens'));
-    expect(document.querySelector('.usage-trend-chart')).toBeInTheDocument();
+    expect(screen.getByRole('img', {
+      name: (_, element) =>
+        element?.classList.contains('usage-trend-chart') === true &&
+        element.getAttribute('aria-label')?.startsWith(translate('zh-CN', 'gateway.usage.chart.summary', {
+          requests: 1,
+          inputTokens: '',
+          outputTokens: '',
+        }).split('1')[0]) === true,
+    })).toHaveClass('usage-trend-chart');
   });
 
   it('does not draw a gateway token trend when usage records lack token counts', async () => {

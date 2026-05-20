@@ -100,6 +100,7 @@ async function createMainWindow(): Promise<void> {
     minHeight: DESKTOP_ENTRY.window.minHeight,
     title: DESKTOP_ENTRY.productName,
     show: false,
+    autoHideMenuBar: true,
     backgroundColor: DESKTOP_ENTRY.window.backgroundColor,
     webPreferences: {
       preload: join(currentDir, '../preload/index.js'),
@@ -110,6 +111,7 @@ async function createMainWindow(): Promise<void> {
   });
 
   mainWindow = window;
+  window.setMenuBarVisibility(false);
 
   window.once('ready-to-show', () => {
     recordDesktopDiagnostic('window.ready-to-show', { mode: isDev ? 'dev' : 'production' });

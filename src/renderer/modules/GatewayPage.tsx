@@ -307,7 +307,14 @@ function GatewayUsageTrendPanel({ usageTrend }: { usageTrend: UsageTrendBucket[]
       actions={<StatusPillLite label={t('gateway.usage.bucket.day')} state="info" />}
     >
       <div className="usage-trend-panel" aria-label={t('gateway.usage.chart.aria')}>
-        <UsageTrendChart points={trend.points} />
+        <UsageTrendChart
+          points={trend.points}
+          description={t('gateway.usage.chart.summary', {
+            requests: trend.totals.requestCount,
+            inputTokens: trend.totals.inputTokens,
+            outputTokens: trend.totals.outputTokens,
+          })}
+        />
         <div className="usage-trend-legend">
           <span><i className="legend-input" />{t('gateway.usage.inputTokens')}</span>
           <span><i className="legend-output" />{t('gateway.usage.outputTokens')}</span>
@@ -319,7 +326,7 @@ function GatewayUsageTrendPanel({ usageTrend }: { usageTrend: UsageTrendBucket[]
   );
 }
 
-function UsageTrendChart({ points }: { points: UsageTrendPoint[] }) {
+function UsageTrendChart({ points, description }: { points: UsageTrendPoint[]; description: string }) {
   const chartPoints = points.length === 1
     ? [
         { ...points[0], bucketStart: points[0].bucketStart - 1 },
@@ -332,7 +339,8 @@ function UsageTrendChart({ points }: { points: UsageTrendPoint[] }) {
   const totalPath = buildTrendPath(chartPoints.map((point) => point.totalTokens), maxTotal);
 
   return (
-    <svg className="usage-trend-chart" viewBox="0 0 320 148" role="img" aria-hidden="true" focusable="false">
+    <svg className="usage-trend-chart" viewBox="0 0 320 148" role="img" aria-label={description} focusable="false">
+      <title>{description}</title>
       <line x1="20" y1="124" x2="306" y2="124" />
       <line x1="20" y1="18" x2="20" y2="124" />
       <path className="trend-total" d={totalPath} />

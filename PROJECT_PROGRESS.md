@@ -1,4 +1,28 @@
-# NexaChat 当前进度
+﻿# NexaChat 当前进度
+
+## 2026-05-20 集成质量提升迭代
+
+- 时间：2026-05-20 12:09 至最终验证完成。
+- 实际项目根目录：`D:/NexaChat`。
+- 分支与上游：`main` / `origin/main`。
+- 基线提交：`5acc4bc00cd1a0deca1f1f3aab34da778146e16b`。
+- 最终提交：以本次提交后 `git rev-parse HEAD` 输出为准；最终中文报告记录精确哈希。
+- 变更摘要：扩展 README 为当前事实入口；补充 Electron sandbox/IPC 安全边界说明；拆开 service registry 深层 mixin 链；修正非交互主题图标语义；为 Gateway 用量趋势增加可访问摘要；补强 Knowledge 可读性对比检查；更新测试与质量门。
+- 文档变更：`README.md`、`PROJECT_PROGRESS.md`、`docs/architecture/current-architecture.md`、`docs/testing/validation-checklist.md`、`docs/design/ui-product-boundary.md`、`docs/audits/full-project-health-check-report.md`、`docs/audits/integrated-quality-score-improvement-report.md`。
+- 主进程与服务变更：`src/main/index.ts`、`src/main/services/serviceRegistry.ts`。
+- UI 与 i18n 变更：`src/renderer/components/AppFrame.tsx`、`src/renderer/modules/GatewayPage.tsx`、`src/renderer/styles/components.css`、`src/renderer/styles/pages.css`、`src/renderer/styles/shell.css`、`src/shared/i18n.ts`。
+- 测试与脚本变更：`tests/app.test.tsx`、`tests/desktop-entry.test.ts`、`tests/store-boundaries.test.ts`、`tests/ui-smoke.spec.ts`、`scripts/quality-gates.mjs`。
+- 已完成的定向验证：`npm.cmd run typecheck` 通过；`npm.cmd run test -- tests/store-boundaries.test.ts tests/desktop-entry.test.ts tests/app.test.tsx tests/i18n-authority.test.ts` 通过，4 files / 39 tests；`npm.cmd run scan:hardcode` 通过。
+- 最终验证矩阵：
+  - `npm.cmd run typecheck`：通过。
+  - `npm.cmd test`：通过，26 files / 125 tests；Node 在数据库测试中输出已知 `node:sqlite` experimental warning。
+  - `npm.cmd run build`：通过，renderer 和 main build 均完成。
+  - `npm.cmd run test:ui-smoke`：通过，7 tests。
+  - `npm.cmd run test:electron-smoke`：通过，Electron smoke rendered the NexaChat shell。
+  - `npm.cmd run scan:quality`：通过，all scans。
+  - `git diff --check`：通过，仅有 CRLF normalization warnings。
+- 剩余风险：`ServiceContext` 仍然偏宽；Electron `sandbox: false` 仍需单独兼容性迭代；性能设计只做了保守提升，没有进行全局状态架构重写；历史审计记录保留为历史，不应被当作最新事实源。
+- 编码说明：主动维护的中文 Markdown 已保持 UTF-8，并为关键中文 Markdown 写入 UTF-8 BOM，降低 Windows PowerShell 默认读取时的乱码风险。
 
 ## 2026-05-18 主题可读性与长点击任务闭环
 

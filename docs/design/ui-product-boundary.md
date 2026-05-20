@@ -1,4 +1,4 @@
-# UI 产品边界
+﻿# UI 产品边界
 
 NexaChat 的 UI 方向是紧凑、干净、桌面工具式、聊天优先、低干扰和模块边界清晰。当前 shell 必须保持 7 个顶层模块，不恢复 Workspace-first 或 Dashboard-first 导航。
 

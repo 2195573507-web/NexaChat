@@ -120,14 +120,21 @@
 }
 
 .inline-notice strong,
-.inline-notice span,
 .inline-notice p,
 .inline-notice code {
   color: inherit;
 }
 
-.eyebrow {
+.inline-notice span {
+  color: var(--color-text);
+}
+
+.notice-muted span {
   color: var(--color-text-muted);
+}
+
+.eyebrow {
+  color: var(--color-text-subtle);
   font-size: var(--font-size-xs);
   font-weight: 720;
   line-height: var(--line-height-badge);
@@ -335,6 +342,7 @@
 }
 
 .field-row > span {
+  color: var(--color-text);
   font-weight: 650;
 }
 
@@ -361,11 +369,13 @@
 }
 
 .data-rows dt {
-  color: var(--color-text-muted);
+  color: var(--color-text);
 }
 
 .data-rows dd {
   margin: 0;
+  color: var(--color-text);
+  font-weight: 650;
   text-align: right;
   overflow-wrap: anywhere;
 }

@@ -56,4 +56,17 @@ describe('desktop entry authority', () => {
     expect(diagnosticsSource).toContain('redacted-secret');
     expect(diagnosticsSource).toContain('nxk_');
   });
+
+  it('documents current Electron isolation safeguards in code', () => {
+    const mainSource = readFileSync(join(repoRoot, 'src/main/index.ts'), 'utf8');
+
+    expect(mainSource).toContain('contextIsolation: true');
+    expect(mainSource).toContain('nodeIntegration: false');
+    expect(mainSource).toContain('sandbox: false');
+    expect(mainSource).toContain('resolveRendererAsset');
+    expect(mainSource).toContain('setWindowOpenHandler');
+    expect(mainSource).toContain('will-navigate');
+    expect(mainSource).toContain('isSafeExternalUrl');
+    expect(mainSource).toContain('autoHideMenuBar: true');
+  });
 });

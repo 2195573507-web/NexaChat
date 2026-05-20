@@ -58,6 +58,15 @@ describe('main-process service boundaries', () => {
     }
   });
 
+  it('keeps the service registry composition readable without parallel service paths', () => {
+    const registrySource = readFileSync(join(servicesDir, 'serviceRegistry.ts'), 'utf8');
+
+    expect(registrySource).toContain('const DashboardContext = DashboardService(ServiceContext);');
+    expect(registrySource).toContain('const RegistryBase = ObservabilityService(SettingsContext);');
+    expect(registrySource).not.toMatch(/ObservabilityService\(SettingsService\(AuditService/);
+    expect(registrySource.match(/export const serviceRegistry = new NexaServiceRegistry\(\);/g)).toHaveLength(1);
+  });
+
   it('keeps secret storage policy in a focused security helper', () => {
     const serviceContext = readFileSync(join(servicesDir, 'serviceContext.ts'), 'utf8');
     const secretStorage = readFileSync(join(projectRoot, 'src/main/security/secretStorage.ts'), 'utf8');

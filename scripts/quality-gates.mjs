@@ -439,6 +439,7 @@ async function scanCurrentDocs() {
     /findings\.md/i,
     /README\.zh-CN\.md/i,
     /完整\s*PDF\/Office\/OCR\/vector DB RAG/,
+    /生产级\s*PDF\/Office\/OCR\/vector DB RAG.*已实现/,
   ];
   for (const pattern of forbiddenReadmePatterns) {
     if (pattern.test(readme)) {

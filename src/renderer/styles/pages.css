@@ -47,6 +47,14 @@
   overflow-wrap: anywhere;
 }
 
+.current-config-strip strong {
+  color: var(--color-text);
+}
+
+.current-config-strip small {
+  color: var(--color-text);
+}
+
 .switch-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

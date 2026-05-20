@@ -12,7 +12,18 @@ import { AuditService } from './auditService.js';
 import { SettingsService } from './settingsService.js';
 import { ObservabilityService } from './observabilityService.js';
 
-const RegistryBase = ObservabilityService(SettingsService(AuditService(SecurityService(DataService(ToolService(KnowledgeService(GatewayService(ChatService(ModelService(ProviderService(DashboardService(ServiceContext))))))))))));
+const DashboardContext = DashboardService(ServiceContext);
+const ProviderContext = ProviderService(DashboardContext);
+const ModelContext = ModelService(ProviderContext);
+const ChatContext = ChatService(ModelContext);
+const GatewayContext = GatewayService(ChatContext);
+const KnowledgeContext = KnowledgeService(GatewayContext);
+const ToolContext = ToolService(KnowledgeContext);
+const DataContext = DataService(ToolContext);
+const SecurityContext = SecurityService(DataContext);
+const AuditContext = AuditService(SecurityContext);
+const SettingsContext = SettingsService(AuditContext);
+const RegistryBase = ObservabilityService(SettingsContext);
 
 export class NexaServiceRegistry extends RegistryBase {}
 

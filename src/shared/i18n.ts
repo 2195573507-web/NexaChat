@@ -45,6 +45,7 @@ export const zhCN = {
   'shell.gateway.running': '运行中',
   'shell.gateway.stopped': '未启用',
   'shell.openChat': '打开聊天',
+  'shell.resolvedColorScheme': '当前配色：{scheme}',
 
   'stage.ready': '就绪',
   'stage.implemented': '可用',
@@ -525,6 +526,7 @@ export const zhCN = {
   'gateway.usage.trendTitle': 'Token 用量趋势',
   'gateway.usage.trendSource': '曲线只聚合本地 usage_records 的真实 token 记录；没有记录时显示空状态。',
   'gateway.usage.chart.aria': 'Gateway token 用量趋势曲线',
+  'gateway.usage.chart.summary': 'Gateway 最近用量：{requests} 次请求，输入 {inputTokens} tokens，输出 {outputTokens} tokens',
   'gateway.usage.empty': '暂无用量数据',
   'gateway.usage.empty.detail': '发送 Chat、Gateway 调用或评测写入 usage_records 后，这里才会显示趋势。',
   'gateway.usage.noTokenData': '暂无可绘制的 token 字段',
@@ -1195,6 +1197,7 @@ export const enUS: Record<I18nKey, string> = {
   'shell.gateway.running': 'running',
   'shell.gateway.stopped': 'disabled',
   'shell.openChat': 'Open chat',
+  'shell.resolvedColorScheme': 'Current color scheme: {scheme}',
 
   'stage.ready': 'Ready',
   'stage.implemented': 'Available',
@@ -1675,6 +1678,7 @@ export const enUS: Record<I18nKey, string> = {
   'gateway.usage.trendTitle': 'Token usage trend',
   'gateway.usage.trendSource': 'The chart only aggregates real token records from local usage_records. Empty records render an empty state.',
   'gateway.usage.chart.aria': 'Gateway token usage trend chart',
+  'gateway.usage.chart.summary': 'Gateway recent usage: {requests} requests, {inputTokens} input tokens, {outputTokens} output tokens',
   'gateway.usage.empty': 'No usage data yet',
   'gateway.usage.empty.detail': 'The trend appears only after Chat, Gateway calls, or evals write usage_records.',
   'gateway.usage.noTokenData': 'No drawable token fields',

@@ -81,6 +81,11 @@ const tabIcons: Record<string, LucideIcon> = {
   'message-square-text': MessageSquareText,
 };
 
+const themeIcons: Record<'light' | 'dark', LucideIcon> = {
+  light: Sun,
+  dark: Moon,
+};
+
 interface AppFrameProps {
   activeModule: NavModule;
   activeModuleId: ModuleId;
@@ -121,6 +126,7 @@ export function AppFrame({
   const translatedActiveTab = translatedActiveModule.tabs.find((tab) => tab.id === activeTab.id) ?? activeTab;
   const themeClass = getThemeClass(shell.uiPreferences.theme, systemPrefersDark);
   const resolvedTheme = resolveThemeMode(shell.uiPreferences.theme, systemPrefersDark);
+  const ThemeIcon = themeIcons[resolvedTheme];
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) {
@@ -197,9 +203,9 @@ export function AppFrame({
                 })}
               </nav>
             ) : null}
-            <button type="button" className="ghost-button" aria-label={resolvedTheme === 'dark' ? t('settings.preferences.theme.dark') : t('settings.preferences.theme.light')}>
-              {resolvedTheme === 'dark' ? <Moon size={16} /> : <Sun size={16} />}
-            </button>
+            <span className="theme-indicator" role="status" aria-label={t('shell.resolvedColorScheme', { scheme: resolvedTheme === 'dark' ? t('settings.preferences.theme.dark') : t('settings.preferences.theme.light') })}>
+              <ThemeIcon size={16} aria-hidden="true" />
+            </span>
             <button type="button" className="primary-button" onClick={() => onModuleChange('chat')}>
               <Send size={15} />
               {t('shell.openChat')}
