@@ -119,3 +119,4 @@
 
 - 审计报告：`docs/audits/deep-project-risk-audit-2026-05-20.md`；实际审计约 60 分钟，用户将并行 Agent 限制为最多 2 个；未修改源码、测试、配置、依赖、构建或发布产物。
 - 验证：`npm.cmd run typecheck` 通过；`npm.cmd run test` 通过；未运行 build/package/release，因为本轮只允许审计文档输出。HEAD：`9ff96dfcd1ea62d32c53d553d768e64f1b9fb392`；写入前 `git status --short` 为空。
+- 第二轮只读复核已追加到同一报告：复用原 2 个 Agent，不新增 Agent；补充 PowerShell installer dangerous `InstallRoot` P1 风险、packaged smoke/production secret-storage gate、IPC/Data/Knowledge/Tools 细节修正；仍未修改任何源码或运行 build/package/release。
