@@ -94,6 +94,7 @@ describe('provider invocation through NexaStore', () => {
     expect(requestSummary.promptHash).toMatch(/^[a-f0-9]{16}$/);
     expect(requestSummary.redactedPreview).toContain('[REDACTED]');
     expect(store.getUsageRecords()).toHaveLength(1);
+    expect(store.getUsageRecords()[0]).toMatchObject({ requestType: 'chat', totalTokens: 18, tokenUsageEstimated: false, status: 'completed' });
     expect(store.getAuditLogs().some((entry) => entry.action === 'chat.completed')).toBe(true);
   });
 

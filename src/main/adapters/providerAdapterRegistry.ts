@@ -14,10 +14,14 @@ import { redactHeaders, redactSensitive } from '../security/redaction.js';
 import {
   ProviderRuntimeError,
   fetchOpenAiCompatibleModels,
+  getEmbeddingRequestSummary as getOpenAiCompatibleEmbeddingRequestSummary,
   getProviderRequestSummary as getOpenAiCompatibleRequestSummary,
+  invokeOpenAiCompatibleEmbeddings,
   invokeOpenAiCompatibleChat,
   testOpenAiCompatibleProvider,
   type ChatMessageInput,
+  type ProviderEmbeddingInput,
+  type ProviderEmbeddingResult,
   type ProviderHealthResult,
   type ProviderInvocationInput,
   type ProviderInvocationResult,
@@ -25,6 +29,11 @@ import {
 } from './openAiCompatibleAdapter.js';
 
 export type ProviderAdapterCapabilities = {
+  supportsChat: boolean;
+  supportsStreaming: boolean;
+  supportsModels: boolean;
+  supportsEmbeddings: boolean;
+  supportsResponses: boolean;
   chat: boolean;
   streaming: boolean;
   modelList: boolean;
@@ -38,9 +47,11 @@ export interface ProviderAdapter {
   protocol: 'openai-compatible' | 'anthropic-native' | 'gemini-native';
   capabilities: ProviderAdapterCapabilities;
   invokeChat(input: ProviderInvocationInput): Promise<ProviderInvocationResult>;
+  invokeEmbeddings(input: ProviderEmbeddingInput): Promise<ProviderEmbeddingResult>;
   testProvider(provider: Provider, apiKey: string | null): Promise<ProviderHealthResult>;
   fetchModels(provider: Provider, apiKey: string | null): Promise<ProviderModelListResult>;
   getRequestSummary(input: ProviderInvocationInput): Record<string, unknown>;
+  getEmbeddingRequestSummary(input: ProviderEmbeddingInput): Record<string, unknown>;
 }
 
 type NativeChatEndpoint = {
@@ -63,23 +74,35 @@ const OPENAI_COMPATIBLE_ADAPTER: ProviderAdapter = {
   name: PROVIDER_ADAPTER_NAMES.openAiCompatible,
   protocol: 'openai-compatible',
   capabilities: {
+    supportsChat: true,
+    supportsStreaming: true,
+    supportsModels: true,
+    supportsEmbeddings: true,
+    supportsResponses: true,
     chat: true,
     streaming: true,
     modelList: true,
-    embeddings: false,
+    embeddings: true,
     tools: false,
     vision: false,
   },
   invokeChat: invokeOpenAiCompatibleChat,
+  invokeEmbeddings: invokeOpenAiCompatibleEmbeddings,
   testProvider: testOpenAiCompatibleProvider,
   fetchModels: fetchOpenAiCompatibleModels,
   getRequestSummary: getOpenAiCompatibleRequestSummary,
+  getEmbeddingRequestSummary: getOpenAiCompatibleEmbeddingRequestSummary,
 };
 
 const ANTHROPIC_ADAPTER: ProviderAdapter = createNativeAdapter({
   name: PROVIDER_ADAPTER_NAMES.anthropic,
   protocol: 'anthropic-native',
   capabilities: {
+    supportsChat: true,
+    supportsStreaming: true,
+    supportsModels: true,
+    supportsEmbeddings: false,
+    supportsResponses: false,
     chat: true,
     streaming: true,
     modelList: true,
@@ -180,6 +203,11 @@ const GEMINI_ADAPTER: ProviderAdapter = createNativeAdapter({
   name: PROVIDER_ADAPTER_NAMES.gemini,
   protocol: 'gemini-native',
   capabilities: {
+    supportsChat: true,
+    supportsStreaming: true,
+    supportsModels: true,
+    supportsEmbeddings: false,
+    supportsResponses: false,
     chat: true,
     streaming: true,
     modelList: true,
@@ -324,6 +352,9 @@ function createNativeAdapter(input: {
     protocol: input.protocol,
     capabilities: input.capabilities,
     invokeChat: (invocation) => invokeNativeChat(invocation, input),
+    invokeEmbeddings: async () => {
+      throw new ProviderRuntimeError('This provider adapter does not support embeddings.', PROVIDER_RUNTIME_ERROR_CODES.embeddingsUnsupported);
+    },
     testProvider: (provider, apiKey) => testNativeProvider(provider, apiKey, input.fetchModels, input.fallbackModels),
     fetchModels: (provider, apiKey) => input.fetchModels(provider, apiKey).catch((error) => {
       const normalized = normalizeInvocationError(error);
@@ -349,6 +380,18 @@ function createNativeAdapter(input: {
         timeoutMs: invocation.timeoutMs ?? PROVIDER_RUNTIME_POLICY.chatTimeoutMs,
         maxRetries: invocation.maxRetries ?? PROVIDER_RUNTIME_POLICY.maxRetries,
         headers: redactHeaders(input.buildEndpoint(invocation).headers),
+      };
+    },
+    getEmbeddingRequestSummary(invocation) {
+      return {
+        providerId: invocation.provider.id,
+        providerType: invocation.provider.type,
+        adapter: input.name,
+        protocol: input.protocol,
+        baseUrl: invocation.provider.baseUrl,
+        model: invocation.model.name,
+        inputCount: invocation.input.length,
+        supported: false,
       };
     },
   };

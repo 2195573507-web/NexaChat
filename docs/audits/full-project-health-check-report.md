@@ -16,8 +16,8 @@
 - 顶层模块：Chat、Models、Knowledge Base、Tools、Gateway、Data、Settings，合计 7 个。
 - 根路由：`/ -> /chat/conversations`。
 - 技术栈：Electron、React 19、TypeScript、Vite、SQLite via `node:sqlite`、preload IPC 隔离、本地 OpenAI-compatible Gateway。
-- Gateway 当前支持 `/v1/models`、`/v1/chat/completions`、`/v1/embeddings`；`/v1/responses` 是 reserved 501。
-- Knowledge Base 当前是 text-like import、chunk、lexical retrieval、citations；不是 PDF/Office/OCR/vector DB RAG。
+- Gateway 当前支持 `/v1/models`、`/v1/chat/completions`、`/v1/embeddings`；后续 2026-05-20 迭代已补齐 `/v1/responses` basic text。本文为 2026-05-18 历史健康检查记录，最新边界以 README 和 current architecture 为准。
+- Knowledge Base 在本报告生成时是 text-like import、chunk、lexical retrieval、citations；后续 2026-05-20 迭代已补齐配置型 provider embedding/vector 基础和 retrieval trace。PDF/Office/OCR、真实 rerank 和 full vector DB RAG 仍未完成。
 - Tools / Agent / MCP 当前是 registration、permissions、dry-run、fixture execution、approval、trace/logging；不是任意工具或代码执行。
 - Data rollback 当前是有限回滚记录能力，不是完整数据库恢复。
 
@@ -32,8 +32,8 @@
 | 05 | P1 | service registry 深层 mixin 组合可读性弱 | 已保留 facade 和现有 registry 行为，补充 service boundary tests，避免高风险重写。 |
 | 06 | P1 | IPC 运行期只做 arity 校验，缺少 payload shape validation | 已新增高风险 IPC payload runtime validators 和无效 payload 测试。 |
 | 07 | P1 | `safeStorage` 不可用时 base64 fallback 容易被误解为加密 | 已改为生产阻断、开发/测试显式 fallback。 |
-| 08 | P1 | Gateway `/v1/chat/completions` 外部 streaming 缺失 | 已为 `stream: true` 增加 OpenAI-compatible SSE；`/v1/responses` 保持 reserved 501。 |
-| 09 | P1 | `/v1/responses` 需要持续标注 reserved | 已在 README/docs/UI 边界中明确 reserved 501。 |
+| 08 | P1 | Gateway `/v1/chat/completions` 外部 streaming 缺失 | 本历史报告生成时已为 `stream: true` 增加 OpenAI-compatible SSE；后续 2026-05-20 迭代已补齐 `/v1/responses` basic text。 |
+| 09 | P1 | `/v1/responses` 需要持续标注 reserved/basic 边界 | 历史报告生成时为 reserved；后续已更新为 basic text 边界，仍不得宣称完整 OpenAI Responses API。 |
 | 10 | P1 | Knowledge 容易被误解为完整 RAG | 已在 README/docs/UI 边界中限定 text-like/lexical/citations。 |
 | 11 | P1 | Tools/MCP/Agent 容易被误解为任意执行平台 | 已在 README/docs/UI 边界中限定 dry-run/fixture/approval/trace。 |
 | 12 | P1 | Data rollback 容易被误解为完整数据库恢复 | 已在 README/docs/UI 边界中限定为有限回滚记录。 |

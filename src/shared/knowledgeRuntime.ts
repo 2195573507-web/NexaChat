@@ -34,7 +34,7 @@ export const KNOWLEDGE_RUNTIME_POLICY = {
   indexDirectory: 'sqlite://knowledge_embeddings',
 } as const;
 
-export const KNOWLEDGE_RETRIEVAL_STRATEGIES = ['lexical'] as const;
+export const KNOWLEDGE_RETRIEVAL_STRATEGIES = ['lexical', 'vector'] as const;
 export type KnowledgeRetrievalStrategy = (typeof KNOWLEDGE_RETRIEVAL_STRATEGIES)[number];
 
 export const KNOWLEDGE_PARSE_STATUSES = ['queued', 'parsing', 'indexed', 'failed', 'stale'] as const;
@@ -81,10 +81,14 @@ export interface KnowledgeScoredChunkInput {
   position: number;
   strategy: KnowledgeRetrievalStrategy;
   vector: number[];
+  vectorProviderId?: string | null;
+  vectorModelId?: string | null;
 }
 
 export interface KnowledgeScoredChunk extends KnowledgeScoredChunkInput {
   score: number;
+  vectorScore: number;
+  lexicalScore: number;
 }
 
 export function normalizeKnowledgeImport(input: {
@@ -174,19 +178,29 @@ export function lexicalEmbedding(value: string): number[] {
   return buckets.map((item) => Number((item / magnitude).toFixed(6)));
 }
 
-export function scoreKnowledgeChunks(query: string, chunks: KnowledgeScoredChunkInput[], topK: number = KNOWLEDGE_RUNTIME_POLICY.defaultTopK): KnowledgeScoredChunk[] {
+export function scoreKnowledgeChunks(
+  query: string,
+  chunks: KnowledgeScoredChunkInput[],
+  topK: number = KNOWLEDGE_RUNTIME_POLICY.defaultTopK,
+  queryVector?: number[] | null,
+): KnowledgeScoredChunk[] {
   const normalizedTopK = Math.min(Math.max(1, Math.floor(topK)), KNOWLEDGE_RUNTIME_POLICY.maxTopK);
-  const queryVector = lexicalEmbedding(query);
+  const activeQueryVector = queryVector && queryVector.length > 0 ? queryVector : lexicalEmbedding(query);
   const queryTokens = new Set(tokenizeKnowledgeText(query));
   return chunks
     .map((chunk) => {
       const chunkTokens = new Set(tokenizeKnowledgeText(chunk.content));
       const overlap = [...queryTokens].filter((token) => chunkTokens.has(token)).length;
       const overlapScore = queryTokens.size > 0 ? overlap / queryTokens.size : 0;
-      const vectorScore = cosineSimilarity(queryVector, chunk.vector);
+      const vectorScore = cosineSimilarity(activeQueryVector, chunk.vector);
+      const score = chunk.strategy === 'vector'
+        ? (vectorScore * 0.82 + overlapScore * 0.18)
+        : (vectorScore * 0.7 + overlapScore * 0.3);
       return {
         ...chunk,
-        score: Number((vectorScore * 0.7 + overlapScore * 0.3).toFixed(6)),
+        score: Number(score.toFixed(6)),
+        vectorScore: Number(vectorScore.toFixed(6)),
+        lexicalScore: Number(overlapScore.toFixed(6)),
       };
     })
     .filter((chunk) => chunk.score > 0 || query.trim().length > 0)

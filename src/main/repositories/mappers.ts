@@ -257,14 +257,22 @@ export function mapGatewayLog(row: Row): GatewayLog {
 }
 
 export function mapUsageRecord(row: Row): UsageRecord {
+  const inputTokens = Number(row.input_tokens);
+  const outputTokens = Number(row.output_tokens);
   return {
     id: String(row.id),
     workspaceId: String(row.workspace_id),
     providerId: nullableString(row.provider_id),
     modelId: nullableString(row.model_id),
     requestLogId: nullableString(row.request_log_id),
-    inputTokens: Number(row.input_tokens),
-    outputTokens: Number(row.output_tokens),
+    requestType: String(row.request_type ?? 'chat') as UsageRecord['requestType'],
+    inputTokens,
+    outputTokens,
+    totalTokens: Number(row.total_tokens ?? inputTokens + outputTokens),
+    tokenUsageEstimated: bool(row.token_usage_estimated ?? 1),
+    latencyMs: nullableNumber(row.latency_ms),
+    status: String(row.status ?? 'completed') as UsageRecord['status'],
+    errorCode: nullableString(row.error_code),
     costEstimate: Number(row.cost_estimate),
     createdAt: Number(row.created_at),
   };
@@ -420,13 +428,26 @@ export function mapKnowledgeEmbedding(row: Row): KnowledgeEmbedding {
 }
 
 export function mapKnowledgeRetrievalTrace(row: Row): KnowledgeRetrievalTrace {
+  const resultCount = Number(row.result_count);
   return {
     id: String(row.id),
     query: String(row.query),
     strategy: String(row.strategy) as KnowledgeRetrievalTrace['strategy'],
     topK: Number(row.top_k),
+    providerId: nullableString(row.provider_id),
+    modelId: nullableString(row.model_id),
+    modelNameSnapshot: nullableString(row.model_name_snapshot),
+    knowledgeScopeJson: nullableString(row.knowledge_scope_json),
+    candidateCount: Number(row.candidate_count ?? resultCount),
+    vectorCandidateCount: Number(row.vector_candidate_count ?? 0),
+    lexicalCandidateCount: Number(row.lexical_candidate_count ?? 0),
+    finalCitationCount: Number(row.final_citation_count ?? resultCount),
+    scoreSummaryJson: nullableString(row.score_summary_json),
+    timingsJson: nullableString(row.timings_json),
+    errorCode: nullableString(row.error_code),
+    errorMessage: nullableString(row.error_message),
     selectedChunkIdsJson: String(row.selected_chunk_ids_json),
-    resultCount: Number(row.result_count),
+    resultCount,
     fallbackReason: nullableString(row.fallback_reason),
     createdAt: Number(row.created_at),
   };

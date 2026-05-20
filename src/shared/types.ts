@@ -606,8 +606,14 @@ export interface UsageRecord {
   providerId: string | null;
   modelId: string | null;
   requestLogId: string | null;
+  requestType: 'chat' | 'gateway_chat' | 'gateway_responses' | 'embeddings' | 'eval' | 'provider_test' | 'other';
   inputTokens: number;
   outputTokens: number;
+  totalTokens: number;
+  tokenUsageEstimated: boolean;
+  latencyMs: number | null;
+  status: 'completed' | 'failed' | 'cancelled';
+  errorCode: string | null;
   costEstimate: number;
   createdAt: number;
 }
@@ -618,7 +624,7 @@ export interface ProviderHealthRecord {
   modelId: string | null;
   status: HealthStatus;
   latencyMs: number | null;
-  source: 'provider-test' | 'chat' | 'gateway' | 'manual';
+  source: 'provider-test' | 'chat' | 'gateway' | 'embeddings' | 'manual';
   errorCode: string | null;
   errorMessage: string | null;
   createdAt: number;
@@ -855,6 +861,18 @@ export interface KnowledgeRetrievalTrace {
   query: string;
   strategy: KnowledgeRetrievalStrategy;
   topK: number;
+  providerId: string | null;
+  modelId: string | null;
+  modelNameSnapshot: string | null;
+  knowledgeScopeJson: string | null;
+  candidateCount: number;
+  vectorCandidateCount: number;
+  lexicalCandidateCount: number;
+  finalCitationCount: number;
+  scoreSummaryJson: string | null;
+  timingsJson: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
   selectedChunkIdsJson: string;
   resultCount: number;
   fallbackReason: string | null;
@@ -901,6 +919,34 @@ export interface KnowledgeRetrievalInput {
 export interface KnowledgeRetrievalResult {
   trace: KnowledgeRetrievalTrace;
   citations: KnowledgeCitation[];
+}
+
+export interface EmbeddingCreateInput {
+  input: string | string[];
+  modelName?: string | null;
+  modelId?: string | null;
+  gatewayRequestId?: string | null;
+}
+
+export interface EmbeddingCreateResult {
+  object: 'list';
+  data: Array<{
+    object: 'embedding';
+    index: number;
+    embedding: number[];
+  }>;
+  model: string;
+  usage: {
+    prompt_tokens: number;
+    total_tokens: number;
+    estimated: boolean;
+  };
+  nexachat: {
+    strategy: 'vector';
+    providerId: string;
+    modelId: string;
+    requestLogId: string;
+  };
 }
 
 export interface McpServer {

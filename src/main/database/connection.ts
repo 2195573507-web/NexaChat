@@ -86,6 +86,7 @@ function runAdditiveMigrations(db: DatabaseSync): void {
   addColumnIfMissing(db, 'gateway_logs', 'error_code', 'TEXT');
   addColumnIfMissing(db, 'gateway_logs', 'latency_ms', 'INTEGER');
   addColumnIfMissing(db, 'gateway_logs', 'remote_address', 'TEXT');
+  migrateRagFoundationColumns(db);
   addColumnIfMissing(db, 'models', 'deleted_at', 'INTEGER');
   addColumnIfMissing(db, 'config_snapshots', 'rollback_snapshot_id', 'TEXT');
   addColumnIfMissing(db, 'config_snapshots', 'source', 'TEXT');
@@ -227,6 +228,46 @@ function migrateKnowledgeColumns(db: DatabaseSync): void {
   addColumnIfMissing(db, 'files', 'index_status', "TEXT NOT NULL DEFAULT 'queued'");
   addColumnIfMissing(db, 'files', 'deleted_at', 'INTEGER');
   addColumnIfMissing(db, 'knowledge_chunks', 'status', "TEXT NOT NULL DEFAULT 'indexed'");
+}
+
+function migrateRagFoundationColumns(db: DatabaseSync): void {
+  addColumnIfMissing(db, 'usage_records', 'request_type', "TEXT NOT NULL DEFAULT 'chat'");
+  addColumnIfMissing(db, 'usage_records', 'total_tokens', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfMissing(db, 'usage_records', 'token_usage_estimated', 'INTEGER NOT NULL DEFAULT 1');
+  addColumnIfMissing(db, 'usage_records', 'latency_ms', 'INTEGER');
+  addColumnIfMissing(db, 'usage_records', 'status', "TEXT NOT NULL DEFAULT 'completed'");
+  addColumnIfMissing(db, 'usage_records', 'error_code', 'TEXT');
+  if (tableExists(db, 'usage_records')) {
+    db.exec(`
+      UPDATE usage_records
+      SET total_tokens = CASE WHEN total_tokens = 0 THEN input_tokens + output_tokens ELSE total_tokens END,
+          token_usage_estimated = COALESCE(token_usage_estimated, 1),
+          request_type = COALESCE(NULLIF(request_type, ''), 'chat'),
+          status = COALESCE(NULLIF(status, ''), 'completed')
+    `);
+  }
+
+  addColumnIfMissing(db, 'knowledge_retrieval_traces', 'provider_id', 'TEXT');
+  addColumnIfMissing(db, 'knowledge_retrieval_traces', 'model_id', 'TEXT');
+  addColumnIfMissing(db, 'knowledge_retrieval_traces', 'model_name_snapshot', 'TEXT');
+  addColumnIfMissing(db, 'knowledge_retrieval_traces', 'knowledge_scope_json', 'TEXT');
+  addColumnIfMissing(db, 'knowledge_retrieval_traces', 'candidate_count', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfMissing(db, 'knowledge_retrieval_traces', 'vector_candidate_count', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfMissing(db, 'knowledge_retrieval_traces', 'lexical_candidate_count', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfMissing(db, 'knowledge_retrieval_traces', 'final_citation_count', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfMissing(db, 'knowledge_retrieval_traces', 'score_summary_json', 'TEXT');
+  addColumnIfMissing(db, 'knowledge_retrieval_traces', 'timings_json', 'TEXT');
+  addColumnIfMissing(db, 'knowledge_retrieval_traces', 'error_code', 'TEXT');
+  addColumnIfMissing(db, 'knowledge_retrieval_traces', 'error_message', 'TEXT');
+  if (tableExists(db, 'knowledge_retrieval_traces')) {
+    db.exec(`
+      UPDATE knowledge_retrieval_traces
+      SET candidate_count = CASE WHEN candidate_count = 0 THEN result_count ELSE candidate_count END,
+          final_citation_count = CASE WHEN final_citation_count = 0 THEN result_count ELSE final_citation_count END,
+          lexical_candidate_count = CASE WHEN lexical_candidate_count = 0 AND strategy = 'lexical' THEN result_count ELSE lexical_candidate_count END,
+          vector_candidate_count = CASE WHEN vector_candidate_count = 0 AND strategy = 'vector' THEN result_count ELSE vector_candidate_count END
+    `);
+  }
 }
 
 function addColumnIfMissing(db: DatabaseSync, table: string, column: string, definition: string): void {

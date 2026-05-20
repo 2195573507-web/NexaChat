@@ -45,7 +45,7 @@ describe('Round 9 knowledge runtime', () => {
 
     const unsupportedFileIds: string[] = [];
     for (const input of unsupportedInputs) {
-      const file = store.createKnowledgeFile(input);
+      const file = await store.createKnowledgeFile(input);
       unsupportedFileIds.push(file.id);
       expect(file.parseStatus).toBe('failed');
       expect(file.indexStatus).toBe('failed');
@@ -55,13 +55,13 @@ describe('Round 9 knowledge runtime', () => {
       expect(store.getKnowledgeChunks(file.id)).toHaveLength(0);
     }
 
-    const retrieval = store.previewKnowledgeRetrieval({ query: 'ocr placeholder' });
+    const retrieval = await store.previewKnowledgeRetrieval({ query: 'ocr placeholder' });
     expect(retrieval.citations.some((citation) => unsupportedFileIds.includes(citation.fileId))).toBe(false);
   });
 
   it('imports text content through parser chunk embedding index retrieval rebuild and delete', async () => {
     const { store } = await import('../src/main/services/store');
-    const file = store.createKnowledgeFile({
+    const file = await store.createKnowledgeFile({
       name: 'round-09.md',
       type: 'text/markdown',
       content: [
@@ -78,19 +78,52 @@ describe('Round 9 knowledge runtime', () => {
     expect(file.chunkCount).toBeGreaterThanOrEqual(1);
     expect(store.getKnowledgeChunks(file.id)).toHaveLength(file.chunkCount);
 
-    const retrieval = store.previewKnowledgeRetrieval({ query: 'structured citations for chat context', topK: 2 });
+    const retrieval = await store.previewKnowledgeRetrieval({ query: 'structured citations for chat context', topK: 2 });
     expect(retrieval.trace.resultCount).toBeGreaterThanOrEqual(1);
     expect(retrieval.citations[0].fileId).toBe(file.id);
     expect(retrieval.citations[0].score).toBeGreaterThan(0);
 
-    const rebuilt = store.rebuildKnowledgeFile({ fileId: file.id });
+    const rebuilt = await store.rebuildKnowledgeFile({ fileId: file.id });
     expect(rebuilt.parseStatus).toBe('indexed');
     expect(store.getKnowledgeChunks(file.id).every((chunk) => chunk.status === 'indexed')).toBe(true);
 
     const deleted = store.deleteKnowledgeFile({ fileId: file.id });
     expect(deleted.indexStatus).toBe('deleted');
     expect(store.getKnowledgeFiles().some((candidate) => candidate.id === file.id)).toBe(false);
-    expect(store.previewKnowledgeRetrieval({ query: 'structured citations for chat context' }).citations.some((citation) => citation.fileId === file.id)).toBe(false);
+    expect((await store.previewKnowledgeRetrieval({ query: 'structured citations for chat context' })).citations.some((citation) => citation.fileId === file.id)).toBe(false);
+  });
+
+  it('uses configured provider embeddings for vector retrieval while keeping lexical fallback available', async () => {
+    const { store } = await import('../src/main/services/store');
+    const server = createServer(handleRequest);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Missing test server address.');
+    const baseUrl = `http://127.0.0.1:${address.port}/v1`;
+    try {
+      const provider = store.createProvider({
+        name: 'Round 9 Embedding Provider',
+        type: 'openai-compatible',
+        baseUrl,
+        apiKey: 'sk-round-09-embedding',
+      });
+      const model = store.createModel({ providerId: provider.id, name: 'round-09-embedding', supportsStreaming: false, supportsEmbeddings: true });
+      const file = await store.createKnowledgeFile({
+        name: 'vector-note.md',
+        type: 'text/markdown',
+        content: 'Vector retrieval should rank provider-backed citations above unrelated local fallback text.',
+      });
+
+      expect(file.embeddingStatus).toBe('embedded');
+      const vector = await store.previewKnowledgeRetrieval({ query: 'provider backed vector citations', strategy: 'vector' });
+      expect(vector.trace.strategy).toBe('vector');
+      expect(vector.trace.providerId).toBe(provider.id);
+      expect(vector.trace.modelId).toBe(model.id);
+      expect(vector.citations[0]?.strategy).toBe('vector');
+      expect(store.getUsageRecords().some((record) => record.requestType === 'embeddings' && record.status === 'completed')).toBe(true);
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+    }
   });
 
   it('injects retrieved knowledge into chat and persists message citations', async () => {
@@ -108,7 +141,7 @@ describe('Round 9 knowledge runtime', () => {
         apiKey: 'sk-round-09',
       });
       const model = store.createModel({ providerId: provider.id, name: 'round-09-chat', supportsStreaming: false });
-      store.createKnowledgeFile({
+      await store.createKnowledgeFile({
         name: 'rag-note.md',
         type: 'text/markdown',
         content: 'RAG citations are persisted as structured message citation records and injected into provider context.',
@@ -143,6 +176,14 @@ function handleRequest(request: IncomingMessage, response: ServerResponse): void
       model: 'round-09-chat',
       choices: [{ index: 0, message: { role: 'assistant', content: 'knowledge-aware response' }, finish_reason: 'stop' }],
       usage: { prompt_tokens: 9, completion_tokens: 4, total_tokens: 13 },
+    });
+    return;
+  }
+  if (request.url === '/v1/embeddings') {
+    writeJson(response, 200, {
+      object: 'list',
+      data: [{ object: 'embedding', index: 0, embedding: [0.9, 0.1, 0.1] }],
+      usage: { prompt_tokens: 3, total_tokens: 3 },
     });
     return;
   }

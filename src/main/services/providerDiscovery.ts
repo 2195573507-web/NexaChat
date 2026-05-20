@@ -39,6 +39,7 @@ interface CandidateScore {
   issue: ProviderDiscoveryIssue | null;
   chatSupported: boolean;
   chatResult: DiscoveryFetchResult | null;
+  embeddingResult: DiscoveryFetchResult | null;
 }
 
 export function normalizeProviderDiscoveryAddress(value: string): string {
@@ -142,6 +143,7 @@ export async function discoverProvider(
     if (score.models[0]) {
       score.chatResult = await testChatForCandidate(score.candidate, score.models[0], input, fetchImpl);
       score.chatSupported = score.chatResult.ok;
+      score.embeddingResult = await testEmbeddingsForCandidate(score.candidate, score.models[0], input, fetchImpl);
     }
     scores.push(score);
     if (score.issue) {
@@ -172,6 +174,16 @@ export async function discoverProvider(
   } else if (chatResult.error) {
     warnings.push(chatResult.error);
     capabilities.chatCompletions = chatResult.status === 404 ? 'unsupported' : 'unknown';
+  }
+
+  const embeddingResult = best.embeddingResult ?? await testEmbeddingsForCandidate(best.candidate, best.models[0], input, fetchImpl);
+  if (embeddingResult.ok && hasEmbeddingVector(embeddingResult.body)) {
+    capabilities.embeddings = 'supported';
+  } else if (embeddingResult.status === 404) {
+    capabilities.embeddings = 'unsupported';
+  } else if (embeddingResult.error) {
+    warnings.push(embeddingResult.error);
+    capabilities.embeddings = 'unknown';
   }
 
   if (best.models.length === 0) {
@@ -222,12 +234,12 @@ async function testModelsForCandidate(
     }
     try {
       bestModels = parseOpenAiCompatibleModelsResponse(result.body);
-      return { candidate, modelEndpoint: endpoint, models: bestModels, latencyMs: result.latencyMs, issue: null, chatSupported: false, chatResult: null };
+      return { candidate, modelEndpoint: endpoint, models: bestModels, latencyMs: result.latencyMs, issue: null, chatSupported: false, chatResult: null, embeddingResult: null };
     } catch (error) {
       firstIssue ??= withEndpoint(normalizeDiscoveryError(error), candidate.baseUrl, endpoint);
     }
   }
-  return { candidate, modelEndpoint: candidate.modelsEndpoint, models: bestModels, latencyMs: bestLatency, issue: firstIssue, chatSupported: false, chatResult: null };
+  return { candidate, modelEndpoint: candidate.modelsEndpoint, models: bestModels, latencyMs: bestLatency, issue: firstIssue, chatSupported: false, chatResult: null, embeddingResult: null };
 }
 
 async function testChatForCandidate(
@@ -246,6 +258,26 @@ async function testChatForCandidate(
       messages: [{ role: 'user', content: 'ping' }],
       max_tokens: 1,
       stream: false,
+    }),
+    endpoint,
+    candidateBaseUrl: candidate.baseUrl,
+  });
+}
+
+async function testEmbeddingsForCandidate(
+  candidate: ProviderDiscoveryCandidate,
+  model: ProviderModelOption,
+  input: ProviderDiscoveryRequest,
+  fetchImpl: typeof fetch,
+): Promise<DiscoveryFetchResult> {
+  const endpoint = selectEndpointForBase(candidate.baseUrl, EMBEDDINGS_ENDPOINTS);
+  return discoveryFetch(fetchImpl, joinEndpoint(candidate.baseUrl, endpoint), {
+    method: 'POST',
+    headers: buildDiscoveryHeaders(input.apiKey, input.customHeadersJson),
+    timeoutMs: Math.min(input.timeoutMs ?? PROVIDER_RUNTIME_POLICY.healthTimeoutMs, PROVIDER_RUNTIME_POLICY.healthTimeoutMs),
+    body: JSON.stringify({
+      model: model.id,
+      input: ['ping'],
     }),
     endpoint,
     candidateBaseUrl: candidate.baseUrl,
@@ -431,6 +463,18 @@ function hasTokenUsage(body: unknown): boolean {
     typeof (usage as { completion_tokens?: unknown }).completion_tokens === 'number' ||
     typeof (usage as { total_tokens?: unknown }).total_tokens === 'number'
   );
+}
+
+function hasEmbeddingVector(body: unknown): boolean {
+  if (!body || typeof body !== 'object') {
+    return false;
+  }
+  const data = (body as { data?: unknown }).data;
+  if (!Array.isArray(data) || data.length === 0) {
+    return false;
+  }
+  const first = data[0] as { embedding?: unknown };
+  return Array.isArray(first.embedding) && first.embedding.every((value) => typeof value === 'number' && Number.isFinite(value));
 }
 
 function parseProviderErrorMessage(body: unknown): string | null {

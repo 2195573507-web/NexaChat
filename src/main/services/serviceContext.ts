@@ -180,6 +180,8 @@ import type {
   KnowledgeRetrievalInput,
   KnowledgeRetrievalResult,
   KnowledgeRetrievalTrace,
+  EmbeddingCreateInput,
+  EmbeddingCreateResult,
   McpServer,
   Message,
   MessagePageInput,
@@ -224,12 +226,38 @@ import type {
 } from '../../shared/types.js';
 import {
   ProviderRuntimeError,
-  fetchOpenAiCompatibleModels,
-  getProviderRequestSummary,
-  invokeOpenAiCompatibleChat,
-  testOpenAiCompatibleProvider,
   type ChatMessageInput,
 } from '../adapters/openAiCompatibleAdapter.js';
+import { getProviderAdapter } from '../adapters/providerAdapterRegistry.js';
+
+type EmbeddingExecution = {
+  strategy: 'vector' | 'lexical';
+  providerId: string | null;
+  modelId: string | null;
+  modelNameSnapshot: string;
+  vectors: number[][];
+  inputTokens: number | null;
+  totalTokens: number | null;
+  latencyMs: number | null;
+  requestLogId: string | null;
+  fallbackReason: string | null;
+};
+
+type UsageRecordInput = {
+  workspaceId: string;
+  providerId: string | null;
+  modelId: string | null;
+  requestLogId: string | null;
+  requestType: UsageRecord['requestType'];
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens?: number | null;
+  tokenUsageEstimated: boolean;
+  latencyMs?: number | null;
+  status: UsageRecord['status'];
+  errorCode?: string | null;
+  costEstimate?: number;
+};
 
 const DEFAULT_WORKSPACE_ID = 'ws_default';
 const DEFAULT_PREFS_ID = 'ui_default';
@@ -377,11 +405,11 @@ export class ServiceContext {
 
     const fileCount = Number((this.db.prepare('SELECT COUNT(*) AS count FROM files').get() as { count: number }).count);
     if (fileCount === 0) {
-      this.createKnowledgeFile({
+      this.seedKnowledgeFile({
         name: 'NexaChat getting-started.md',
         type: 'text/markdown',
         content: t('knowledge.seed.gettingStartedContent'),
-      });
+      }, timestamp);
     }
 
     const mcpCount = Number((this.db.prepare('SELECT COUNT(*) AS count FROM mcp_servers').get() as { count: number }).count);
@@ -599,17 +627,18 @@ export class ServiceContext {
     };
   }
 
-  protected retrieveKnowledge(
+  protected async retrieveKnowledge(
     query: string,
     options: {
       topK?: number;
       strategy?: KnowledgeRetrievalInput['strategy'];
       persistCitations?: boolean;
     } = {},
-  ): KnowledgeRetrievalResult {
-    const strategy = options.strategy ?? 'lexical';
+  ): Promise<KnowledgeRetrievalResult> {
+    const requestedStrategy = options.strategy ?? 'vector';
     const topK = Math.min(Math.max(1, Math.floor(options.topK ?? KNOWLEDGE_RUNTIME_POLICY.defaultTopK)), KNOWLEDGE_RUNTIME_POLICY.maxTopK);
     const timestamp = now();
+    const startedAt = Date.now();
     const candidates = this.db
       .prepare(
         `SELECT
@@ -619,6 +648,10 @@ export class ServiceContext {
            knowledge_chunks.citation,
            knowledge_chunks.position,
            files.name AS file_name,
+           knowledge_embeddings.provider_id,
+           knowledge_embeddings.model_id,
+           knowledge_embeddings.model_name_snapshot,
+           knowledge_embeddings.strategy AS embedding_strategy,
            knowledge_embeddings.vector_json
          FROM knowledge_chunks
          JOIN files ON files.id = knowledge_chunks.file_id
@@ -635,8 +668,29 @@ export class ServiceContext {
         citation: string;
         position: number;
         file_name: string;
+        provider_id: string | null;
+        model_id: string | null;
+        model_name_snapshot: string | null;
+        embedding_strategy: KnowledgeRetrievalInput['strategy'] | null;
         vector_json: string | null;
       }>;
+    let queryEmbedding: EmbeddingExecution | null = null;
+    let strategy = requestedStrategy;
+    let fallbackReason: string | null = null;
+    let retrievalError: { code: string; message: string } | null = null;
+    if (requestedStrategy === 'vector' && candidates.some((chunk) => chunk.embedding_strategy === 'vector')) {
+      try {
+        queryEmbedding = await this.generateEmbeddingVectors([query], { allowLexicalFallback: false, requestType: 'retrieval_query' });
+      } catch (error) {
+        const normalized = this.normalizeProviderError(error);
+        retrievalError = { code: normalized.code, message: normalized.message };
+        strategy = 'lexical';
+        fallbackReason = normalized.code;
+      }
+    } else if (requestedStrategy === 'vector') {
+      strategy = 'lexical';
+      fallbackReason = 'no_vector_embeddings';
+    }
     const scoredInput: KnowledgeScoredChunkInput[] = candidates.map((chunk) => ({
       id: chunk.id,
       fileId: chunk.file_id,
@@ -644,18 +698,58 @@ export class ServiceContext {
       content: chunk.content,
       citation: chunk.citation,
       position: Number(chunk.position),
-      strategy,
+      strategy: chunk.embedding_strategy === 'vector' && strategy === 'vector' ? 'vector' : 'lexical',
       vector: chunk.vector_json ? JSON.parse(chunk.vector_json) as number[] : lexicalEmbedding(chunk.content),
+      vectorProviderId: chunk.provider_id,
+      vectorModelId: chunk.model_id,
     }));
-    const scored = scoreKnowledgeChunks(query, scoredInput, topK);
+    const vectorCandidates = scoredInput.filter((chunk) => chunk.strategy === 'vector');
+    const lexicalCandidates = scoredInput.filter((chunk) => chunk.strategy === 'lexical');
+    const candidateInput = strategy === 'vector' && vectorCandidates.length > 0 ? vectorCandidates : scoredInput.map((chunk) => ({ ...chunk, strategy: 'lexical' as const }));
+    if (strategy === 'vector' && vectorCandidates.length === 0) {
+      strategy = 'lexical';
+      fallbackReason ??= 'no_vector_candidates';
+    }
+    const scored = scoreKnowledgeChunks(query, candidateInput, topK, strategy === 'vector' ? queryEmbedding?.vectors[0] : null);
     const retrievalId = createId('retrieval');
-    const fallbackReason = strategy === 'lexical' ? 'lexical_embedding' : null;
+    const scores = scored.map((chunk) => chunk.score);
+    const scoreSummary = {
+      max: scores.length > 0 ? Math.max(...scores) : 0,
+      min: scores.length > 0 ? Math.min(...scores) : 0,
+      average: scores.length > 0 ? Number((scores.reduce((sum, score) => sum + score, 0) / scores.length).toFixed(6)) : 0,
+      rerank: 'disabled',
+    };
     this.db
       .prepare(
-        `INSERT INTO knowledge_retrieval_traces (id, query, strategy, top_k, selected_chunk_ids_json, result_count, fallback_reason, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO knowledge_retrieval_traces (id, query, strategy, top_k, provider_id, model_id, model_name_snapshot, knowledge_scope_json, candidate_count, vector_candidate_count, lexical_candidate_count, final_citation_count, score_summary_json, timings_json, error_code, error_message, selected_chunk_ids_json, result_count, fallback_reason, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(retrievalId, query.trim(), strategy, topK, JSON.stringify(scored.map((chunk) => chunk.id)), scored.length, fallbackReason, timestamp);
+      .run(
+        retrievalId,
+        redactSensitive(query.trim()).slice(0, 4000),
+        strategy,
+        topK,
+        queryEmbedding?.providerId ?? null,
+        queryEmbedding?.modelId ?? null,
+        queryEmbedding?.modelNameSnapshot ?? null,
+        JSON.stringify({ workspaceId: DEFAULT_WORKSPACE_ID, fileIds: Array.from(new Set(candidates.map((chunk) => chunk.file_id))) }),
+        candidates.length,
+        vectorCandidates.length,
+        lexicalCandidates.length,
+        scored.length,
+        JSON.stringify(scoreSummary),
+        JSON.stringify({
+          totalMs: Math.max(1, Date.now() - startedAt),
+          queryEmbeddingMs: queryEmbedding?.latencyMs ?? 0,
+          rerankMs: 0,
+        }),
+        retrievalError?.code ?? null,
+        retrievalError?.message ?? null,
+        JSON.stringify(scored.map((chunk) => chunk.id)),
+        scored.length,
+        fallbackReason,
+        timestamp,
+      );
     const citations = scored.map((chunk) => this.buildKnowledgeCitation({
       retrievalId,
       chunkId: chunk.id,
@@ -664,7 +758,7 @@ export class ServiceContext {
       citation: chunk.citation,
       snippet: chunk.content.slice(0, 220),
       score: chunk.score,
-      strategy,
+      strategy: chunk.strategy,
       fallbackReason,
       timestamp,
       persist: options.persistCitations ?? false,
@@ -672,6 +766,45 @@ export class ServiceContext {
     return {
       trace: this.requireKnowledgeRetrievalTrace(retrievalId),
       citations,
+    };
+  }
+
+  public async createEmbeddings(input: EmbeddingCreateInput): Promise<EmbeddingCreateResult> {
+    const values = (Array.isArray(input.input) ? input.input : [input.input])
+      .map((value) => String(value ?? '').trim())
+      .filter(Boolean);
+    if (values.length === 0) {
+      throw new ProviderRuntimeError('Embedding input must include at least one non-empty string.', PROVIDER_RUNTIME_ERROR_CODES.invalidResponse);
+    }
+    const execution = await this.generateEmbeddingVectors(values, {
+      allowLexicalFallback: false,
+      modelId: input.modelId ?? null,
+      modelName: input.modelName ?? null,
+      gatewayRequestId: input.gatewayRequestId ?? null,
+      requestType: 'embeddings',
+    });
+    if (execution.strategy !== 'vector' || !execution.requestLogId || !execution.providerId || !execution.modelId) {
+      throw new ProviderRuntimeError('No provider-backed embedding model is configured.', PROVIDER_RUNTIME_ERROR_CODES.embeddingsUnsupported);
+    }
+    return {
+      object: 'list',
+      data: execution.vectors.map((embedding, index) => ({
+        object: 'embedding',
+        index,
+        embedding,
+      })),
+      model: execution.modelNameSnapshot,
+      usage: {
+        prompt_tokens: execution.inputTokens ?? estimateTokens(values.join('\n')),
+        total_tokens: execution.totalTokens ?? execution.inputTokens ?? estimateTokens(values.join('\n')),
+        estimated: execution.inputTokens === null || execution.totalTokens === null,
+      },
+      nexachat: {
+        strategy: 'vector',
+        providerId: execution.providerId,
+        modelId: execution.modelId,
+        requestLogId: execution.requestLogId,
+      },
     };
   }
 
@@ -791,6 +924,259 @@ export class ServiceContext {
     }
   }
 
+  protected seedKnowledgeFile(input: KnowledgeImportInput, timestamp: number): KnowledgeFile {
+    const id = createId('file');
+    const normalized = normalizeKnowledgeImport(input);
+    const metadata = {
+      parserType: normalized.parserType,
+      originalSize: input.size ?? normalized.size,
+      importMode: 'seed-inline-text',
+      maxImportBytes: KNOWLEDGE_RUNTIME_POLICY.maxImportBytes,
+      embeddingStrategy: 'lexical',
+      fallbackReason: 'constructor_seed',
+    };
+    const chunks = normalized.supported ? chunkKnowledgeText(normalized.content) : [];
+    const tokenCount = chunks.reduce((sum, chunk) => sum + chunk.tokenCount, 0);
+    const errorMessage = normalized.errorKey ? t(normalized.errorKey as Parameters<typeof t>[0]) : null;
+    const parseStatus = normalized.supported ? 'indexed' : 'failed';
+    const indexStatus = normalized.supported ? 'indexed' : 'failed';
+    const embeddingStatus = normalized.supported ? 'embedded' : 'failed';
+    this.db
+      .prepare(
+        `INSERT INTO files (id, workspace_id, knowledge_base_id, name, type, size, parse_status, index_status, embedding_status, parser_type, chunk_count, token_count, content_hash, storage_ref, metadata_json, error_message, parse_started_at, parse_completed_at, deleted_at, created_at, updated_at)
+         VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+      )
+      .run(
+        id,
+        DEFAULT_WORKSPACE_ID,
+        normalized.name,
+        normalized.type,
+        normalized.size,
+        parseStatus,
+        indexStatus,
+        embeddingStatus,
+        normalized.parserType,
+        chunks.length,
+        tokenCount,
+        normalized.contentHash,
+        null,
+        JSON.stringify(metadata),
+        errorMessage,
+        timestamp,
+        timestamp,
+        timestamp,
+        timestamp,
+      );
+    if (normalized.supported) {
+      this.indexKnowledgeChunks(id, normalized.name, chunks, {
+        strategy: 'lexical',
+        providerId: null,
+        modelId: null,
+        modelNameSnapshot: KNOWLEDGE_RUNTIME_POLICY.embeddingModel,
+        vectors: chunks.map((chunk) => lexicalEmbedding(chunk.content)),
+        inputTokens: tokenCount,
+        totalTokens: tokenCount,
+        latencyMs: 0,
+        requestLogId: null,
+        fallbackReason: 'constructor_seed',
+      }, timestamp);
+    }
+    return this.requireKnowledgeFile(id);
+  }
+
+  protected async generateEmbeddingVectors(
+    values: string[],
+    options: {
+      allowLexicalFallback: boolean;
+      modelId?: string | null;
+      modelName?: string | null;
+      gatewayRequestId?: string | null;
+      requestType?: 'knowledge_index' | 'retrieval_query' | 'embeddings';
+    },
+  ): Promise<EmbeddingExecution> {
+    const normalized = values.map((value) => value.trim()).filter(Boolean);
+    if (normalized.length === 0) {
+      return {
+        strategy: 'lexical',
+        providerId: null,
+        modelId: null,
+        modelNameSnapshot: KNOWLEDGE_RUNTIME_POLICY.embeddingModel,
+        vectors: values.map((value) => lexicalEmbedding(value)),
+        inputTokens: 0,
+        totalTokens: 0,
+        latencyMs: 0,
+        requestLogId: null,
+        fallbackReason: 'empty_input',
+      };
+    }
+    const selected = this.selectEmbeddingModel(options.modelId ?? null, options.modelName ?? null);
+    if (!selected) {
+      if (options.allowLexicalFallback) {
+        return {
+          strategy: 'lexical',
+          providerId: null,
+          modelId: null,
+          modelNameSnapshot: KNOWLEDGE_RUNTIME_POLICY.embeddingModel,
+          vectors: values.map((value) => lexicalEmbedding(value)),
+          inputTokens: estimateTokens(values.join('\n')),
+          totalTokens: estimateTokens(values.join('\n')),
+          latencyMs: 0,
+          requestLogId: null,
+          fallbackReason: 'no_embedding_model',
+        };
+      }
+      throw new ProviderRuntimeError('No enabled provider-backed embedding model is configured.', PROVIDER_RUNTIME_ERROR_CODES.embeddingsUnsupported);
+    }
+
+    const { provider, model, adapter } = selected;
+    const apiKey = this.getProviderSecret(provider);
+    const requestLogId = createId('req');
+    const startedAt = now();
+    this.db
+      .prepare(
+        `INSERT INTO request_logs (id, conversation_id, message_id, provider_id, model_id, model_name_snapshot, route_id, gateway_request_id, status, endpoint, request_summary_json, response_summary_json, input_tokens, output_tokens, latency_ms, finish_reason, error_code, error_message, started_at, completed_at, created_at)
+         VALUES (?, NULL, NULL, ?, ?, ?, NULL, ?, 'started', '/v1/embeddings', ?, NULL, ?, 0, NULL, NULL, NULL, NULL, ?, NULL, ?)`,
+      )
+      .run(
+        requestLogId,
+        provider.id,
+        model.id,
+        model.modelNameSnapshot,
+        options.gatewayRequestId ?? null,
+        JSON.stringify({
+          ...adapter.getEmbeddingRequestSummary({ provider, model, apiKey, input: normalized }),
+          inputHash: createHash('sha256').update(normalized.join('\n')).digest('hex').slice(0, 16),
+          requestType: options.requestType ?? 'embeddings',
+        }),
+        estimateTokens(normalized.join('\n')),
+        startedAt,
+        startedAt,
+      );
+
+    try {
+      const result = await adapter.invokeEmbeddings({ provider, model, apiKey, input: normalized });
+      const inputTokens = result.inputTokens ?? estimateTokens(normalized.join('\n'));
+      const totalTokens = result.totalTokens ?? inputTokens;
+      this.db
+        .prepare(
+          `UPDATE request_logs
+           SET status = 'completed', response_summary_json = ?, input_tokens = ?, output_tokens = 0, latency_ms = ?, finish_reason = 'stop', completed_at = ?
+           WHERE id = ?`,
+        )
+        .run(
+          JSON.stringify(result.responseSummary),
+          inputTokens,
+          result.latencyMs,
+          now(),
+          requestLogId,
+        );
+      this.recordUsage({
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        providerId: provider.id,
+        modelId: model.id,
+        requestLogId,
+        requestType: 'embeddings',
+        inputTokens,
+        outputTokens: 0,
+        totalTokens,
+        tokenUsageEstimated: result.inputTokens === null || result.totalTokens === null,
+        latencyMs: result.latencyMs,
+        status: 'completed',
+        errorCode: null,
+        costEstimate: 0,
+      });
+      this.recordProviderHealth(provider.id, model.id, 'healthy', result.latencyMs, 'embeddings', null, null);
+      return {
+        strategy: 'vector',
+        providerId: provider.id,
+        modelId: model.id,
+        modelNameSnapshot: model.modelNameSnapshot,
+        vectors: result.embeddings,
+        inputTokens: result.inputTokens,
+        totalTokens: result.totalTokens,
+        latencyMs: result.latencyMs,
+        requestLogId,
+        fallbackReason: null,
+      };
+    } catch (error) {
+      const normalizedError = this.normalizeProviderError(error);
+      const latencyMs = Math.max(1, now() - startedAt);
+      this.db
+        .prepare(
+          `UPDATE request_logs
+           SET status = 'failed', response_summary_json = ?, latency_ms = ?, error_code = ?, error_message = ?, completed_at = ?
+           WHERE id = ?`,
+        )
+        .run(
+          JSON.stringify({ errorCode: normalizedError.code, retryable: normalizedError.retryable }),
+          latencyMs,
+          normalizedError.code,
+          normalizedError.message,
+          now(),
+          requestLogId,
+        );
+      this.recordUsage({
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        providerId: provider.id,
+        modelId: model.id,
+        requestLogId,
+        requestType: 'embeddings',
+        inputTokens: estimateTokens(normalized.join('\n')),
+        outputTokens: 0,
+        totalTokens: estimateTokens(normalized.join('\n')),
+        tokenUsageEstimated: true,
+        latencyMs,
+        status: 'failed',
+        errorCode: normalizedError.code,
+        costEstimate: 0,
+      });
+      this.recordProviderHealth(provider.id, model.id, 'error', latencyMs, 'embeddings', normalizedError.code, normalizedError.message);
+      if (options.allowLexicalFallback) {
+        return {
+          strategy: 'lexical',
+          providerId: null,
+          modelId: null,
+          modelNameSnapshot: KNOWLEDGE_RUNTIME_POLICY.embeddingModel,
+          vectors: values.map((value) => lexicalEmbedding(value)),
+          inputTokens: estimateTokens(values.join('\n')),
+          totalTokens: estimateTokens(values.join('\n')),
+          latencyMs,
+          requestLogId,
+          fallbackReason: normalizedError.code,
+        };
+      }
+      throw error;
+    }
+  }
+
+  private selectEmbeddingModel(modelId?: string | null, modelName?: string | null): { provider: Provider; model: Model; adapter: NonNullable<ReturnType<typeof getProviderAdapter>> } | null {
+    const activeModels = this.getModels().filter((model) => model.enabled && model.healthStatus !== 'error');
+    const explicit = modelId
+      ? activeModels.find((model) => model.id === modelId)
+      : modelName
+        ? activeModels.find((model) => model.name === modelName || model.displayName === modelName || model.id === modelName)
+        : null;
+    const candidates = explicit ? [explicit] : activeModels.filter((model) => model.supportsEmbeddings);
+    for (const model of candidates) {
+      if (!model.supportsEmbeddings) {
+        throw new ProviderRuntimeError('Selected model does not support embeddings.', PROVIDER_RUNTIME_ERROR_CODES.modelEmbeddingsUnsupported);
+      }
+      const provider = this.requireProvider(model.providerId);
+      if (!provider.enabled) {
+        continue;
+      }
+      const adapter = getProviderAdapter(provider.type);
+      if (!adapter?.capabilities.supportsEmbeddings) {
+        if (explicit) {
+          throw new ProviderRuntimeError('Selected provider does not support embeddings.', PROVIDER_RUNTIME_ERROR_CODES.embeddingsUnsupported);
+        }
+        continue;
+      }
+      return { provider, model, adapter };
+    }
+    return null;
+  }
+
   protected insertMessageChunks({
     messageId,
     conversationId,
@@ -832,12 +1218,13 @@ export class ServiceContext {
     fileId: string,
     fileName: string,
     chunks: ReturnType<typeof chunkKnowledgeText>,
+    embeddings: EmbeddingExecution,
     timestamp: number,
   ): void {
     chunks.forEach((chunk, index) => {
       const chunkId = createId('kchunk');
       const embeddingId = createId('kembed');
-      const vector = lexicalEmbedding(chunk.content);
+      const vector = embeddings.vectors[index] ?? lexicalEmbedding(chunk.content);
       const citation = `${fileName}#chunk-${index + 1}`;
       this.db
         .prepare(
@@ -855,19 +1242,27 @@ export class ServiceContext {
           chunk.sourceStart,
           chunk.sourceEnd,
           embeddingId,
-          JSON.stringify({ strategy: 'lexical', indexDirectory: KNOWLEDGE_RUNTIME_POLICY.indexDirectory }),
+          JSON.stringify({
+            strategy: embeddings.strategy,
+            indexDirectory: KNOWLEDGE_RUNTIME_POLICY.indexDirectory,
+            embeddingRequestLogId: embeddings.requestLogId,
+            fallbackReason: embeddings.fallbackReason,
+          }),
           timestamp + index,
           timestamp + index,
         );
       this.db
         .prepare(
           `INSERT INTO knowledge_embeddings (id, chunk_id, provider_id, model_id, model_name_snapshot, strategy, dimension, vector_json, vector_hash, status, created_at)
-           VALUES (?, ?, NULL, NULL, ?, 'lexical', ?, ?, ?, 'embedded', ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'embedded', ?)`,
         )
         .run(
           embeddingId,
           chunkId,
-          KNOWLEDGE_RUNTIME_POLICY.embeddingModel,
+          embeddings.providerId,
+          embeddings.modelId,
+          embeddings.modelNameSnapshot,
+          embeddings.strategy,
           vector.length,
           JSON.stringify(vector),
           stableKnowledgeHash(JSON.stringify(vector)),
@@ -1343,6 +1738,32 @@ export class ServiceContext {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(createId('health'), providerId, modelId, status, latencyMs, source, errorCode, errorMessage ? redactSensitive(errorMessage) : null, now());
+  }
+
+  protected recordUsage(input: UsageRecordInput): void {
+    const totalTokens = input.totalTokens ?? input.inputTokens + input.outputTokens;
+    this.db
+      .prepare(
+        `INSERT INTO usage_records (id, workspace_id, provider_id, model_id, request_log_id, request_type, input_tokens, output_tokens, total_tokens, token_usage_estimated, latency_ms, status, error_code, cost_estimate, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        createId('usage'),
+        input.workspaceId,
+        input.providerId,
+        input.modelId,
+        input.requestLogId,
+        input.requestType,
+        Math.max(0, Math.floor(input.inputTokens)),
+        Math.max(0, Math.floor(input.outputTokens)),
+        Math.max(0, Math.floor(totalTokens)),
+        input.tokenUsageEstimated ? 1 : 0,
+        input.latencyMs ?? null,
+        input.status,
+        input.errorCode ?? null,
+        input.costEstimate ?? 0,
+        now(),
+      );
   }
 
   protected requireGatewayKey(id: string): GatewayApiKey {
@@ -1848,11 +2269,12 @@ export interface ServiceContext {
   listKnowledgeChunks(input?: KnowledgeChunkPageInput): PageResult<KnowledgeChunk>;
   getKnowledgeRetrievalTraces(): KnowledgeRetrievalTrace[];
   getKnowledgeCitations(messageId?: string): KnowledgeCitation[];
-  createKnowledgeFile(input: KnowledgeImportInput): KnowledgeFile;
-  retryKnowledgeFile(input: KnowledgeRebuildInput): KnowledgeFile;
-  rebuildKnowledgeFile(input: KnowledgeRebuildInput): KnowledgeFile;
+  createKnowledgeFile(input: KnowledgeImportInput): Promise<KnowledgeFile>;
+  retryKnowledgeFile(input: KnowledgeRebuildInput): Promise<KnowledgeFile>;
+  rebuildKnowledgeFile(input: KnowledgeRebuildInput): Promise<KnowledgeFile>;
   deleteKnowledgeFile(input: KnowledgeDeleteInput): KnowledgeFile;
-  previewKnowledgeRetrieval(input: KnowledgeRetrievalInput): KnowledgeRetrievalResult;
+  previewKnowledgeRetrieval(input: KnowledgeRetrievalInput): Promise<KnowledgeRetrievalResult>;
+  createEmbeddings(input: EmbeddingCreateInput): Promise<EmbeddingCreateResult>;
   getMcpServers(): McpServer[];
   getAgents(): AgentDefinition[];
   getTools(): ToolDefinition[];

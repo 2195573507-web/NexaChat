@@ -304,7 +304,7 @@ export function ChatService<TBase extends ServiceConstructor<ServiceContext>>(Ba
     const inputTokens = estimateTokens(trimmedContent);
     const emit = options.onEvent ?? (() => {});
     const modelForContext = this.requireModel(routeDecision.modelId);
-    const retrieval = this.retrieveKnowledge(trimmedContent, { persistCitations: false });
+    const retrieval = await this.retrieveKnowledge(trimmedContent, { persistCitations: false });
     const context = this.buildConversationContext(
       conversation.id,
       contextStrategy,
@@ -552,22 +552,21 @@ export function ChatService<TBase extends ServiceConstructor<ServiceContext>>(Ba
           requestLogId,
         );
 
-      this.db
-        .prepare(
-          `INSERT INTO usage_records (id, workspace_id, provider_id, model_id, request_log_id, input_tokens, output_tokens, cost_estimate, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(
-          createId('usage'),
-          conversation.workspaceId,
-          routeDecision.providerId,
-          routeDecision.modelId,
-          requestLogId,
-          result.inputTokens ?? inputTokens,
-          outputTokens,
-          this.estimateCost(routeDecision.modelId, result.inputTokens ?? inputTokens, outputTokens),
-          now(),
-        );
+      this.recordUsage({
+        workspaceId: conversation.workspaceId,
+        providerId: routeDecision.providerId,
+        modelId: routeDecision.modelId,
+        requestLogId,
+        requestType: input.metadata?.gatewayEndpoint === '/v1/responses' ? 'gateway_responses' : input.metadata?.gatewayEndpoint === '/v1/chat/completions' ? 'gateway_chat' : 'chat',
+        inputTokens: result.inputTokens ?? inputTokens,
+        outputTokens,
+        totalTokens: result.totalTokens ?? (result.inputTokens ?? inputTokens) + outputTokens,
+        tokenUsageEstimated: result.inputTokens === null || result.outputTokens === null || result.totalTokens === null,
+        latencyMs: result.latencyMs,
+        status: 'completed',
+        errorCode: null,
+        costEstimate: this.estimateCost(routeDecision.modelId, result.inputTokens ?? inputTokens, outputTokens),
+      });
 
       this.db
         .prepare('UPDATE conversations SET title = ?, last_message_at = ?, updated_at = ? WHERE id = ?')

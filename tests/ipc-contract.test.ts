@@ -105,7 +105,7 @@ describe('IPC contract authority', () => {
       .toThrow(/statusCode/);
     expect(() => assertIpcPayload(IPC_CHANNELS.knowledgeCreateFile, [{ name: 'big.md', content: 'x'.repeat(600_001) }]))
       .toThrow(/content/);
-    expect(() => assertIpcPayload(IPC_CHANNELS.knowledgePreviewRetrieval, [{ query: 'hello', strategy: 'vector' }]))
+    expect(() => assertIpcPayload(IPC_CHANNELS.knowledgePreviewRetrieval, [{ query: 'hello', strategy: 'rerank' }]))
       .toThrow(/strategy/);
     expect(() => assertIpcPayload(IPC_CHANNELS.gatewayCreateKey, [{ name: 'Gateway Key', scopes: ['responses:write'] }]))
       .toThrow(/unsupported scope/);

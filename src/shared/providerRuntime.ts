@@ -12,6 +12,7 @@ export type ProviderNativeAdapterName = (typeof PROVIDER_ADAPTER_NAMES)[keyof ty
 export const OPENAI_COMPATIBLE_ENDPOINTS = {
   models: '/models',
   chatCompletions: '/chat/completions',
+  embeddings: '/embeddings',
 } as const;
 
 export const PROVIDER_RUNTIME_POLICY = {
@@ -23,6 +24,8 @@ export const PROVIDER_RUNTIME_POLICY = {
 
 export const PROVIDER_RUNTIME_ERROR_CODES = {
   unsupportedProvider: 'provider_unsupported',
+  embeddingsUnsupported: 'provider_embeddings_unsupported',
+  modelEmbeddingsUnsupported: 'provider_model_embeddings_unsupported',
   invalidBaseUrl: 'provider_invalid_base_url',
   missingSecret: 'provider_secret_missing',
   authFailed: 'provider_auth_failed',

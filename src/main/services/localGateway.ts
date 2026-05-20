@@ -1,6 +1,9 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { store } from './store.js';
 import {
+  PROVIDER_RUNTIME_ERROR_CODES,
+} from '../../shared/providerRuntime.js';
+import {
   GATEWAY_BIND_HOST,
   GATEWAY_BODY_LIMIT_BYTES,
   GATEWAY_ENDPOINT,
@@ -11,7 +14,6 @@ import {
   type GatewayErrorCode,
   type GatewayScope,
 } from '../../shared/gatewayRuntime.js';
-import { KNOWLEDGE_RUNTIME_POLICY, lexicalEmbedding } from '../../shared/knowledgeRuntime.js';
 import type { ChatStreamEventPayload } from '../../shared/ipc.js';
 import type { ChatResponse } from '../../shared/types.js';
 
@@ -434,25 +436,25 @@ async function handleEmbeddings(request: IncomingMessage, response: ServerRespon
     return;
   }
   const body = await readJsonBody(request);
-  const input = Array.isArray(body.input) ? body.input : [body.input ?? ''];
-  writeJson(response, 200, {
-    object: 'list',
-    data: input.map((value, index) => ({
-      object: 'embedding',
-      index,
-      embedding: lexicalEmbedding(String(value)),
-    })),
-    model: body.model ?? KNOWLEDGE_RUNTIME_POLICY.embeddingModel,
-    usage: {
-      prompt_tokens: input.join(' ').length,
-      total_tokens: input.join(' ').length,
-    },
-    nexachat: {
-      strategy: 'lexical',
-      indexDirectory: KNOWLEDGE_RUNTIME_POLICY.indexDirectory,
-    },
-  });
-  recordGatewayEvent(request, GATEWAY_ENDPOINT.embeddings, 200, startedAt, auth.key, auth.scope, null);
+  const input = Array.isArray(body.input) ? body.input.map((item) => String(item ?? '')) : [String(body.input ?? '')];
+  if (input.every((item) => item.trim().length === 0)) {
+    writeGatewayError(response, 'invalid_request', '/v1/embeddings requires a non-empty string or string array input.');
+    recordGatewayEvent(request, GATEWAY_ENDPOINT.embeddings, 400, startedAt, auth.key, auth.scope, 'invalid_request');
+    return;
+  }
+  try {
+    const result = await store.createEmbeddings({
+      input,
+      modelName: typeof body.model === 'string' ? body.model : null,
+      gatewayRequestId: `gwemb_${startedAt}_${Math.random().toString(16).slice(2)}`,
+    });
+    writeJson(response, 200, result);
+    recordGatewayEvent(request, GATEWAY_ENDPOINT.embeddings, 200, startedAt, auth.key, auth.scope, null, result.nexachat.requestLogId);
+  } catch (error) {
+    const normalized = normalizeGatewayError(error);
+    writeGatewayError(response, normalized.code, normalized.message);
+    recordGatewayEvent(request, GATEWAY_ENDPOINT.embeddings, GATEWAY_ERROR_STATUS[normalized.code], startedAt, auth.key, auth.scope, normalized.code);
+  }
 }
 
 function unsupportedResponsesFields(body: Record<string, unknown>): string[] {
@@ -627,6 +629,30 @@ class GatewayRequestError extends Error {
 function normalizeGatewayError(error: unknown): { code: GatewayErrorCode; message: string } {
   if (error instanceof GatewayRequestError) {
     return { code: error.code, message: error.message };
+  }
+  if (error instanceof Error && 'code' in error) {
+    const code = String((error as { code?: unknown }).code);
+    if (
+      code === PROVIDER_RUNTIME_ERROR_CODES.embeddingsUnsupported ||
+      code === PROVIDER_RUNTIME_ERROR_CODES.modelEmbeddingsUnsupported ||
+      code === PROVIDER_RUNTIME_ERROR_CODES.missingSecret ||
+      code === PROVIDER_RUNTIME_ERROR_CODES.invalidBaseUrl ||
+      code === PROVIDER_RUNTIME_ERROR_CODES.unsupportedProvider
+    ) {
+      return { code: 'invalid_request', message: error.message };
+    }
+    if (
+      code === PROVIDER_RUNTIME_ERROR_CODES.authFailed ||
+      code === PROVIDER_RUNTIME_ERROR_CODES.forbidden ||
+      code === PROVIDER_RUNTIME_ERROR_CODES.rateLimited ||
+      code === PROVIDER_RUNTIME_ERROR_CODES.timeout ||
+      code === PROVIDER_RUNTIME_ERROR_CODES.upstreamError ||
+      code === PROVIDER_RUNTIME_ERROR_CODES.networkError ||
+      code === PROVIDER_RUNTIME_ERROR_CODES.invalidResponse ||
+      code === PROVIDER_RUNTIME_ERROR_CODES.modelNotFound
+    ) {
+      return { code: 'provider_error', message: error.message };
+    }
   }
   return { code: 'internal_error', message: error instanceof Error ? error.message : String(error) };
 }

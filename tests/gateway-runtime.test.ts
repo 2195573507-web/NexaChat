@@ -164,15 +164,13 @@ describe('Round 8 gateway runtime authority', () => {
       },
       body: JSON.stringify({ input: ['hello', 'nexachat'] }),
     });
-    const embeddingsBody = await embeddings.json() as { object: string; data: Array<{ embedding: number[] }>; nexachat: { strategy: string } };
-    expect(embeddings.status).toBe(200);
-    expect(embeddingsBody.object).toBe('list');
-    expect(embeddingsBody.data).toHaveLength(2);
-    expect(embeddingsBody.data[0].embedding.length).toBeGreaterThan(0);
-    expect(embeddingsBody.nexachat.strategy).toBe('lexical');
+    const embeddingsBody = await embeddings.json() as { error?: { type: string } };
+    expect(embeddings.status).toBe(400);
+    expect(embeddingsBody.error?.type).toBe('invalid_request');
     expect(store.getGatewayLogs().some((entry) => entry.path === '/v1/responses' && entry.statusCode === 403 && entry.errorCode === 'scope_denied')).toBe(true);
     expect(store.getGatewayLogs().some((entry) => entry.path === '/v1/responses' && entry.statusCode === 400 && entry.errorCode === 'unsupported_field')).toBe(true);
     expect(store.getGatewayLogs().some((entry) => entry.path === '/v1/responses' && entry.statusCode === 400 && entry.errorCode === 'invalid_request')).toBe(true);
+    expect(store.getGatewayLogs().some((entry) => entry.path === '/v1/embeddings' && entry.statusCode === 400 && entry.errorCode === 'invalid_request')).toBe(true);
   });
 });
 

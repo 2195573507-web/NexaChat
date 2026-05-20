@@ -89,8 +89,8 @@ function seedRepositoryFixture(database: DatabaseSync): void {
     ['usage_3', 199_000, 6, 7],
   ] as const) {
     database.prepare(
-      `INSERT INTO usage_records (id, workspace_id, provider_id, model_id, request_log_id, input_tokens, output_tokens, cost_estimate, created_at)
-       VALUES (?, 'workspace_1', 'provider_1', 'model_1', NULL, ?, ?, 0, ?)`,
-    ).run(id, inputTokens, outputTokens, createdAt);
+      `INSERT INTO usage_records (id, workspace_id, provider_id, model_id, request_log_id, request_type, input_tokens, output_tokens, total_tokens, token_usage_estimated, latency_ms, status, error_code, cost_estimate, created_at)
+       VALUES (?, 'workspace_1', 'provider_1', 'model_1', NULL, 'chat', ?, ?, ?, 1, 12, 'completed', NULL, 0, ?)`,
+    ).run(id, inputTokens, outputTokens, inputTokens + outputTokens, createdAt);
   }
 }

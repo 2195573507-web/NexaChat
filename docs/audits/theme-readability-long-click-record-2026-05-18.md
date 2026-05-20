@@ -8,8 +8,8 @@
 - The user stopped the work with the stop instruction `bu yao pao le` / `do not keep running`; no further long-running tests, build commands, smoke commands, commit, or push were run after that instruction.
 
 ## Tool And Skill Record
-- Missing skill path recorded: `C:\Users\至亲\.codex\skills\using-superpower\SKILL.md` was not available.
-- Available equivalent used: `C:\Users\至亲\.codex\skills\using-superpowers\SKILL.md`.
+- Missing skill name recorded: `using-superpower` was not available.
+- Available equivalent used: `using-superpowers`.
 - UI audit skill used: `impeccable`.
 - Browser/Playwright-driven real-click workflow was used for UI testing.
 

@@ -2,6 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   ProviderRuntimeError,
+  getEmbeddingRequestSummary,
+  invokeOpenAiCompatibleEmbeddings,
   invokeOpenAiCompatibleChat,
   testOpenAiCompatibleProvider,
 } from '../src/main/adapters/openAiCompatibleAdapter';
@@ -154,6 +156,27 @@ describe('OpenAI-compatible provider adapter', () => {
 
     expect(result.ok).toBe(true);
     expect(result.modelNames).toEqual(['test-chat']);
+  });
+
+  it('calls OpenAI-compatible embeddings and redacts embedding request summaries', async () => {
+    const embeddingModel = { ...model, name: 'test-embedding', supportsEmbeddings: true };
+    const result = await invokeOpenAiCompatibleEmbeddings({
+      provider,
+      model: embeddingModel,
+      apiKey: 'sk-embedding-secret',
+      input: ['vector me'],
+    });
+
+    expect(lastAuth).toBe('Bearer sk-embedding-secret');
+    expect(result.embeddings).toEqual([[0.1, 0.2, 0.3]]);
+    expect(result.inputTokens).toBe(2);
+    expect(result.totalTokens).toBe(2);
+    expect(JSON.stringify(getEmbeddingRequestSummary({
+      provider,
+      model: embeddingModel,
+      apiKey: 'sk-embedding-secret',
+      input: ['vector me'],
+    }))).not.toContain('sk-embedding-secret');
   });
 });
 
@@ -313,6 +336,15 @@ function handleRequest(request: IncomingMessage, response: ServerResponse): void
       return;
     }
     writeJson(response, 200, jsonPayload());
+    return;
+  }
+  if (request.url === '/v1/embeddings') {
+    writeJson(response, 200, {
+      object: 'list',
+      data: [{ object: 'embedding', index: 0, embedding: [0.1, 0.2, 0.3] }],
+      model: 'test-embedding',
+      usage: { prompt_tokens: 2, total_tokens: 2 },
+    });
     return;
   }
   writeJson(response, 404, { error: { message: 'not found' } });

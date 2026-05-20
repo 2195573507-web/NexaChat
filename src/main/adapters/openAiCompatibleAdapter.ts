@@ -27,6 +27,16 @@ export interface ProviderInvocationInput {
   onProgress?: (message: string) => void;
 }
 
+export interface ProviderEmbeddingInput {
+  provider: Provider;
+  model: Model;
+  apiKey: string | null;
+  input: string[];
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  maxRetries?: number;
+}
+
 export interface ProviderInvocationResult {
   content: string;
   chunks: string[];
@@ -37,6 +47,15 @@ export interface ProviderInvocationResult {
   latencyMs: number;
   retryCount: number;
   streamed: boolean;
+  responseSummary: Record<string, unknown>;
+}
+
+export interface ProviderEmbeddingResult {
+  embeddings: number[][];
+  inputTokens: number | null;
+  totalTokens: number | null;
+  latencyMs: number;
+  retryCount: number;
   responseSummary: Record<string, unknown>;
 }
 
@@ -136,6 +155,77 @@ export async function invokeOpenAiCompatibleChat(input: ProviderInvocationInput)
   throw lastError ?? new ProviderRuntimeError('Provider invocation failed.', PROVIDER_RUNTIME_ERROR_CODES.upstreamError);
 }
 
+export async function invokeOpenAiCompatibleEmbeddings(input: ProviderEmbeddingInput): Promise<ProviderEmbeddingResult> {
+  assertProviderReady(input.provider, input.apiKey);
+  if (!input.model.supportsEmbeddings) {
+    throw new ProviderRuntimeError('Selected model does not support embeddings.', PROVIDER_RUNTIME_ERROR_CODES.modelEmbeddingsUnsupported);
+  }
+  if (input.signal?.aborted) {
+    throw new ProviderRuntimeError('Provider request was cancelled before it started.', PROVIDER_RUNTIME_ERROR_CODES.cancelled);
+  }
+  const normalizedInput = input.input.map((item) => item.trim()).filter(Boolean);
+  if (normalizedInput.length === 0) {
+    throw new ProviderRuntimeError('Embedding input is empty.', PROVIDER_RUNTIME_ERROR_CODES.invalidResponse);
+  }
+  const startedAt = Date.now();
+  const timeoutMs = input.timeoutMs ?? PROVIDER_RUNTIME_POLICY.healthTimeoutMs;
+  const maxRetries = input.maxRetries ?? PROVIDER_RUNTIME_POLICY.maxRetries;
+  let attempt = 0;
+  let lastError: ProviderRuntimeError | null = null;
+
+  while (attempt <= maxRetries) {
+    const controller = new AbortController();
+    const upstreamAbort = () => controller.abort(input.signal?.reason);
+    const timer = setTimeout(() => controller.abort(new Error('provider_timeout')), timeoutMs);
+    input.signal?.addEventListener('abort', upstreamAbort, { once: true });
+
+    try {
+      const response = await fetch(joinEndpoint(input.provider.baseUrl, OPENAI_COMPATIBLE_ENDPOINTS.embeddings), {
+        method: 'POST',
+        headers: buildHeaders(input.provider, input.apiKey),
+        body: JSON.stringify({
+          model: input.model.name,
+          input: normalizedInput,
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      input.signal?.removeEventListener('abort', upstreamAbort);
+
+      if (!response.ok) {
+        const error = await buildHttpError(response);
+        if (attempt < maxRetries && error.retryable) {
+          lastError = error;
+          attempt += 1;
+          await sleep(PROVIDER_RUNTIME_POLICY.retryBackoffMs * attempt);
+          continue;
+        }
+        throw error;
+      }
+
+      const result = await parseEmbeddingResponse(response, normalizedInput.length);
+      return {
+        ...result,
+        latencyMs: Math.max(1, Date.now() - startedAt),
+        retryCount: attempt,
+      };
+    } catch (error) {
+      clearTimeout(timer);
+      input.signal?.removeEventListener('abort', upstreamAbort);
+      const normalized = normalizeInvocationError(error);
+      if (attempt < maxRetries && normalized.retryable) {
+        lastError = normalized;
+        attempt += 1;
+        await sleep(PROVIDER_RUNTIME_POLICY.retryBackoffMs * attempt);
+        continue;
+      }
+      throw normalized;
+    }
+  }
+
+  throw lastError ?? new ProviderRuntimeError('Provider embedding invocation failed.', PROVIDER_RUNTIME_ERROR_CODES.upstreamError);
+}
+
 export async function testOpenAiCompatibleProvider(provider: Provider, apiKey: string | null): Promise<ProviderHealthResult> {
   const startedAt = Date.now();
   try {
@@ -191,6 +281,20 @@ export function getProviderRequestSummary(input: ProviderInvocationInput): Recor
     messageCount: input.messages.length,
     stream: input.stream === true,
     timeoutMs: input.timeoutMs ?? PROVIDER_RUNTIME_POLICY.chatTimeoutMs,
+    maxRetries: input.maxRetries ?? PROVIDER_RUNTIME_POLICY.maxRetries,
+    headers: redactHeaders(buildHeaders(input.provider, input.apiKey)),
+  };
+}
+
+export function getEmbeddingRequestSummary(input: ProviderEmbeddingInput): Record<string, unknown> {
+  return {
+    providerId: input.provider.id,
+    providerType: input.provider.type,
+    adapter: 'openai-compatible',
+    baseUrl: input.provider.baseUrl,
+    model: input.model.name,
+    inputCount: input.input.length,
+    timeoutMs: input.timeoutMs ?? PROVIDER_RUNTIME_POLICY.healthTimeoutMs,
     maxRetries: input.maxRetries ?? PROVIDER_RUNTIME_POLICY.maxRetries,
     headers: redactHeaders(buildHeaders(input.provider, input.apiKey)),
   };
@@ -278,6 +382,45 @@ async function parseJsonResponse(response: Response): Promise<Omit<ProviderInvoc
       model: typeof body.model === 'string' ? body.model : null,
       finishReason: typeof choice?.finish_reason === 'string' ? choice.finish_reason : null,
       usage: body.usage ?? null,
+    },
+  };
+}
+
+async function parseEmbeddingResponse(
+  response: Response,
+  expectedCount: number,
+): Promise<Omit<ProviderEmbeddingResult, 'latencyMs' | 'retryCount'>> {
+  const body = await response.json() as {
+    data?: Array<{ embedding?: unknown; index?: unknown }>;
+    usage?: { prompt_tokens?: unknown; total_tokens?: unknown };
+    model?: unknown;
+    id?: unknown;
+  };
+  if (!Array.isArray(body.data)) {
+    throw new ProviderRuntimeError('Provider embedding response did not include a data array.', PROVIDER_RUNTIME_ERROR_CODES.invalidResponse);
+  }
+  const sorted = body.data
+    .slice()
+    .sort((left, right) => Number(left.index ?? 0) - Number(right.index ?? 0));
+  const embeddings = sorted.map((item) => {
+    if (!Array.isArray(item.embedding) || item.embedding.some((value) => typeof value !== 'number' || !Number.isFinite(value))) {
+      throw new ProviderRuntimeError('Provider embedding response included an invalid vector.', PROVIDER_RUNTIME_ERROR_CODES.invalidResponse);
+    }
+    return item.embedding.map((value) => Number(value));
+  });
+  if (embeddings.length !== expectedCount) {
+    throw new ProviderRuntimeError('Provider embedding response count did not match the request.', PROVIDER_RUNTIME_ERROR_CODES.invalidResponse);
+  }
+  return {
+    embeddings,
+    inputTokens: toNullableNumber(body.usage?.prompt_tokens),
+    totalTokens: toNullableNumber(body.usage?.total_tokens),
+    responseSummary: {
+      id: typeof body.id === 'string' ? body.id : null,
+      model: typeof body.model === 'string' ? body.model : null,
+      usage: body.usage ?? null,
+      vectorCount: embeddings.length,
+      dimension: embeddings[0]?.length ?? 0,
     },
   };
 }

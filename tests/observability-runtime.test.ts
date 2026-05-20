@@ -173,14 +173,22 @@ function provider(input: Pick<Provider, 'id' | 'name' | 'healthStatus'>): Provid
 }
 
 function usageRecord(input: Partial<UsageRecord>): UsageRecord {
+  const inputTokens = input.inputTokens ?? 0;
+  const outputTokens = input.outputTokens ?? 0;
   return {
     id: 'usage_1',
     workspaceId: 'ws_default',
     providerId: 'provider_1',
     modelId: 'model_1',
     requestLogId: input.requestLogId ?? null,
-    inputTokens: input.inputTokens ?? 0,
-    outputTokens: input.outputTokens ?? 0,
+    requestType: input.requestType ?? 'chat',
+    inputTokens,
+    outputTokens,
+    totalTokens: input.totalTokens ?? inputTokens + outputTokens,
+    tokenUsageEstimated: input.tokenUsageEstimated ?? false,
+    latencyMs: input.latencyMs ?? null,
+    status: input.status ?? 'completed',
+    errorCode: input.errorCode ?? null,
     costEstimate: 0,
     createdAt: input.createdAt ?? 1,
   };
@@ -220,6 +228,18 @@ function retrievalTrace(): KnowledgeRetrievalTrace {
     query: 'local',
     strategy: 'lexical',
     topK: 3,
+    providerId: null,
+    modelId: null,
+    modelNameSnapshot: null,
+    knowledgeScopeJson: JSON.stringify({ test: true }),
+    candidateCount: 1,
+    vectorCandidateCount: 0,
+    lexicalCandidateCount: 1,
+    finalCitationCount: 1,
+    scoreSummaryJson: JSON.stringify({ rerank: 'disabled' }),
+    timingsJson: JSON.stringify({ totalMs: 1 }),
+    errorCode: null,
+    errorMessage: null,
     selectedChunkIdsJson: JSON.stringify(['chunk_1']),
     resultCount: 1,
     fallbackReason: null,

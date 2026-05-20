@@ -119,12 +119,12 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
     return (
       <TabPanel moduleId="knowledge" tab={activeTab}>
         <PageHeader
-          eyebrow={t('knowledge.strategy.lexical')}
+          eyebrow={retrieval?.trace.strategy ?? 'vector'}
           title={t('knowledge.retrieval.title')}
           description={activeTab.featureBoundary}
           status={<StatusPillLite label={indexedFiles.length > 0 ? t('common.indexed') : t('common.notConfigured')} state={indexedFiles.length > 0 ? 'ready' : 'warning'} />}
           actions={<CommandButton variant="primary" icon={<Search size={15} />} disabled={!query.trim() || indexedFiles.length === 0 || pending.isPending('knowledge.retrieve')} disabledReason={indexedFiles.length === 0 ? t('knowledge.retrieval.dependency') : undefined} onClick={() => onAction(t('knowledge.toast.retrieved'), () => pending.runPending('knowledge.retrieve', async () => {
-            const result = await api.previewKnowledgeRetrieval({ query, topK: KNOWLEDGE_RUNTIME_POLICY.defaultTopK, strategy: 'lexical' });
+            const result = await api.previewKnowledgeRetrieval({ query, topK: KNOWLEDGE_RUNTIME_POLICY.defaultTopK, strategy: 'vector' });
             setRetrieval(result);
           }))}>{pending.isPending('knowledge.retrieve') ? t('app.status.busy') : t('knowledge.retrieval.run')}</CommandButton>}
         />
@@ -149,7 +149,8 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
           />
         </ConfigList>
         <ConfigDetail title={t('stage.environment-limited')} description={t('nav.knowledge.retrieval.boundary')}>
-          <StatusPillLite label={t('knowledge.strategy.lexical')} state="warning" />
+          <StatusPillLite label={retrieval?.trace.strategy ?? 'vector'} state={retrieval?.trace.strategy === 'vector' ? 'ready' : 'warning'} />
+          {retrieval?.trace.fallbackReason ? <InlineNotice tone="warning" title={t('knowledge.columns.fallback')} detail={retrieval.trace.fallbackReason} /> : null}
           <InlineNotice tone="warning" title={t('common.required')} detail={t('knowledge.retrieval.dependency')} />
           <InlineNotice tone="info" title={t('knowledge.columns.citation')} detail={t('knowledge.retrieval.note')} />
         </ConfigDetail>

@@ -199,22 +199,21 @@ export function ObservabilityService<TBase extends ServiceConstructor<ServiceCon
           now(),
           requestLogId,
         );
-      this.db
-        .prepare(
-          `INSERT INTO usage_records (id, workspace_id, provider_id, model_id, request_log_id, input_tokens, output_tokens, cost_estimate, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(
-          createId('usage'),
-          DEFAULT_WORKSPACE_ID,
-          provider.id,
-          model.id,
-          requestLogId,
-          inputTokens,
-          outputTokens,
-          this.estimateCost(model.id, inputTokens, outputTokens),
-          now(),
-        );
+      this.recordUsage({
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        providerId: provider.id,
+        modelId: model.id,
+        requestLogId,
+        requestType: 'eval',
+        inputTokens,
+        outputTokens,
+        totalTokens: invocation.totalTokens ?? inputTokens + outputTokens,
+        tokenUsageEstimated: invocation.inputTokens === null || invocation.outputTokens === null || invocation.totalTokens === null,
+        latencyMs: invocation.latencyMs,
+        status: 'completed',
+        errorCode: null,
+        costEstimate: this.estimateCost(model.id, inputTokens, outputTokens),
+      });
       this.db
         .prepare(
           `INSERT INTO eval_results (id, eval_set_id, provider_id, model_id, request_log_id, status, score, latency_ms, output_preview, error_code, error_message, created_at)

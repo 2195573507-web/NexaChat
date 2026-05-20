@@ -170,6 +170,52 @@ describe('local gateway provider forwarding chain', () => {
     expect(store.getGatewayLogs().some((entry) => entry.statusCode === 200 && entry.path === '/v1/responses' && entry.requestLogId === body.nexachat?.requestLogId)).toBe(true);
   });
 
+  it('forwards /v1/embeddings through the configured embedding provider and records usage', async () => {
+    const { store } = await import('../src/main/services/store');
+    const { createLocalGatewayServer } = await import('../src/main/services/localGateway');
+    const provider = store.createProvider({
+      name: 'Gateway Embedding Upstream',
+      type: 'openai-compatible',
+      baseUrl: upstreamBaseUrl,
+      apiKey: 'sk-gateway-embedding-secret',
+    });
+    const model = store.createModel({ providerId: provider.id, name: 'gateway-embedding', supportsStreaming: false, supportsEmbeddings: true });
+    const createdKey = store.createGatewayKey({
+      name: 'Round embeddings gateway smoke',
+      scopes: ['embeddings:write'],
+      quotaLimit: 10,
+      rateLimitPerMinute: 10,
+    });
+    gateway = createLocalGatewayServer();
+    const gatewayUrl = await listen(gateway);
+
+    const response = await fetch(`${gatewayUrl}/v1/embeddings`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${createdKey.key}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: model.name,
+        input: ['embedding request'],
+      }),
+    });
+    const body = await response.json() as {
+      object?: string;
+      data?: Array<{ embedding?: number[] }>;
+      usage?: { estimated?: boolean };
+      nexachat?: { strategy?: string; providerId?: string | null; modelId?: string | null; requestLogId?: string | null };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.object).toBe('list');
+    expect(body.data?.[0]?.embedding).toEqual([0.5, 0.25, 0.75]);
+    expect(body.usage?.estimated).toBe(false);
+    expect(body.nexachat).toMatchObject({ strategy: 'vector', providerId: provider.id, modelId: model.id });
+    expect(store.getUsageRecords().some((record) => record.requestType === 'embeddings' && record.requestLogId === body.nexachat?.requestLogId)).toBe(true);
+    expect(store.getGatewayLogs().some((entry) => entry.statusCode === 200 && entry.path === '/v1/embeddings' && entry.requestLogId === body.nexachat?.requestLogId)).toBe(true);
+  });
+
   it('streams /v1/chat/completions as OpenAI-compatible SSE chunks', async () => {
     const { store } = await import('../src/main/services/store');
     const { createLocalGatewayServer } = await import('../src/main/services/localGateway');
@@ -349,6 +395,17 @@ function handleUpstream(request: IncomingMessage, response: ServerResponse): voi
           model: 'gateway-chat',
           choices: [{ index: 0, message: { role: 'assistant', content: 'gateway upstream response' }, finish_reason: 'stop' }],
           usage: { prompt_tokens: 4, completion_tokens: 6, total_tokens: 10 },
+        }
+      : { error: { message: 'upstream failed' } });
+    return;
+  }
+  if (request.url === '/v1/embeddings') {
+    writeJson(response, upstreamStatus, upstreamStatus === 200
+      ? {
+          object: 'list',
+          data: [{ object: 'embedding', index: 0, embedding: [0.5, 0.25, 0.75] }],
+          model: 'gateway-embedding',
+          usage: { prompt_tokens: 2, total_tokens: 2 },
         }
       : { error: { message: 'upstream failed' } });
     return;

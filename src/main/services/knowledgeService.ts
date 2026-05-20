@@ -53,7 +53,7 @@ export function KnowledgeService<TBase extends ServiceConstructor<ServiceContext
   }
 
 
-  createKnowledgeFile(input: KnowledgeImportInput): KnowledgeFile {
+  async createKnowledgeFile(input: KnowledgeImportInput): Promise<KnowledgeFile> {
     this.requirePermission(SECURITY_ACTION_PERMISSIONS.knowledgeWrite, 'file', null);
     const timestamp = now();
     const id = createId('file');
@@ -97,7 +97,27 @@ export function KnowledgeService<TBase extends ServiceConstructor<ServiceContext
         timestamp,
       );
     if (normalized.supported) {
-      this.indexKnowledgeChunks(id, normalized.name, chunks, timestamp);
+      const embeddings = await this.generateEmbeddingVectors(chunks.map((chunk) => chunk.content), {
+        allowLexicalFallback: true,
+        requestType: 'knowledge_index',
+      });
+      this.indexKnowledgeChunks(id, normalized.name, chunks, embeddings, timestamp);
+      this.db
+        .prepare('UPDATE files SET embedding_status = ?, metadata_json = ?, updated_at = ? WHERE id = ?')
+        .run(
+          'embedded',
+          JSON.stringify({
+            ...metadata,
+            embeddingStrategy: embeddings.strategy,
+            embeddingProviderId: embeddings.providerId,
+            embeddingModelId: embeddings.modelId,
+            embeddingModelName: embeddings.modelNameSnapshot,
+            embeddingRequestLogId: embeddings.requestLogId,
+            fallbackReason: embeddings.fallbackReason,
+          }),
+          now(),
+          id,
+        );
     }
     this.audit('knowledge.file.created', 'file', id, {
       name: normalized.name,
@@ -111,12 +131,12 @@ export function KnowledgeService<TBase extends ServiceConstructor<ServiceContext
   }
 
 
-  retryKnowledgeFile(input: KnowledgeRebuildInput): KnowledgeFile {
+  async retryKnowledgeFile(input: KnowledgeRebuildInput): Promise<KnowledgeFile> {
     return this.rebuildKnowledgeFile(input);
   }
 
 
-  rebuildKnowledgeFile(input: KnowledgeRebuildInput): KnowledgeFile {
+  async rebuildKnowledgeFile(input: KnowledgeRebuildInput): Promise<KnowledgeFile> {
     this.requirePermission(SECURITY_ACTION_PERMISSIONS.knowledgeWrite, 'file', input.fileId);
     const file = this.requireKnowledgeFile(input.fileId);
     const timestamp = now();
@@ -136,13 +156,40 @@ export function KnowledgeService<TBase extends ServiceConstructor<ServiceContext
     this.db.prepare('UPDATE knowledge_chunks SET status = ?, updated_at = ? WHERE file_id = ?').run('deleted', timestamp, file.id);
     this.db
       .prepare(
+        `UPDATE knowledge_embeddings
+         SET status = 'stale'
+         WHERE chunk_id IN (SELECT id FROM knowledge_chunks WHERE file_id = ?)`,
+      )
+      .run(file.id);
+    const embeddings = await this.generateEmbeddingVectors(chunks.map((chunk) => chunk.content), {
+      allowLexicalFallback: true,
+      requestType: 'knowledge_index',
+    });
+    this.db
+      .prepare(
         `UPDATE files
-         SET parse_status = 'indexed', index_status = 'indexed', embedding_status = 'embedded', chunk_count = ?, token_count = ?, error_message = NULL, parse_started_at = ?, parse_completed_at = ?, updated_at = ?
+         SET parse_status = 'indexed', index_status = 'indexed', embedding_status = 'embedded', chunk_count = ?, token_count = ?, metadata_json = ?, error_message = NULL, parse_started_at = ?, parse_completed_at = ?, updated_at = ?
          WHERE id = ?`,
       )
-      .run(chunks.length, chunks.reduce((sum, chunk) => sum + chunk.tokenCount, 0), timestamp, timestamp, timestamp, file.id);
-    this.indexKnowledgeChunks(file.id, file.name, chunks, timestamp);
-    this.audit('knowledge.file.rebuilt', 'file', file.id, { chunkCount: chunks.length });
+      .run(
+        chunks.length,
+        chunks.reduce((sum, chunk) => sum + chunk.tokenCount, 0),
+        JSON.stringify({
+          rebuiltFromChunks: existingChunks.length,
+          embeddingStrategy: embeddings.strategy,
+          embeddingProviderId: embeddings.providerId,
+          embeddingModelId: embeddings.modelId,
+          embeddingModelName: embeddings.modelNameSnapshot,
+          embeddingRequestLogId: embeddings.requestLogId,
+          fallbackReason: embeddings.fallbackReason,
+        }),
+        timestamp,
+        timestamp,
+        timestamp,
+        file.id,
+      );
+    this.indexKnowledgeChunks(file.id, file.name, chunks, embeddings, timestamp);
+    this.audit('knowledge.file.rebuilt', 'file', file.id, { chunkCount: chunks.length, embeddingStrategy: embeddings.strategy, fallbackReason: embeddings.fallbackReason });
     return this.requireKnowledgeFile(file.id);
   }
 
@@ -170,7 +217,7 @@ export function KnowledgeService<TBase extends ServiceConstructor<ServiceContext
   }
 
 
-  previewKnowledgeRetrieval(input: KnowledgeRetrievalInput): KnowledgeRetrievalResult {
+  async previewKnowledgeRetrieval(input: KnowledgeRetrievalInput): Promise<KnowledgeRetrievalResult> {
     this.requirePermission(SECURITY_ACTION_PERMISSIONS.knowledgeRead, 'knowledge_retrieval', null);
     return this.retrieveKnowledge(input.query, {
       topK: input.topK,

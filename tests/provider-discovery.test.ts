@@ -71,6 +71,7 @@ describe('Provider discovery probing', () => {
     expect(result.models).toEqual([{ id: 'test-chat', name: 'test-chat' }]);
     expect(result.capabilities.chatCompletions).toBe('supported');
     expect(result.capabilities.tokenUsage).toBe('supported');
+    expect(result.capabilities.embeddings).toBe('supported');
     expect(JSON.stringify(result)).not.toContain('fake-provider-key');
   });
 
@@ -138,6 +139,14 @@ function handleRequest(request: IncomingMessage, response: ServerResponse): void
       model: 'test-chat',
       choices: [{ message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }],
       usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    });
+    return;
+  }
+  if (request.url === '/v1/embeddings') {
+    writeJson(response, 200, {
+      object: 'list',
+      data: [{ object: 'embedding', index: 0, embedding: [1, 0, 0] }],
+      usage: { prompt_tokens: 1, total_tokens: 1 },
     });
     return;
   }

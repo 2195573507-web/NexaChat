@@ -13,7 +13,7 @@ NexaChat 当前已经是一个可用的基础版本：产品入口是 Chat，根
 - Gateway `/v1/responses` 已从预留接口补齐为 basic text 版本：支持基础文本 input、映射到现有 Chat Provider 链路，并记录 request log、usage 和 Gateway audit。
 - Chat true streaming / IPC partial update 已通过 typed `chat:stream:event`、renderer 局部 chunk 更新、取消后 late chunk 防护和测试覆盖形成可用链路；通用长任务 progress 复用仍是后续深化项。
 - Provider adapter registry 已接入 OpenAI-compatible、Anthropic native 和 Gemini native 第一版；Anthropic/Gemini 覆盖文本 chat、基础 streaming、模型列表或 fallback、API key 验证和统一错误映射。
-- 本轮没有实现 PDF/Office/OCR、真实 embedding/vector/rerank、Data full restore/cleanup、Electron sandbox、真实 MCP/Agent sandbox/workflow runtime，这些仍保持在后续阶段。
+- 后续 RAG foundation 迭代已补齐 OpenAI-compatible provider embeddings、本地 SQLite vector 记录、vector-first retrieval、retrieval trace 与 citation 审计基础。PDF/Office/OCR、真实 rerank、Data full restore/cleanup、Electron sandbox、真实 MCP/Agent sandbox/workflow runtime 仍保持在后续阶段。
 
 ## 当前未完成 / 受限功能总表
 
@@ -28,8 +28,8 @@ NexaChat 当前已经是一个可用的基础版本：产品入口是 Chat，根
 | PDF import | 当前 Knowledge Base 主要支持 text-like 导入 | PDF 解析、页码、元数据、进度和失败恢复未实现 | 中 | P2 |
 | Office import | 当前未作为生产能力声明 | docx/xlsx/pptx 等格式解析链路、依赖和安全边界未确定 | 中高 | P2 |
 | OCR | 当前未作为生产能力声明 | 需要图像预处理、语言包、耗时任务和权限策略 | 高 | P3 |
-| Real embedding provider | Gateway `/v1/embeddings` 存在基础接口，但 Knowledge 仍以 lexical retrieval 为主 | 缺少可配置 embedding provider、批处理、缓存和失败降级 | 中 | P2 |
-| Vector retrieval / vector DB | 当前不是 vector DB RAG | 缺少向量存储选择、索引生命周期、删除一致性和迁移策略 | 高 | P2 |
+| Real embedding provider | OpenAI-compatible embeddings 已有 provider-backed 基础链路；Anthropic/Gemini native 明确 unsupported | 仍缺少跨 provider embedding、批处理队列、缓存和大规模失败恢复 | 中 | P2 基础已完成 |
+| Vector retrieval / vector DB | 已有本地 SQLite `vector_json`、cosine search、stale/deleted 排除和 lexical fallback；不是外部 vector DB | 仍缺少专用向量索引、大规模性能优化和真实 rerank 质量层 | 高 | P2 基础已完成 |
 | RAG rerank | 当前 citation 基于基础检索结果 | 缺少 rerank provider、阈值、成本控制和可解释日志 | 中 | P3 |
 | Citation score / source confidence | 当前 citations 不应被描述为带完整可信度评分 | 缺少 score 计算、展示规则和测试语料 | 中 | P3 |
 | Real MCP execution | 当前 Tools / Agent / MCP 是 registration、权限、dry-run、fixture execution、approval、trace/logging | 尚未接入真实 MCP client runtime 和工具调用闭环 | 高 | P4 |
@@ -282,7 +282,7 @@ Citation score 和 source confidence 应基于检索分数、rerank 分数、chu
 
 - PDF/Office/OCR 分阶段上线，不把未完成格式显示为已支持。
 - 导入过程有 progress reporting、metadata、错误恢复和删除一致性。
-- embedding/vector/rerank 任一环节失败时保留 lexical retrieval fallback。
+- embedding/vector 失败时保留 lexical retrieval fallback；rerank 未接入前必须明确标注为 disabled/rerank-ready。
 - 删除知识文件后，文本 chunk、embedding、metadata 和索引记录一致删除。
 - 文档和 UI 不宣称 full PDF/OCR/vector DB RAG，除非对应能力已完成并验证。
 
