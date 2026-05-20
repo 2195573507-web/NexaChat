@@ -269,6 +269,8 @@ export class ServiceContext {
   protected gatewayRecentError: string | null = null;
   protected gatewayLastStartError: string | null = null;
   protected readonly activeChatControllers = new Map<string, AbortController>();
+  private transactionDepth = 0;
+  private transactionSequence = 0;
 
   constructor() {
     this.db = getDatabase().db;
@@ -286,6 +288,38 @@ export class ServiceContext {
       throw new Error('Raw database access is only available in tests.');
     }
     return this.db;
+  }
+
+  protected runInWriteTransaction<T>(operation: () => T): T {
+    if (this.transactionDepth > 0) {
+      const savepoint = `nexachat_sp_${++this.transactionSequence}`;
+      this.db.exec(`SAVEPOINT ${savepoint}`);
+      this.transactionDepth += 1;
+      try {
+        const result = operation();
+        this.db.exec(`RELEASE SAVEPOINT ${savepoint}`);
+        return result;
+      } catch (error) {
+        this.db.exec(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+        this.db.exec(`RELEASE SAVEPOINT ${savepoint}`);
+        throw error;
+      } finally {
+        this.transactionDepth -= 1;
+      }
+    }
+
+    this.db.exec('BEGIN IMMEDIATE');
+    this.transactionDepth += 1;
+    try {
+      const result = operation();
+      this.db.exec('COMMIT');
+      return result;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    } finally {
+      this.transactionDepth -= 1;
+    }
   }
 
   protected normalizeBaseUrl(value: string): string {

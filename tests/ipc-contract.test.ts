@@ -31,38 +31,47 @@ describe('IPC contract authority', () => {
     expect(() => assertIpcPayload(IPC_CHANNELS.modelDisable, [{ modelId: 'model_1' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.modelEnable, [{ modelId: 'model_1' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.modelDelete, [{ modelId: 'model_1' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.chatSendMessage, [{ content: 'hello', contextStrategy: 'recent_n' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.chatSendMessage, [])).toThrow(/Invalid IPC payload/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.chatRetryMessage, [{ messageId: 'msg_1', contextStrategy: 'recent_n' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.chatRegenerateMessage, [{ assistantMessageId: 'msg_2', modelId: 'model_1' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.chatCancelMessage, [{ requestLogId: 'req_1' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.chatCompareModels, [{ content: 'compare', modelIds: ['model_1', 'model_2'] }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.chatExportConversation, [{ conversationId: 'conversation_1', format: 'json', redacted: true }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.chatListConversations, [])).not.toThrow();
-    expect(() => assertIpcPayload(IPC_CHANNELS.chatListConversations, [{ limit: 30, offset: 0 }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.chatListConversations, [{ limit: 30, offset: 0, query: 'local' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.chatListMessages, [{ conversationId: 'conversation_1', limit: 60 }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.chatListMessages, [])).toThrow(/Invalid IPC payload/);
-    expect(() => assertIpcPayload(IPC_CHANNELS.gatewayLogsList, [{ limit: 24, statusCode: 200 }])).not.toThrow();
-    expect(() => assertIpcPayload(IPC_CHANNELS.auditLogsList, [{ limit: 30, query: 'chat' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.chatUpdateConversationFlags, ['conversation_1', { isPinned: true, status: 'archived' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.gatewayLogsList, [{ limit: 24, statusCode: 200, since: 1 }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.auditLogsList, [{ limit: 30, query: 'chat', action: 'chat.completed' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.knowledgeFilesList, [{ limit: 30, status: 'indexed' }])).not.toThrow();
-    expect(() => assertIpcPayload(IPC_CHANNELS.knowledgeChunksList, [{ fileId: 'file_1' }])).not.toThrow();
-    expect(() => assertIpcPayload(IPC_CHANNELS.usageTrendGet, [{ bucketMs: 86_400_000, limit: 14 }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.knowledgeChunksList, [{ fileId: 'file_1', limit: 40 }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.usageTrendGet, [{ bucketMs: 86_400_000, limit: 14, providerId: null }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.taskCancel, ['task_1'])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.taskCancel, [])).toThrow(/Invalid IPC payload/);
     expect(() => assertIpcPayload(IPC_CHANNELS.knowledgeCreateFile, [{ name: 'note.md', type: 'text/markdown', content: 'hello' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.knowledgeCreateFile, ['note.md', 'text/markdown', 1024])).toThrow(/Invalid IPC payload/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.knowledgeRetryFile, [{ fileId: 'file_1' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.knowledgeDeleteFile, [{ fileId: 'file_1' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.knowledgePreviewRetrieval, [{ query: 'hello' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.executionStartRun, [{ kind: 'tool', mode: 'preview', toolId: 'nexachat.status.read' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.executionDecideApproval, [{ approvalId: 'approval_1', decision: 'approved' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.auditSearch, ['gateway'])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.auditVerify, [])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.auditExport, [])).not.toThrow();
-    expect(() => assertIpcPayload(IPC_CHANNELS.dataApplyImportPlan, ['import_1', { mode: 'apply-metadata' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.dataApplyImportPlan, ['import_1', { mode: 'apply-metadata', conflictStrategy: 'keep-local' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.dataRestoreSnapshot, ['snapshot_1', { mode: 'rollback' }])).not.toThrow();
-    expect(() => assertIpcPayload(IPC_CHANNELS.dataExportPackage, [])).not.toThrow();
-    expect(() => assertIpcPayload(IPC_CHANNELS.dataCreateEncryptedBackup, [{ passphrase: 'round-12-passphrase' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.dataExportPackage, [{ profile: 'metadata-redacted' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.dataCreateEncryptedBackup, [{ profile: 'encrypted-full', passphrase: 'round-12-passphrase' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.dataCreateRestorePreflight, [{ backupId: 'backup_1', passphrase: 'round-12-passphrase' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.dataApplyRollback, [{ rollbackId: 'rollback_1', confirmationPhrase: 'ROLLBACK DATA' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.observabilityQuery, [])).not.toThrow();
-    expect(() => assertIpcPayload(IPC_CHANNELS.observabilityQuery, [{ status: 'completed' }])).not.toThrow();
-    expect(() => assertIpcPayload(IPC_CHANNELS.observabilityCreateFeedback, [{ label: 'bug', notes: 'local only' }])).not.toThrow();
-    expect(() => assertIpcPayload(IPC_CHANNELS.observabilityRunEval, [{ evalSetId: 'eval_round13_basic' }])).not.toThrow();
-    expect(() => assertIpcPayload(IPC_CHANNELS.observabilitySavePrivacy, [{ includePromptSnippets: false }])).not.toThrow();
-    expect(() => assertIpcPayload(IPC_CHANNELS.observabilityExport, [])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.observabilityQuery, [{ status: 'completed', includeTrace: true }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.observabilityCreateFeedback, [{ label: 'bug', requestLogId: 'req_1', messageId: null, notes: 'local only' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.observabilityRunEval, [{ evalSetId: 'eval_round13_basic', modelId: null }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.observabilitySavePrivacy, [{ retentionPolicy: 'thirty_days', exportScope: 'redacted_details', includePromptSnippets: false, includeLocalPaths: false, cloudTelemetryEnabled: false }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.observabilityExport, [{ status: 'all' }])).not.toThrow();
   });
 
   it('rejects malformed high-risk IPC payload shapes before service handlers run', () => {
@@ -84,6 +93,20 @@ describe('IPC contract authority', () => {
       .toThrow(/modelId/);
     expect(() => assertIpcPayload(IPC_CHANNELS.modelDelete, [{ modelId: 'model_1', hardDelete: true }]))
       .toThrow(/unsupported fields: hardDelete/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.chatSendMessage, [{ content: 'hello', contextStrategy: 'full_rag' }]))
+      .toThrow(/contextStrategy/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.chatCompareModels, [{ content: 'compare', modelIds: ['model_1'] }]))
+      .toThrow(/modelIds/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.chatExportConversation, [{ conversationId: 'conversation_1', format: 'pdf' }]))
+      .toThrow(/format/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.chatUpdateConversationFlags, ['conversation_1', { status: 'purged' }]))
+      .toThrow(/status/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.gatewayLogsList, [{ statusCode: 99 }]))
+      .toThrow(/statusCode/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.knowledgeCreateFile, [{ name: 'big.md', content: 'x'.repeat(600_001) }]))
+      .toThrow(/content/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.knowledgePreviewRetrieval, [{ query: 'hello', strategy: 'vector' }]))
+      .toThrow(/strategy/);
     expect(() => assertIpcPayload(IPC_CHANNELS.gatewayCreateKey, [{ name: 'Gateway Key', scopes: ['responses:write'] }]))
       .toThrow(/unsupported scope/);
     expect(() => assertIpcPayload(IPC_CHANNELS.gatewayUpdateKey, [{ gatewayKeyId: 'gkey_1', quotaLimit: -1 }]))
@@ -98,12 +121,18 @@ describe('IPC contract authority', () => {
       .toThrow(/approved or denied/);
     expect(() => assertIpcPayload(IPC_CHANNELS.dataCreateEncryptedBackup, [{ profile: 'metadata-redacted' }]))
       .toThrow(/passphrase/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.dataExportPackage, [{ profile: 'plaintext-full' }]))
+      .toThrow(/profile/);
     expect(() => assertIpcPayload(IPC_CHANNELS.dataApplyRollback, [{ rollbackId: 'rollback_1', confirmationPhrase: 'ROLLBACK DATA', fullRestore: true }]))
       .toThrow(/unsupported fields: fullRestore/);
     expect(() => assertIpcPayload(IPC_CHANNELS.mcpCreateServer, ['MCP', 'ftp', 'http://127.0.0.1:9']))
       .toThrow(/transport/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.observabilityCreateFeedback, [{ label: 'exploit', notes: 'bad' }]))
+      .toThrow(/feedback label/);
     expect(() => assertIpcPayload(IPC_CHANNELS.observabilitySavePrivacy, [{ includePromptSnippets: false, retentionDays: 0 }]))
-      .toThrow(/retentionDays/);
+      .toThrow(/unsupported fields: retentionDays/);
+    expect(() => assertIpcPayload(IPC_CHANNELS.observabilitySavePrivacy, [{ retentionPolicy: 'one_day' }]))
+      .toThrow(/retentionPolicy/);
   });
 
   it('keeps chat stream and task progress payloads typed around request identity and progress', () => {

@@ -1,5 +1,21 @@
 ﻿# NexaChat 当前进度
 
+## 2026-05-20 全项目健康体检与修复
+
+- 任务名称：全项目健康体检与确认问题修复。
+- 时间：2026-05-20 13:29 至最终提交推送完成。
+- 实际项目根目录：`D:/NexaChat`。
+- 分支与上游：`main` / `origin/main`。
+- 基线提交：`56de597a2ebde458714043095d6114b0d6f04247`。
+- 最终提交：`PENDING_FINAL_COMMIT`（提交 hash 无法自引用写入同一提交，实际 hash 以最终报告和 `git rev-parse HEAD` 为准）。
+- 审计范围：产品事实、架构与分层、主进程/预加载/渲染边界、IPC 契约、SQLite/Data 事务、Chat、Models、Knowledge Base、Tools、Gateway、Data、Settings、UI/UX/可访问性、性能热点、测试、文档真实性、质量门与打包准备度。
+- 发现数量：P0=0，P1=2，P2=4，P3=1。
+- 主要修复：修复 UI smoke 固定端口导致的误失败；补齐当前 Observability/Chat/Knowledge/Data/Gateway 等 IPC payload shape validation；为 Data 多写入路径增加嵌套写事务和失败回滚测试；修复 Gateway SSE 在 JSON upstream 模式下空流的问题；删除会触发质量门失败的根目录临时计划文件。
+- 验证结果：`npm.cmd run typecheck` 通过；`npm.cmd run test` 通过，26 files / 127 tests，仅有已知 `node:sqlite` experimental warning；`npm.cmd run build` 通过；`npm.cmd run test:ui-smoke` 通过，7 tests；`npm.cmd run test:electron-smoke` 通过；`npm.cmd run scan:quality` 通过；`npm.cmd run lint` 和 `npm.cmd run format:check` 不存在；`git diff --check` 通过，仅 CRLF normalization warnings。
+- 剩余风险：`ServiceContext` 仍偏宽，需单独架构迭代；Electron `sandbox: false` 仍需专门兼容性验证；Node 24 `node:sqlite` experimental warning 仍存在；UI smoke 不是所有真实外部 Provider/数据破坏路径的人工 QA 替代。
+- 审计报告：`docs/audits/full-project-health-remediation-2026-05-20.md`。
+- 推送状态：`PENDING_PUSH`（提交后执行推送并以最终报告记录远端校验结果）。
+
 ## 2026-05-20 集成质量提升迭代
 
 - 时间：2026-05-20 12:09 至最终验证完成。

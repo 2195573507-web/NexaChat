@@ -304,6 +304,19 @@ const uiThemes = new Set(['light', 'dark', 'system']);
 const uiDensities = new Set(['comfortable', 'compact']);
 const uiFontModes = new Set(['system', 'kaiti']);
 const uiLanguages = new Set(['zh-CN', 'en-US']);
+const contextStrategies = new Set(['recent_n', 'summary_recent_n', 'manual', 'token_trim']);
+const conversationStatuses = new Set(['active', 'archived', 'deleted']);
+const conversationExportFormats = new Set(['markdown', 'json']);
+const knowledgeIndexStatuses = new Set(['queued', 'indexing', 'indexed', 'failed', 'stale', 'deleted']);
+const knowledgeRetrievalStrategies = new Set(['lexical']);
+const feedbackLabels = new Set(['thumbs_up', 'thumbs_down', 'bug', 'unsafe', 'other']);
+const requestLogStatuses = new Set(['started', 'streaming', 'completed', 'failed', 'cancelled', 'all']);
+const observabilityRetentionPolicies = new Set(['seven_days', 'thirty_days', 'ninety_days', 'forever']);
+const observabilityExportScopes = new Set(['summary', 'redacted_details']);
+const dataBackupProfiles = new Set(['metadata-redacted', 'encrypted-full']);
+const importPlanModes = new Set(['record-only', 'apply-metadata']);
+const dataConflictStrategies = new Set(['keep-local', 'import-as-new', 'skip']);
+const restoreSnapshotModes = new Set(['preflight', 'rollback']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -341,7 +354,7 @@ function requireString(value: Record<string, unknown>, key: string, options: { m
 
 function optionalString(value: Record<string, unknown>, key: string, max: number): string | null {
   const current = value[key];
-  if (current === undefined) return null;
+  if (current === undefined || current === null) return null;
   if (typeof current !== 'string') {
     return `${key} must be a string`;
   }
@@ -386,6 +399,30 @@ function optionalStringArray(value: Record<string, unknown>, key: string, maxIte
     }
   }
   return null;
+}
+
+function optionalEnum(value: Record<string, unknown>, key: string, allowed: ReadonlySet<string>, label = key): string | null {
+  const current = value[key];
+  if (current === undefined || current === null) return null;
+  return typeof current === 'string' && allowed.has(current) ? null : `${label} must be one of: ${[...allowed].join(', ')}`;
+}
+
+function validatePageInput(input: unknown, label: string, allowed: readonly string[] = []): string | null {
+  const value = validateObject(input, label, ['limit', 'offset', ...allowed]);
+  if (typeof value === 'string') return value;
+  return (
+    optionalNumberOrNull(value, 'limit', { min: 1, max: 200 }) ??
+    optionalNumberOrNull(value, 'offset', { min: 0 })
+  );
+}
+
+function validateOptionalPageInput(input: unknown, label: string, allowed: readonly string[] = []): string | null {
+  if (input === undefined) return null;
+  return validatePageInput(input, label, allowed);
+}
+
+function validateIdString(value: unknown, key: string, max = 120): string | null {
+  return typeof value === 'string' && value.trim().length > 0 && value.length <= max ? null : `${key} must be a non-empty string up to ${max} characters`;
 }
 
 function validateProviderInput(input: unknown): string | null {
@@ -461,6 +498,142 @@ function validateModelUpdateInput(input: unknown): string | null {
 
 function validateModelStateInput(input: unknown, label = 'model state input'): string | null {
   return validateIdObject(input, label, 'modelId');
+}
+
+function validateSendMessage(input: unknown): string | null {
+  const value = validateObject(input, 'chat send input', ['conversationId', 'content', 'providerId', 'modelId', 'clientRequestId', 'contextStrategy', 'parentMessageId', 'attachments', 'metadata']);
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value.attachments) && value.attachments.length > 10) return 'attachments must contain at most 10 items';
+  return (
+    requireString(value, 'content', { max: 64_000 }) ??
+    optionalString(value, 'conversationId', 120) ??
+    optionalString(value, 'providerId', 120) ??
+    optionalString(value, 'modelId', 120) ??
+    optionalString(value, 'clientRequestId', 120) ??
+    optionalString(value, 'parentMessageId', 120) ??
+    optionalEnum(value, 'contextStrategy', contextStrategies, 'contextStrategy') ??
+    (value.attachments === undefined || Array.isArray(value.attachments) ? null : 'attachments must be an array') ??
+    (value.metadata === undefined || isRecord(value.metadata) ? null : 'metadata must be an object')
+  );
+}
+
+function validateRetryMessage(input: unknown): string | null {
+  const value = validateObject(input, 'chat retry input', ['messageId', 'modelId', 'contextStrategy']);
+  if (typeof value === 'string') return value;
+  return requireString(value, 'messageId', { max: 120 }) ?? optionalString(value, 'modelId', 120) ?? optionalEnum(value, 'contextStrategy', contextStrategies, 'contextStrategy');
+}
+
+function validateRegenerateMessage(input: unknown): string | null {
+  const value = validateObject(input, 'chat regenerate input', ['assistantMessageId', 'modelId', 'contextStrategy']);
+  if (typeof value === 'string') return value;
+  return requireString(value, 'assistantMessageId', { max: 120 }) ?? optionalString(value, 'modelId', 120) ?? optionalEnum(value, 'contextStrategy', contextStrategies, 'contextStrategy');
+}
+
+function validateCompareModels(input: unknown): string | null {
+  const value = validateObject(input, 'chat compare input', ['conversationId', 'content', 'modelIds', 'contextStrategy']);
+  if (typeof value === 'string') return value;
+  if (!Array.isArray(value.modelIds)) return 'modelIds must be an array';
+  if (value.modelIds.length < 2 || value.modelIds.length > 3) return 'modelIds must contain 2-3 items';
+  for (const modelId of value.modelIds) {
+    const error = validateIdString(modelId, 'modelId');
+    if (error) return error;
+  }
+  return (
+    requireString(value, 'content', { max: 64_000 }) ??
+    optionalString(value, 'conversationId', 120) ??
+    optionalEnum(value, 'contextStrategy', contextStrategies, 'contextStrategy')
+  );
+}
+
+function validateExportConversation(input: unknown): string | null {
+  const value = validateObject(input, 'conversation export input', ['conversationId', 'format', 'redacted']);
+  if (typeof value === 'string') return value;
+  return (
+    requireString(value, 'conversationId', { max: 120 }) ??
+    (typeof value.format === 'string' && conversationExportFormats.has(value.format) ? null : 'format must be markdown or json') ??
+    optionalBoolean(value, 'redacted')
+  );
+}
+
+function validateConversationFlags(args: unknown[]): string | null {
+  const [conversationId, flags] = args;
+  const idError = validateIdString(conversationId, 'conversationId');
+  if (idError) return idError;
+  const value = validateObject(flags, 'conversation flags', ['isPinned', 'isFavorite', 'status']);
+  if (typeof value === 'string') return value;
+  return optionalBoolean(value, 'isPinned') ?? optionalBoolean(value, 'isFavorite') ?? optionalEnum(value, 'status', conversationStatuses, 'status');
+}
+
+function validateMessagePageInput(input: unknown): string | null {
+  const page = validatePageInput(input, 'message page input', ['conversationId']);
+  if (page) return page;
+  return requireString(input as Record<string, unknown>, 'conversationId', { max: 120 });
+}
+
+function validateGatewayLogPageInput(input: unknown): string | null {
+  const page = validateOptionalPageInput(input, 'gateway log page input', ['statusCode', 'since', 'until']);
+  if (page || input === undefined) return page;
+  const value = input as Record<string, unknown>;
+  return (
+    optionalNumberOrNull(value, 'statusCode', { min: 100, max: 599 }) ??
+    optionalNumberOrNull(value, 'since', { min: 0 }) ??
+    optionalNumberOrNull(value, 'until', { min: 0 })
+  );
+}
+
+function validateAuditLogPageInput(input: unknown): string | null {
+  const page = validateOptionalPageInput(input, 'audit log page input', ['query', 'action', 'userId', 'since', 'until']);
+  if (page || input === undefined) return page;
+  const value = input as Record<string, unknown>;
+  return optionalString(value, 'query', 500) ?? optionalString(value, 'action', 160) ?? optionalString(value, 'userId', 120) ?? optionalNumberOrNull(value, 'since', { min: 0 }) ?? optionalNumberOrNull(value, 'until', { min: 0 });
+}
+
+function validateKnowledgeFilePageInput(input: unknown): string | null {
+  const page = validateOptionalPageInput(input, 'knowledge file page input', ['status']);
+  if (page || input === undefined) return page;
+  return optionalEnum(input as Record<string, unknown>, 'status', knowledgeIndexStatuses, 'status');
+}
+
+function validateKnowledgeChunkPageInput(input: unknown): string | null {
+  const page = validateOptionalPageInput(input, 'knowledge chunk page input', ['fileId']);
+  if (page || input === undefined) return page;
+  return optionalString(input as Record<string, unknown>, 'fileId', 120);
+}
+
+function validateUsageTrendInput(input: unknown): string | null {
+  if (input === undefined) return null;
+  const value = validateObject(input, 'usage trend input', ['workspaceId', 'providerId', 'modelId', 'since', 'until', 'bucketMs', 'limit']);
+  if (typeof value === 'string') return value;
+  return (
+    optionalString(value, 'workspaceId', 120) ??
+    optionalString(value, 'providerId', 120) ??
+    optionalString(value, 'modelId', 120) ??
+    optionalNumberOrNull(value, 'since', { min: 0 }) ??
+    optionalNumberOrNull(value, 'until', { min: 0 }) ??
+    optionalNumberOrNull(value, 'bucketMs', { min: 60_000, max: 31_536_000_000 }) ??
+    optionalNumberOrNull(value, 'limit', { min: 1, max: 365 })
+  );
+}
+
+function validateKnowledgeImport(input: unknown): string | null {
+  const value = validateObject(input, 'knowledge import input', ['name', 'type', 'size', 'content']);
+  if (typeof value === 'string') return value;
+  return (
+    requireString(value, 'name', { max: 260 }) ??
+    requireString(value, 'content', { max: 600_000, allowEmpty: true }) ??
+    optionalString(value, 'type', 160) ??
+    optionalNumberOrNull(value, 'size', { min: 0, max: 600_000 })
+  );
+}
+
+function validateKnowledgeRetrieval(input: unknown): string | null {
+  const value = validateObject(input, 'knowledge retrieval input', ['query', 'topK', 'strategy']);
+  if (typeof value === 'string') return value;
+  return (
+    requireString(value, 'query', { max: 4000 }) ??
+    optionalNumberOrNull(value, 'topK', { min: 1, max: 8 }) ??
+    optionalEnum(value, 'strategy', knowledgeRetrievalStrategies, 'strategy')
+  );
 }
 
 function validateGatewayScopes(value: Record<string, unknown>, key: string): string | null {
@@ -546,7 +719,7 @@ function validateApprovalDecision(input: unknown): string | null {
 function validateDataBackup(input: unknown): string | null {
   const value = validateObject(input, 'data backup input', ['profile', 'passphrase']);
   if (typeof value === 'string') return value;
-  return requireString(value, 'passphrase', { max: 4096 });
+  return optionalEnum(value, 'profile', dataBackupProfiles, 'profile') ?? requireString(value, 'passphrase', { max: 4096 });
 }
 
 function validateRestorePreflight(input: unknown): string | null {
@@ -580,6 +753,47 @@ function validateMcpPermission(args: unknown[]): string | null {
   return null;
 }
 
+function validateObservabilityQuery(input: unknown): string | null {
+  if (input === undefined) return null;
+  const value = validateObject(input, 'observability query input', ['query', 'status', 'providerId', 'modelId', 'endpoint', 'includeAudit', 'includeTrace', 'since', 'until']);
+  if (typeof value === 'string') return value;
+  return (
+    optionalString(value, 'query', 500) ??
+    optionalEnum(value, 'status', requestLogStatuses, 'status') ??
+    optionalString(value, 'providerId', 120) ??
+    optionalString(value, 'modelId', 120) ??
+    optionalString(value, 'endpoint', 200) ??
+    optionalBoolean(value, 'includeAudit') ??
+    optionalBoolean(value, 'includeTrace') ??
+    optionalNumberOrNull(value, 'since', { min: 0 }) ??
+    optionalNumberOrNull(value, 'until', { min: 0 })
+  );
+}
+
+function validateFeedbackInput(input: unknown): string | null {
+  const value = validateObject(input, 'feedback input', ['label', 'messageId', 'requestLogId', 'notes']);
+  if (typeof value === 'string') return value;
+  return (
+    (typeof value.label === 'string' && feedbackLabels.has(value.label) ? null : 'label must be a known feedback label') ??
+    optionalString(value, 'messageId', 120) ??
+    optionalString(value, 'requestLogId', 120) ??
+    optionalString(value, 'notes', 4000)
+  );
+}
+
+function validateObservabilityPrivacy(input: unknown): string | null {
+  const value = validateObject(input, 'observability privacy input', ['retentionPolicy', 'exportScope', 'includePromptSnippets', 'includeLocalPaths', 'cloudTelemetryEnabled', 'updatedAt']);
+  if (typeof value === 'string') return value;
+  return (
+    optionalEnum(value, 'retentionPolicy', observabilityRetentionPolicies, 'retentionPolicy') ??
+    optionalEnum(value, 'exportScope', observabilityExportScopes, 'exportScope') ??
+    optionalBoolean(value, 'includePromptSnippets') ??
+    optionalBoolean(value, 'includeLocalPaths') ??
+    optionalBoolean(value, 'cloudTelemetryEnabled') ??
+    optionalNumberOrNull(value, 'updatedAt', { min: 0 })
+  );
+}
+
 const ipcPayloadValidators: Partial<Record<IpcChannel, IpcPayloadValidator>> = {
   [IPC_CHANNELS.providerDiscover]: ([input]) => validateProviderDiscoveryRequest(input),
   [IPC_CHANNELS.providerSaveFromDiscovery]: ([input]) => validateProviderSaveFromDiscovery(input),
@@ -589,12 +803,37 @@ const ipcPayloadValidators: Partial<Record<IpcChannel, IpcPayloadValidator>> = {
   [IPC_CHANNELS.modelDisable]: ([input]) => validateModelStateInput(input, 'model disable input'),
   [IPC_CHANNELS.modelEnable]: ([input]) => validateModelStateInput(input, 'model enable input'),
   [IPC_CHANNELS.modelDelete]: ([input]) => validateModelStateInput(input, 'model delete input'),
+  [IPC_CHANNELS.chatCreateConversation]: ([title]) => title === undefined || (typeof title === 'string' && title.length <= 200) ? null : 'title must be a string up to 200 characters',
+  [IPC_CHANNELS.chatSendMessage]: ([input]) => validateSendMessage(input),
+  [IPC_CHANNELS.chatRetryMessage]: ([input]) => validateRetryMessage(input),
+  [IPC_CHANNELS.chatRegenerateMessage]: ([input]) => validateRegenerateMessage(input),
+  [IPC_CHANNELS.chatCancelMessage]: ([input]) => validateIdObject(input, 'chat cancel input', 'requestLogId'),
+  [IPC_CHANNELS.chatCompareModels]: ([input]) => validateCompareModels(input),
+  [IPC_CHANNELS.chatExportConversation]: ([input]) => validateExportConversation(input),
+  [IPC_CHANNELS.chatListConversations]: ([input]) => {
+    const page = validateOptionalPageInput(input, 'conversation page input', ['query']);
+    if (page || input === undefined) return page;
+    return optionalString(input as Record<string, unknown>, 'query', 500);
+  },
+  [IPC_CHANNELS.chatListMessages]: ([input]) => validateMessagePageInput(input),
+  [IPC_CHANNELS.chatUpdateConversationFlags]: validateConversationFlags,
+  [IPC_CHANNELS.gatewayLogsList]: ([input]) => validateGatewayLogPageInput(input),
+  [IPC_CHANNELS.auditLogsList]: ([input]) => validateAuditLogPageInput(input),
+  [IPC_CHANNELS.knowledgeFilesList]: ([input]) => validateKnowledgeFilePageInput(input),
+  [IPC_CHANNELS.knowledgeChunksList]: ([input]) => validateKnowledgeChunkPageInput(input),
+  [IPC_CHANNELS.usageTrendGet]: ([input]) => validateUsageTrendInput(input),
+  [IPC_CHANNELS.taskCancel]: ([taskId]) => validateIdString(taskId, 'taskId'),
   [IPC_CHANNELS.gatewayCreateKey]: ([input]) => validateGatewayCreateKey(input),
   [IPC_CHANNELS.gatewayUpdateKey]: ([input]) => validateGatewayUpdateKey(input),
   [IPC_CHANNELS.gatewayRotateKey]: ([input]) => validateIdObject(input, 'gateway key rotate input', 'gatewayKeyId'),
   [IPC_CHANNELS.gatewayRevokeKey]: ([gatewayKeyId]) => typeof gatewayKeyId === 'string' && gatewayKeyId.trim().length > 0 && gatewayKeyId.length <= 120 ? null : 'gatewayKeyId must be a non-empty string up to 120 characters',
   [IPC_CHANNELS.gatewayToggle]: ([enabled]) => typeof enabled === 'boolean' ? null : 'enabled must be a boolean',
   [IPC_CHANNELS.settingsSaveUiPreferences]: ([input]) => validateUiPreferences(input),
+  [IPC_CHANNELS.knowledgeCreateFile]: ([input]) => validateKnowledgeImport(input),
+  [IPC_CHANNELS.knowledgeRetryFile]: ([input]) => validateIdObject(input, 'knowledge rebuild input', 'fileId'),
+  [IPC_CHANNELS.knowledgeRebuildFile]: ([input]) => validateIdObject(input, 'knowledge rebuild input', 'fileId'),
+  [IPC_CHANNELS.knowledgeDeleteFile]: ([input]) => validateIdObject(input, 'knowledge delete input', 'fileId'),
+  [IPC_CHANNELS.knowledgePreviewRetrieval]: ([input]) => validateKnowledgeRetrieval(input),
   [IPC_CHANNELS.mcpCreateServer]: validateMcpCreate,
   [IPC_CHANNELS.mcpUpdatePermission]: validateMcpPermission,
   [IPC_CHANNELS.agentCreate]: ([name, goal]) => (
@@ -611,35 +850,31 @@ const ipcPayloadValidators: Partial<Record<IpcChannel, IpcPayloadValidator>> = {
     if (typeof resultId !== 'string' || resultId.trim().length === 0 || resultId.length > 120) return 'resultId must be a non-empty string up to 120 characters';
     if (options === undefined) return null;
     const value = validateObject(options, 'import plan options', ['mode', 'conflictStrategy', 'confirmationPhrase']);
-    return typeof value === 'string' ? value : optionalString(value, 'confirmationPhrase', 120);
+    return typeof value === 'string' ? value : optionalEnum(value, 'mode', importPlanModes, 'mode') ?? optionalEnum(value, 'conflictStrategy', dataConflictStrategies, 'conflictStrategy') ?? optionalString(value, 'confirmationPhrase', 120);
   },
   [IPC_CHANNELS.dataRestoreSnapshot]: ([snapshotId, options]) => {
     if (typeof snapshotId !== 'string' || snapshotId.trim().length === 0 || snapshotId.length > 120) return 'snapshotId must be a non-empty string up to 120 characters';
     if (options === undefined) return null;
     const value = validateObject(options, 'restore snapshot options', ['mode', 'confirmationPhrase']);
-    return typeof value === 'string' ? value : optionalString(value, 'confirmationPhrase', 120);
+    return typeof value === 'string' ? value : optionalEnum(value, 'mode', restoreSnapshotModes, 'mode') ?? optionalString(value, 'confirmationPhrase', 120);
   },
   [IPC_CHANNELS.dataExportPackage]: ([options]) => {
     if (options === undefined) return null;
     const value = validateObject(options, 'data export options', ['profile']);
-    return typeof value === 'string' ? value : null;
+    return typeof value === 'string' ? value : optionalEnum(value, 'profile', dataBackupProfiles, 'profile');
   },
   [IPC_CHANNELS.dataCreateEncryptedBackup]: ([input]) => validateDataBackup(input),
   [IPC_CHANNELS.dataCreateRestorePreflight]: ([input]) => validateRestorePreflight(input),
   [IPC_CHANNELS.dataApplyRollback]: ([input]) => validateDataRollback(input),
-  [IPC_CHANNELS.observabilityCreateFeedback]: ([input]) => {
-    const value = validateObject(input, 'feedback input', ['label', 'notes', 'route', 'severity']);
-    return typeof value === 'string' ? value : requireString(value, 'label', { max: 80 }) ?? optionalString(value, 'notes', 4000);
-  },
+  [IPC_CHANNELS.observabilityQuery]: ([input]) => validateObservabilityQuery(input),
+  [IPC_CHANNELS.observabilityCreateFeedback]: ([input]) => validateFeedbackInput(input),
   [IPC_CHANNELS.observabilityRunEval]: ([input]) => {
     const value = validateObject(input, 'eval run input', ['evalSetId', 'modelId']);
     return typeof value === 'string' ? value : requireString(value, 'evalSetId', { max: 120 }) ?? optionalString(value, 'modelId', 120);
   },
-  [IPC_CHANNELS.observabilitySavePrivacy]: ([input]) => {
-    const value = validateObject(input, 'observability privacy input', ['includePromptSnippets', 'includeErrorDetails', 'retentionDays', 'updatedAt']);
-    if (typeof value === 'string') return value;
-    return optionalBoolean(value, 'includePromptSnippets') ?? optionalBoolean(value, 'includeErrorDetails') ?? optionalNumberOrNull(value, 'retentionDays', { min: 1, max: 3650 }) ?? optionalNumberOrNull(value, 'updatedAt', { min: 0 });
-  },
+  [IPC_CHANNELS.observabilitySavePrivacy]: ([input]) => validateObservabilityPrivacy(input),
+  [IPC_CHANNELS.observabilityExport]: ([input]) => validateObservabilityQuery(input),
+  [IPC_CHANNELS.auditSearch]: ([query]) => query === undefined || (typeof query === 'string' && query.length <= 500) ? null : 'query must be a string up to 500 characters',
 };
 
 const ipcPayloadArity: Record<IpcChannel, { min: number; max: number }> = {

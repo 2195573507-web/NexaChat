@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { createServer } from 'node:net';
 
 function run(command, args, options = {}) {
   return spawn(command, args, {
@@ -31,6 +32,23 @@ async function waitForServer(url, timeoutMs = 60_000) {
   throw new Error(`Timed out waiting for ${url}: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
 }
 
+async function findFreePort(startPort = 5173, host = '127.0.0.1') {
+  for (let port = startPort; port < startPort + 50; port += 1) {
+    const free = await new Promise((resolve) => {
+      const probe = createServer()
+        .once('error', () => resolve(false))
+        .once('listening', () => {
+          probe.close(() => resolve(true));
+        })
+        .listen(port, host);
+    });
+    if (free) {
+      return port;
+    }
+  }
+  throw new Error(`Unable to find a free localhost port starting at ${startPort}.`);
+}
+
 async function terminate(child) {
   if (!child.pid || child.killed) {
     return;
@@ -56,25 +74,33 @@ async function terminate(child) {
   });
 }
 
-const server = run('node', ['./node_modules/vite/bin/vite.js', '--host', '127.0.0.1'], {
-  env: {
-    VITE_NEXACHAT_BROWSER_MOCK: '1',
-  },
-  stdio: 'pipe',
-});
-
-server.stdout.on('data', (chunk) => process.stdout.write(chunk));
-server.stderr.on('data', (chunk) => process.stderr.write(chunk));
-
-server.once('exit', (code) => {
-  if (code !== 0 && process.exitCode === undefined) {
-    process.exitCode = code ?? 1;
-  }
-});
+let server = null;
 
 try {
-  await waitForServer('http://127.0.0.1:5173');
-  const playwright = run('node', ['./node_modules/@playwright/test/cli.js', 'test', 'tests/ui-smoke.spec.ts', '--config=playwright.config.ts']);
+  const port = await findFreePort();
+  const baseUrl = `http://127.0.0.1:${port}`;
+  server = run('node', ['./node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], {
+    env: {
+      VITE_NEXACHAT_BROWSER_MOCK: '1',
+    },
+    stdio: 'pipe',
+  });
+
+  server.stdout.on('data', (chunk) => process.stdout.write(chunk));
+  server.stderr.on('data', (chunk) => process.stderr.write(chunk));
+
+  server.once('exit', (code) => {
+    if (code !== 0 && process.exitCode === undefined) {
+      process.exitCode = code ?? 1;
+    }
+  });
+
+  await waitForServer(baseUrl);
+  const playwright = run('node', ['./node_modules/@playwright/test/cli.js', 'test', 'tests/ui-smoke.spec.ts', '--config=playwright.config.ts'], {
+    env: {
+      PLAYWRIGHT_BASE_URL: baseUrl,
+    },
+  });
   const exitCode = await new Promise((resolve) => {
     playwright.on('exit', (code) => resolve(code ?? 1));
     playwright.on('error', () => resolve(1));

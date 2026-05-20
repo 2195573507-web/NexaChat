@@ -161,6 +161,45 @@ describe('local gateway provider forwarding chain', () => {
     expect(store.getGatewayLogs().some((entry) => entry.statusCode === 200 && entry.path === '/v1/chat/completions')).toBe(true);
   });
 
+  it('returns SSE content when the client requests streaming but the selected model uses a JSON upstream response', async () => {
+    const { store } = await import('../src/main/services/store');
+    const { createLocalGatewayServer } = await import('../src/main/services/localGateway');
+    const provider = store.createProvider({
+      name: 'Gateway JSON Upstream Stream Request',
+      type: 'openai-compatible',
+      baseUrl: upstreamBaseUrl,
+      apiKey: 'sk-gateway-secret',
+    });
+    const model = store.createModel({ providerId: provider.id, name: 'gateway-chat', supportsStreaming: false });
+    const createdKey = store.createGatewayKey('Round json gateway stream smoke');
+    gateway = createLocalGatewayServer();
+    const gatewayUrl = await listen(gateway);
+
+    const response = await fetch(`${gatewayUrl}/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${createdKey.key}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: model.name,
+        stream: true,
+        messages: [{ role: 'user', content: 'gateway should stream json fallback' }],
+      }),
+    });
+    const events = parseSse(await response.text());
+    const chunks = events
+      .filter((event) => event.data !== '[DONE]' && event.event === null)
+      .map((event) => JSON.parse(event.data) as { choices?: Array<{ delta?: { content?: string }; finish_reason?: string | null }> });
+
+    expect(response.status).toBe(200);
+    expect(chunks.map((chunk) => chunk.choices?.[0]?.delta?.content).filter(Boolean)).toEqual(['gateway upstream response']);
+    expect(chunks.some((chunk) => chunk.choices?.[0]?.finish_reason === 'stop')).toBe(true);
+    expect(events.some((event) => event.event === 'nexachat.completed')).toBe(true);
+    expect(events.at(-1)?.data).toBe('[DONE]');
+    expect(store.getGatewayLogs().some((entry) => entry.statusCode === 200 && entry.path === '/v1/chat/completions')).toBe(true);
+  });
+
   it('rejects unauthorized streaming requests before opening SSE', async () => {
     const { store } = await import('../src/main/services/store');
     const { createLocalGatewayServer } = await import('../src/main/services/localGateway');

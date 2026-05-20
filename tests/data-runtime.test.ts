@@ -87,6 +87,33 @@ describe('Round 12 data mobility runtime', () => {
     expect(store.getRollbackRecords().some((record) => record.jobId === result.id && record.state === 'available')).toBe(true);
   });
 
+  it('rolls back import metadata and snapshot writes when application fails mid-transaction', async () => {
+    const { NexaStore } = await import('../src/main/services/store');
+    class FailingImportStore extends NexaStore {
+      protected override applyImportMetadata(manifest: Record<string, unknown>): string[] {
+        super.applyImportMetadata(manifest);
+        throw new Error('simulated import failure');
+      }
+    }
+    const store = new FailingImportStore();
+    const result = store.validateImportManifest(JSON.stringify({
+      source: 'sub2api',
+      providers: [{ name: 'Partial Import Provider', baseUrl: 'http://127.0.0.1:11434/v1' }],
+      models: [{ providerName: 'Partial Import Provider', name: 'partial-import-model' }],
+    }));
+
+    expect(() => store.applyImportPlan(result.id, {
+      mode: 'apply-metadata',
+      confirmationPhrase: DATA_CONFIRMATION_PHRASES.applyImport,
+    })).toThrow('simulated import failure');
+
+    expect(store.getProviders().some((provider) => provider.name === 'Partial Import Provider')).toBe(false);
+    expect(store.getModels().some((model) => model.name === 'partial-import-model')).toBe(false);
+    expect(store.getImportExportResults().filter((item) => item.action === 'snapshot')).toHaveLength(0);
+    expect(store.getRollbackRecords().some((record) => record.jobId === result.id)).toBe(false);
+    expect(store.getDataMobilityJobs().find((job) => job.id === result.id)?.status).toBe('ready');
+  });
+
   it('rolls back imported metadata without deleting existing local records', async () => {
     const { store } = await import('../src/main/services/store');
     const localProvider = store.createProvider({ name: 'Local Provider', type: 'openai-compatible', baseUrl: 'http://127.0.0.1:11434/v1' });

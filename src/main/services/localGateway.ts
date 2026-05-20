@@ -297,7 +297,9 @@ async function handleStreamingChatCompletions(
     }
 
     openStream();
-    if ((result.chunks ?? []).length === 0) {
+    if (!requestLogWasStreamed(result)) {
+      writeSse(response, buildStreamingChunk(result, result.assistantMessage.content, null, created));
+    } else if ((result.chunks ?? []).length === 0) {
       writeSse(response, buildStreamingChunk(result, '', null, created));
     }
     writeSse(response, buildStreamingChunk(result, '', result.assistantMessage.finishReason ?? 'stop', created));
@@ -417,6 +419,17 @@ function buildStreamingChunk(result: ChatResponse, content: string, finishReason
       },
     ],
   };
+}
+
+function requestLogWasStreamed(result: ChatResponse): boolean {
+  try {
+    const summary = result.requestLog.responseSummaryJson
+      ? JSON.parse(result.requestLog.responseSummaryJson) as { streamed?: unknown }
+      : null;
+    return summary?.streamed === true;
+  } catch {
+    return false;
+  }
 }
 
 function writeGatewayError(response: ServerResponse, code: GatewayErrorCode, message = GATEWAY_ERROR_MESSAGES[code]): void {
