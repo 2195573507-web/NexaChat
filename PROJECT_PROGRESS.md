@@ -6,7 +6,7 @@
 - 实际项目根目录：`D:/NexaChat`。
 - 分支与上游：`main` / `origin/main`。
 - 基线提交：`5acc4bc00cd1a0deca1f1f3aab34da778146e16b`。
-- 最终提交：以本次提交后 `git rev-parse HEAD` 输出为准；最终中文报告记录精确哈希。
+- 最终提交：`78c5b738dc431def216af36fb5105668325e190a`。
 - 变更摘要：扩展 README 为当前事实入口；补充 Electron sandbox/IPC 安全边界说明；拆开 service registry 深层 mixin 链；修正非交互主题图标语义；为 Gateway 用量趋势增加可访问摘要；补强 Knowledge 可读性对比检查；更新测试与质量门。
 - 文档变更：`README.md`、`PROJECT_PROGRESS.md`、`docs/architecture/current-architecture.md`、`docs/testing/validation-checklist.md`、`docs/design/ui-product-boundary.md`、`docs/audits/full-project-health-check-report.md`、`docs/audits/integrated-quality-score-improvement-report.md`。
 - 主进程与服务变更：`src/main/index.ts`、`src/main/services/serviceRegistry.ts`。
@@ -21,6 +21,7 @@
   - `npm.cmd run test:electron-smoke`：通过，Electron smoke rendered the NexaChat shell。
   - `npm.cmd run scan:quality`：通过，all scans。
   - `git diff --check`：通过，仅有 CRLF normalization warnings。
+- 推送状态：已提交到本地 `main`，但推送到 `origin/main` 未成功；`git push` 报 `Recv failure: Connection was reset`，重试 `git push origin main` 和 `git ls-remote origin refs/heads/main` 报无法连接 `github.com:443`；`Test-NetConnection github.com -Port 443` 显示 `TcpTestSucceeded: False`。当前本地分支状态为 `main...origin/main [ahead 1]`。
 - 剩余风险：`ServiceContext` 仍然偏宽；Electron `sandbox: false` 仍需单独兼容性迭代；性能设计只做了保守提升，没有进行全局状态架构重写；历史审计记录保留为历史，不应被当作最新事实源。
 - 编码说明：主动维护的中文 Markdown 已保持 UTF-8，并为关键中文 Markdown 写入 UTF-8 BOM，降低 Windows PowerShell 默认读取时的乱码风险。
 
