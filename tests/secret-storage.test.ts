@@ -10,6 +10,7 @@ let previousVitest: string | undefined;
 let previousDevServerUrl: string | undefined;
 let previousElectronSmoke: string | undefined;
 let previousFallbackFlag: string | undefined;
+let previousReleaseProfile: string | undefined;
 
 vi.mock('electron', () => ({
   app: {
@@ -30,6 +31,7 @@ beforeEach(() => {
   previousDevServerUrl = process.env.VITE_DEV_SERVER_URL;
   previousElectronSmoke = process.env.NEXACHAT_ELECTRON_SMOKE;
   previousFallbackFlag = process.env.NEXACHAT_ALLOW_INSECURE_SECRET_STORAGE;
+  previousReleaseProfile = process.env.NEXACHAT_RELEASE_PROFILE;
   dataDir = join(process.cwd(), 'test-results', `secret-storage-${Date.now()}-${Math.random().toString(16).slice(2)}`);
   mkdirSync(dataDir, { recursive: true });
   process.env.NEXACHAT_DATA_DIR = dataDir;
@@ -44,6 +46,7 @@ afterEach(async () => {
   restoreEnv('VITE_DEV_SERVER_URL', previousDevServerUrl);
   restoreEnv('NEXACHAT_ELECTRON_SMOKE', previousElectronSmoke);
   restoreEnv('NEXACHAT_ALLOW_INSECURE_SECRET_STORAGE', previousFallbackFlag);
+  restoreEnv('NEXACHAT_RELEASE_PROFILE', previousReleaseProfile);
   vi.resetModules();
 });
 
@@ -106,6 +109,61 @@ describe('secret storage fallback policy', () => {
 
     expect(row.encrypted_value).toMatch(/^local-dev:v1:/);
     expect(row.encrypted_value).not.toContain(created.key);
+  });
+
+  it('blocks insecure fallback markers in release profile', async () => {
+    process.env.NODE_ENV = 'production';
+    process.env.NEXACHAT_RELEASE_PROFILE = '1';
+    process.env.NEXACHAT_ALLOW_INSECURE_SECRET_STORAGE = '1';
+    delete process.env.VITEST;
+    delete process.env.VITE_DEV_SERVER_URL;
+    delete process.env.NEXACHAT_ELECTRON_SMOKE;
+
+    await expect(import('../src/main/services/store')).rejects.toThrow(/blocked in release context/);
+  });
+
+  it('blocks Electron smoke fallback markers in release profile', async () => {
+    process.env.NODE_ENV = 'production';
+    process.env.NEXACHAT_RELEASE_PROFILE = '1';
+    process.env.NEXACHAT_ELECTRON_SMOKE = '1';
+    delete process.env.VITEST;
+    delete process.env.VITE_DEV_SERVER_URL;
+    delete process.env.NEXACHAT_ALLOW_INSECURE_SECRET_STORAGE;
+
+    await expect(import('../src/main/services/store')).rejects.toThrow(/blocked in release context/);
+  });
+
+  it('reports secret storage diagnostics without raw secret values', async () => {
+    process.env.NODE_ENV = 'test';
+    process.env.NEXACHAT_ALLOW_INSECURE_SECRET_STORAGE = '1';
+    const { getSecretStorageDiagnostics } = await import('../src/main/security/secretStorage');
+
+    expect(getSecretStorageDiagnostics()).toMatchObject({
+      mode: 'local-dev-fallback',
+      safeStorageAvailable: false,
+      releaseProfile: false,
+      insecureFallbackEnvPresent: true,
+    });
+  });
+
+  it('reports blocked release diagnostics without exposing fallback secrets', async () => {
+    process.env.NODE_ENV = 'production';
+    process.env.NEXACHAT_RELEASE_PROFILE = '1';
+    process.env.NEXACHAT_ALLOW_INSECURE_SECRET_STORAGE = '1';
+    delete process.env.VITEST;
+    delete process.env.VITE_DEV_SERVER_URL;
+    delete process.env.NEXACHAT_ELECTRON_SMOKE;
+    const { getSecretStorageDiagnostics } = await import('../src/main/security/secretStorage');
+
+    const diagnostics = getSecretStorageDiagnostics();
+
+    expect(diagnostics).toMatchObject({
+      mode: 'blocked',
+      releaseProfile: true,
+      insecureFallbackEnvPresent: true,
+    });
+    expect(JSON.stringify(diagnostics)).not.toContain('fake');
+    expect(JSON.stringify(diagnostics)).not.toContain('sk-');
   });
 
   it('keeps diagnostics and redaction free of raw fallback secrets', async () => {

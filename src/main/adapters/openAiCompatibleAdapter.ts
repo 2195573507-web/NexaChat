@@ -7,7 +7,7 @@ import {
   isRetryableProviderStatus,
   normalizeProviderHttpErrorCode,
 } from '../../shared/providerRuntime.js';
-import { redactHeaders, redactSensitive } from '../security/redaction.js';
+import { redactHeaders, redactKnownSecrets } from '../security/redaction.js';
 
 export interface ChatMessageInput {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -102,7 +102,11 @@ export async function invokeOpenAiCompatibleChat(input: ProviderInvocationInput)
   while (attempt <= maxRetries) {
     const controller = new AbortController();
     const upstreamAbort = () => controller.abort(input.signal?.reason);
-    const timer = setTimeout(() => controller.abort(new Error('provider_timeout')), timeoutMs);
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort(new Error('provider_timeout'));
+    }, timeoutMs);
     input.signal?.addEventListener('abort', upstreamAbort, { once: true });
 
     try {
@@ -116,12 +120,11 @@ export async function invokeOpenAiCompatibleChat(input: ProviderInvocationInput)
         }),
         signal: controller.signal,
       });
-      clearTimeout(timer);
-      input.signal?.removeEventListener('abort', upstreamAbort);
-
       if (!response.ok) {
-        const error = await buildHttpError(response);
+        const error = await buildHttpError(response, input.apiKey);
         if (attempt < maxRetries && error.retryable) {
+          clearTimeout(timer);
+          input.signal?.removeEventListener('abort', upstreamAbort);
           lastError = error;
           attempt += 1;
           await sleep(PROVIDER_RUNTIME_POLICY.retryBackoffMs * attempt);
@@ -131,8 +134,10 @@ export async function invokeOpenAiCompatibleChat(input: ProviderInvocationInput)
       }
 
       const result = input.stream === true
-        ? await parseStreamingResponse(response, input)
+        ? await parseStreamingResponse(response, { onChunk: input.onChunk, onProgress: input.onProgress, signal: controller.signal })
         : await parseJsonResponse(response);
+      clearTimeout(timer);
+      input.signal?.removeEventListener('abort', upstreamAbort);
       return {
         ...result,
         latencyMs: Math.max(1, Date.now() - startedAt),
@@ -141,7 +146,7 @@ export async function invokeOpenAiCompatibleChat(input: ProviderInvocationInput)
     } catch (error) {
       clearTimeout(timer);
       input.signal?.removeEventListener('abort', upstreamAbort);
-      const normalized = normalizeInvocationError(error);
+      const normalized = normalizeInvocationError(error, input.apiKey, timedOut);
       if (attempt < maxRetries && normalized.retryable) {
         lastError = normalized;
         attempt += 1;
@@ -176,7 +181,11 @@ export async function invokeOpenAiCompatibleEmbeddings(input: ProviderEmbeddingI
   while (attempt <= maxRetries) {
     const controller = new AbortController();
     const upstreamAbort = () => controller.abort(input.signal?.reason);
-    const timer = setTimeout(() => controller.abort(new Error('provider_timeout')), timeoutMs);
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort(new Error('provider_timeout'));
+    }, timeoutMs);
     input.signal?.addEventListener('abort', upstreamAbort, { once: true });
 
     try {
@@ -189,12 +198,11 @@ export async function invokeOpenAiCompatibleEmbeddings(input: ProviderEmbeddingI
         }),
         signal: controller.signal,
       });
-      clearTimeout(timer);
-      input.signal?.removeEventListener('abort', upstreamAbort);
-
       if (!response.ok) {
-        const error = await buildHttpError(response);
+        const error = await buildHttpError(response, input.apiKey);
         if (attempt < maxRetries && error.retryable) {
+          clearTimeout(timer);
+          input.signal?.removeEventListener('abort', upstreamAbort);
           lastError = error;
           attempt += 1;
           await sleep(PROVIDER_RUNTIME_POLICY.retryBackoffMs * attempt);
@@ -204,6 +212,8 @@ export async function invokeOpenAiCompatibleEmbeddings(input: ProviderEmbeddingI
       }
 
       const result = await parseEmbeddingResponse(response, normalizedInput.length);
+      clearTimeout(timer);
+      input.signal?.removeEventListener('abort', upstreamAbort);
       return {
         ...result,
         latencyMs: Math.max(1, Date.now() - startedAt),
@@ -212,7 +222,7 @@ export async function invokeOpenAiCompatibleEmbeddings(input: ProviderEmbeddingI
     } catch (error) {
       clearTimeout(timer);
       input.signal?.removeEventListener('abort', upstreamAbort);
-      const normalized = normalizeInvocationError(error);
+      const normalized = normalizeInvocationError(error, input.apiKey, timedOut);
       if (attempt < maxRetries && normalized.retryable) {
         lastError = normalized;
         attempt += 1;
@@ -239,7 +249,7 @@ export async function testOpenAiCompatibleProvider(provider: Provider, apiKey: s
       modelNames: result.modelNames,
     };
   } catch (error) {
-    const normalized = normalizeInvocationError(error);
+    const normalized = normalizeInvocationError(error, apiKey);
     return {
       ok: false,
       latencyMs: Math.max(1, Date.now() - startedAt),
@@ -261,7 +271,7 @@ export async function fetchOpenAiCompatibleModels(provider: Provider, apiKey: st
   });
   const latencyMs = Math.max(1, Date.now() - startedAt);
   if (!response.ok) {
-    throw await buildHttpError(response);
+    throw await buildHttpError(response, apiKey);
   }
   const body = await response.json() as { data?: Array<{ id?: unknown; object?: unknown }> };
   return {
@@ -336,10 +346,10 @@ function joinEndpoint(baseUrl: string, endpoint: string): string {
   return `${baseUrl.replace(/\/+$/, '')}${endpoint}`;
 }
 
-async function buildHttpError(response: Response): Promise<ProviderRuntimeError> {
+async function buildHttpError(response: Response, apiKey?: string | null): Promise<ProviderRuntimeError> {
   const text = await response.text();
   const message = parseErrorMessage(text) ?? `Provider returned HTTP ${response.status}.`;
-  return new ProviderRuntimeError(redactSensitive(message), normalizeProviderHttpErrorCode(response.status), {
+  return new ProviderRuntimeError(redactKnownSecrets(message, [apiKey]), normalizeProviderHttpErrorCode(response.status), {
     status: response.status,
     retryable: isRetryableProviderStatus(response.status),
   });
@@ -427,7 +437,7 @@ async function parseEmbeddingResponse(
 
 async function parseStreamingResponse(
   response: Response,
-  input: Pick<ProviderInvocationInput, 'onChunk' | 'onProgress'> = {},
+  input: Pick<ProviderInvocationInput, 'onChunk' | 'onProgress' | 'signal'> = {},
 ): Promise<Omit<ProviderInvocationResult, 'latencyMs' | 'retryCount'>> {
   if (!response.body) {
     throw new ProviderRuntimeError('Provider streaming response did not include a body.', PROVIDER_RUNTIME_ERROR_CODES.invalidResponse);
@@ -440,37 +450,54 @@ async function parseStreamingResponse(
   let finishReason: string | null = null;
   let usage: { prompt_tokens?: unknown; completion_tokens?: unknown; total_tokens?: unknown } | null = null;
 
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split(/\r?\n/);
-    buffer = lines.pop() ?? '';
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || !trimmed.startsWith('data:')) continue;
-      const data = trimmed.slice('data:'.length).trim();
-      if (data === '[DONE]') {
-        continue;
+  try {
+    while (true) {
+      if (input.signal?.aborted) {
+        await reader.cancel().catch(() => undefined);
+        throw input.signal.reason instanceof Error ? input.signal.reason : new Error('provider_cancelled');
       }
-      const chunk = JSON.parse(data) as {
-        choices?: Array<{ delta?: { content?: unknown }; finish_reason?: unknown }>;
-        usage?: { prompt_tokens?: unknown; completion_tokens?: unknown; total_tokens?: unknown };
-      };
-      const choice = Array.isArray(chunk.choices) ? chunk.choices[0] : null;
-      if (typeof choice?.delta?.content === 'string') {
-        chunks.push(choice.delta.content);
-        content += choice.delta.content;
-        input.onChunk?.(choice.delta.content);
-      }
-      if (typeof choice?.finish_reason === 'string') {
-        finishReason = choice.finish_reason;
-      }
-      if (chunk.usage) {
-        usage = chunk.usage;
-        input.onProgress?.('usage');
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data:')) continue;
+        const data = trimmed.slice('data:'.length).trim();
+        if (data === '[DONE]') {
+          continue;
+        }
+        let chunk: {
+          error?: { message?: unknown };
+          choices?: Array<{ delta?: { content?: unknown }; finish_reason?: unknown }>;
+          usage?: { prompt_tokens?: unknown; completion_tokens?: unknown; total_tokens?: unknown };
+        };
+        try {
+          chunk = JSON.parse(data) as typeof chunk;
+        } catch {
+          throw new ProviderRuntimeError('Provider stream included malformed SSE JSON.', PROVIDER_RUNTIME_ERROR_CODES.invalidResponse);
+        }
+        if (typeof chunk.error?.message === 'string') {
+          throw new ProviderRuntimeError(chunk.error.message, PROVIDER_RUNTIME_ERROR_CODES.upstreamError);
+        }
+        const choice = Array.isArray(chunk.choices) ? chunk.choices[0] : null;
+        if (typeof choice?.delta?.content === 'string') {
+          chunks.push(choice.delta.content);
+          content += choice.delta.content;
+          input.onChunk?.(choice.delta.content);
+        }
+        if (typeof choice?.finish_reason === 'string') {
+          finishReason = choice.finish_reason;
+        }
+        if (chunk.usage) {
+          usage = chunk.usage;
+          input.onProgress?.('usage');
+        }
       }
     }
+  } finally {
+    reader.releaseLock();
   }
 
   if (!content) {
@@ -492,9 +519,15 @@ async function parseStreamingResponse(
   };
 }
 
-function normalizeInvocationError(error: unknown): ProviderRuntimeError {
+function normalizeInvocationError(error: unknown, apiKey?: string | null, timedOut = false): ProviderRuntimeError {
   if (error instanceof ProviderRuntimeError) {
-    return error;
+    return new ProviderRuntimeError(redactKnownSecrets(error.message, [apiKey]), error.code, {
+      status: error.status,
+      retryable: error.retryable,
+    });
+  }
+  if (timedOut) {
+    return new ProviderRuntimeError('Provider request timed out.', PROVIDER_RUNTIME_ERROR_CODES.timeout, { retryable: true });
   }
   if (error instanceof DOMException && error.name === 'AbortError') {
     return new ProviderRuntimeError('Provider request was cancelled or timed out.', PROVIDER_RUNTIME_ERROR_CODES.cancelled, { retryable: false });
@@ -509,7 +542,7 @@ function normalizeInvocationError(error: unknown): ProviderRuntimeError {
     return new ProviderRuntimeError('Provider request timed out.', PROVIDER_RUNTIME_ERROR_CODES.timeout, { retryable: true });
   }
   if (error instanceof Error) {
-    return new ProviderRuntimeError(redactSensitive(error.message), PROVIDER_RUNTIME_ERROR_CODES.networkError, { retryable: true });
+    return new ProviderRuntimeError(redactKnownSecrets(error.message, [apiKey]), PROVIDER_RUNTIME_ERROR_CODES.networkError, { retryable: true });
   }
   return new ProviderRuntimeError('Provider request failed.', PROVIDER_RUNTIME_ERROR_CODES.networkError, { retryable: true });
 }

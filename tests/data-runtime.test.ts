@@ -152,12 +152,25 @@ describe('Round 12 data mobility runtime', () => {
 
     const snapshot = store.createSnapshot();
     const diagnostics = store.exportDiagnostics();
-    const backup = store.createEncryptedBackup({ passphrase: 'round-12-passphrase' });
+    const backup = store.createEncryptedBackup({ profile: 'encrypted-redacted', passphrase: 'round-12-passphrase' });
+    const backupPackage = JSON.parse(backup.packageJson) as {
+      profile: string;
+      fullDatabase: boolean;
+      rawDatabaseIncluded: boolean;
+      secrets: string;
+    };
     const preflight = store.createRestorePreflight({ backupId: backup.id, passphrase: 'round-12-passphrase' });
 
     expect(snapshot.manifestJson).not.toContain('sk-round-12-secret');
     expect(diagnostics.manifestJson).not.toContain(dataDir);
     expect(backup.packageJson).not.toContain('sk-round-12-secret');
+    expect(backup.profile).toBe('encrypted-redacted');
+    expect(backupPackage).toMatchObject({
+      profile: 'encrypted-redacted',
+      fullDatabase: false,
+      rawDatabaseIncluded: false,
+      secrets: 'stripped',
+    });
     expect(backup.encrypted).toBe(true);
     expect(preflight.operationKind).toBe('restore-preflight');
     expect(preflight.status).toBe('ready');

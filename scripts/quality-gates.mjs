@@ -82,6 +82,15 @@ const CHILD_PROCESS_ALLOWLIST = new Set([
   'scripts/quality-gates.mjs',
 ]);
 
+const PACKAGER_FORBIDDEN_COPY_ITEMS = [
+  "'src'",
+  "'tests'",
+  "'docs/build-plans'",
+  "'.git'",
+  "'.env'",
+  "'test-results'",
+];
+
 function walk(dir) {
   const absoluteDir = join(repoRoot, dir);
   const entries = [];
@@ -259,12 +268,69 @@ async function scanSecurity() {
   if (!mainSource.includes('nodeIntegration: false')) {
     unsafeViolations.push('src/main/index.ts: missing nodeIntegration: false');
   }
+  if (!mainSource.includes('content-security-policy') || !mainSource.includes('CONTENT_SECURITY_POLICY')) {
+    unsafeViolations.push('src/main/index.ts: missing nexachat:// Content-Security-Policy');
+  }
+  if (!mainSource.includes('setPermissionRequestHandler')) {
+    unsafeViolations.push('src/main/index.ts: missing default-deny permission request handler');
+  }
+  if (!mainSource.includes('sandbox: false')) {
+    unsafeViolations.push('src/main/index.ts: missing explicit sandbox compatibility decision');
+  }
   if (!preloadSource.includes('contextBridge.exposeInMainWorld')) {
     unsafeViolations.push('src/preload/index.ts: missing contextBridge bridge');
+  }
+  if (/exposeInMainWorld\([^)]*ipcRenderer/s.test(preloadSource)) {
+    unsafeViolations.push('src/preload/index.ts: raw ipcRenderer exposed through preload');
   }
   fail('Potential raw secret values', secretViolations);
   fail('Unsafe renderer/main security patterns', unsafeViolations);
   fail('Raw shell execution in runtime source', shellViolations);
+}
+
+async function scanReleaseSafety() {
+  const violations = [];
+  if (process.env.NEXACHAT_ALLOW_INSECURE_SECRET_STORAGE === '1') {
+    violations.push('environment: NEXACHAT_ALLOW_INSECURE_SECRET_STORAGE=1 is forbidden for release safety checks');
+  }
+  if (process.env.NEXACHAT_RELEASE_PROFILE === '1' && process.env.NEXACHAT_ELECTRON_SMOKE === '1') {
+    violations.push('environment: NEXACHAT_ELECTRON_SMOKE=1 cannot be used as proof of release secret storage');
+  }
+  const installerGenerator = read('scripts/create-installer-script.mjs');
+  if (!installerGenerator.includes('Assert-SafeInstallRoot')) {
+    violations.push('scripts/create-installer-script.mjs: missing Assert-SafeInstallRoot');
+  }
+  if (/Get-ChildItem\s+-LiteralPath\s+\$resolvedInstall[\s\S]{0,120}Remove-Item\s+-Recurse\s+-Force/.test(installerGenerator)) {
+    violations.push('scripts/create-installer-script.mjs: contains blanket InstallRoot child delete');
+  }
+  for (const required of [
+    'InstallRoot cannot be a drive root',
+    'Desktop, Documents, Downloads',
+    'not a verified NexaChat install directory',
+    'Refusing to remove path outside InstallRoot',
+  ]) {
+    if (!installerGenerator.includes(required)) {
+      violations.push(`scripts/create-installer-script.mjs: missing guard text "${required}"`);
+    }
+  }
+
+  const packager = read('scripts/package-win-unpacked.mjs');
+  for (const item of PACKAGER_FORBIDDEN_COPY_ITEMS) {
+    if (packager.includes(item)) {
+      violations.push(`scripts/package-win-unpacked.mjs: forbidden package copy item ${item}`);
+    }
+  }
+  for (const required of [
+    'desktopEntry.relativePaths.rendererDist',
+    'desktopEntry.relativePaths.mainDist',
+    "'assets'",
+    'packagedManifest',
+  ]) {
+    if (!packager.includes(required)) {
+      violations.push(`scripts/package-win-unpacked.mjs: missing expected allowlisted package source ${required}`);
+    }
+  }
+  fail('Release safety gaps', violations);
 }
 
 async function scanDeadLinks() {
@@ -472,6 +538,98 @@ async function scanCurrentDocs() {
   fail('Docs freshness gaps', violations);
 }
 
+async function scanCurrentDocsV2() {
+  const violations = [];
+  const readmePath = join(repoRoot, 'README.md');
+  if (!existsPath(readmePath)) {
+    violations.push('README.md: missing');
+    fail('Docs freshness gaps', violations);
+    return;
+  }
+
+  const readme = read('README.md');
+  const requiredText = [
+    'NexaChat 是本地优先、聊天优先的多模型 AI 桌面工作台。',
+    '当前根路由 `/` 解析到 `/chat/conversations`',
+    'Chat',
+    'Models',
+    'Knowledge Base',
+    'Tools',
+    'Gateway',
+    'Data',
+    'Settings',
+    'React 19',
+    'SQLite / `node:sqlite`',
+    '默认本地 Gateway 地址：`127.0.0.1:8787`',
+    'Knowledge Base 当前支持 text-like 导入',
+    '`/v1/responses` 当前提供 basic text',
+    'Tools / Agent / MCP 当前支持注册、权限、dry-run、fixture execution、approval、trace/logging',
+    'npm.cmd run typecheck',
+    'npm.cmd run scan:quality',
+    'npm.cmd run test',
+    'npm.cmd run test:ui-smoke',
+    'npm.cmd run test:electron-smoke',
+    'scan:release-safety',
+    '`src/main`',
+    '`src/preload`',
+    '`src/renderer`',
+    '`src/shared`',
+    '`tests`',
+  ];
+  for (const text of requiredText) {
+    if (!readme.includes(text)) {
+      violations.push(`README.md: missing "${text}"`);
+    }
+  }
+
+  const forbiddenReadmePatterns = [
+    /Workspace-first/i,
+    /Dashboard-first/i,
+    /\b8[- ]module\b/i,
+    /8\s*个顶层模块/,
+    /docs\/iteration-plans/i,
+    /task_plan\.md/i,
+    /progress\.md/i,
+    /findings\.md/i,
+    /README\.zh-CN\.md/i,
+    /完整\s*PDF\/Office\/OCR\/vector DB RAG/,
+    /生产级\s*PDF\/Office\/OCR\/vector DB RAG.*已实现/,
+    /已签名.*installer/i,
+    /auto-update.*已完成/i,
+  ];
+  for (const pattern of forbiddenReadmePatterns) {
+    if (pattern.test(readme)) {
+      violations.push(`README.md: forbidden stale or overstated text matched ${pattern}`);
+    }
+  }
+
+  const requiredDocs = [
+    'docs/architecture/current-architecture.md',
+    'docs/testing/validation-checklist.md',
+    'docs/design/ui-product-boundary.md',
+  ];
+  for (const rel of requiredDocs) {
+    if (!existsPath(join(repoRoot, rel))) {
+      violations.push(`${rel}: missing current source-of-truth doc`);
+    }
+  }
+
+  const removedArtifacts = [
+    'README.zh-CN.md',
+    'task_plan.md',
+    'progress.md',
+    'findings.md',
+    'docs/iteration-plans',
+    'docs/implementation',
+  ];
+  for (const rel of removedArtifacts) {
+    if (existsPath(join(repoRoot, rel))) {
+      violations.push(`${rel}: stale planning/process artifact should not be present`);
+    }
+  }
+  fail('Docs freshness gaps', violations);
+}
+
 async function runCommandGate(command, args) {
   const spawnCommand = process.platform === 'win32' && command.endsWith('.cmd') ? 'cmd.exe' : command;
   const spawnArgs = process.platform === 'win32' && command.endsWith('.cmd') ? ['/d', '/s', '/c', command, ...args] : args;
@@ -502,18 +660,22 @@ async function main() {
     case 'security':
       await scanSecurity();
       break;
+    case 'release-safety':
+      await scanReleaseSafety();
+      break;
     case 'dead-links':
       await scanDeadLinks();
       break;
     case 'docs':
-      await scanCurrentDocs();
+      await scanCurrentDocsV2();
       break;
     case 'all-scans':
       await scanHardcode();
       await scanDuplicates();
       await scanSecurity();
+      await scanReleaseSafety();
       await scanDeadLinks();
-      await scanCurrentDocs();
+      await scanCurrentDocsV2();
       break;
     case 'release':
       await runCommandGate('npm.cmd', ['run', 'typecheck']);
@@ -521,17 +683,19 @@ async function main() {
       await runCommandGate('npm.cmd', ['run', 'build']);
       await runCommandGate('npm.cmd', ['run', 'test:ui-smoke']);
       await runCommandGate('npm.cmd', ['run', 'test:electron-smoke']);
+      await scanReleaseSafety();
       await runCommandGate('npm.cmd', ['run', 'package:release']);
       await runCommandGate('npm.cmd', ['run', 'test:desktop-entry']);
       await scanHardcode();
       await scanDuplicates();
       await scanSecurity();
+      await scanReleaseSafety();
       await scanDeadLinks();
-      await scanCurrentDocs();
+      await scanCurrentDocsV2();
       await runCommandGate('git', ['diff', '--check']);
       break;
     default:
-      console.log('Usage: node scripts/quality-gates.mjs <hardcode|duplicates|security|dead-links|docs|all-scans|release>');
+      console.log('Usage: node scripts/quality-gates.mjs <hardcode|duplicates|security|release-safety|dead-links|docs|all-scans|release>');
       process.exit(gate ? 1 : 0);
   }
 

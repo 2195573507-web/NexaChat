@@ -19,11 +19,14 @@ npm.cmd run typecheck
 git diff --check
 npm.cmd run typecheck
 npm.cmd test
-npm.cmd run build
+npm.cmd run test
 npm.cmd run test:ui-smoke
 npm.cmd run test:electron-smoke
+npm.cmd run scan:security
 npm.cmd run scan:quality
 ```
+
+`npm.cmd run build` 只有在当前任务允许写入 `dist/`、`dist-electron/` 等构建产物时运行；如果本轮明确禁止生成或覆盖构建/发布产物，应跳过并记录原因。
 
 历史审计矩阵也接受下面的等价顺序，但本轮集成质量迭代优先使用上方顺序，以便先暴露类型、单元和构建问题：
 
@@ -49,6 +52,12 @@ git status --short --untracked-files=all
 - `test-results/`、`playwright-report/`、`dist/`、`dist-electron/`、`release/` 属于生成或运行产物，默认不提交。
 - UI smoke 需要覆盖 7 个模块、无路由泄漏、无横向溢出、theme/language/system mode 基本路径。
 - 长时间点击测试的历史结果可以作为 evidence，但不能替代最新相关修复的 targeted validation。
+
+## 发布/安装器边界
+
+- `npm.cmd run scan:release-safety` 是只读源码安全扫描，可以在不生成产物的修复轮次运行。
+- `package:win-unpacked`、`package:installer-script`、`package:release`、`test:package-smoke`、`test:installer-smoke`、`verify:release` 和 `test:desktop-entry` 会触碰打包、安装器、release 目录或组合发布门，只有在用户明确允许生成 release artifacts 时运行。
+- docs-only、read-only 或 no-artifact remediation 轮次不得运行 build/package/release/installer/update feed 命令；必须用源码扫描、单元测试和静态 release-safety 测试替代。
 
 ## 长测证据规则
 

@@ -1,6 +1,6 @@
 import { createId, now } from '../utils/ids.js';
 import { translate } from '../../shared/i18n.js';
-import { EXECUTION_TOOL_IDS, normalizeApprovalDecision, normalizeExecutionStartInput } from '../../shared/executionRuntime.js';
+import { EXECUTION_APPROVAL_TTL_MS, EXECUTION_RESERVED_RUN_KINDS, EXECUTION_TOOL_IDS, normalizeApprovalDecision, normalizeExecutionStartInput } from '../../shared/executionRuntime.js';
 import { SECURITY_ACTION_PERMISSIONS } from '../../shared/securityRuntime.js';
 import type {
   AgentDefinition,
@@ -16,6 +16,7 @@ import type {
 import { ServiceContext, type ServiceConstructor } from './serviceContext.js';
 
 const t = (key: Parameters<typeof translate>[1], params?: Parameters<typeof translate>[2]) => translate('zh-CN', key, params);
+const APPROVAL_EXPIRED_MESSAGE = 'Approval has expired.';
 
 
 
@@ -113,6 +114,9 @@ export function ToolService<TBase extends ServiceConstructor<ServiceContext>>(Ba
     this.requirePermission(SECURITY_ACTION_PERMISSIONS.executionRun, 'execution_run', null);
     const normalized = normalizeExecutionStartInput(input);
     const timestamp = now();
+    if (EXECUTION_RESERVED_RUN_KINDS.includes(normalized.kind)) {
+      throw new Error(t('tools.execution.reservedKinds.detail'));
+    }
     const runId = createId('run');
     const agent = normalized.agentId ? this.requireAgent(normalized.agentId) : null;
     const tool = normalized.toolId ? this.requireTool(normalized.toolId) : this.requireTool(EXECUTION_TOOL_IDS.statusRead);
@@ -188,10 +192,10 @@ export function ToolService<TBase extends ServiceConstructor<ServiceContext>>(Ba
       this.db
         .prepare(
           `INSERT INTO approval_requests (id, run_id, step_id, status, requested_action, risk_level, reason, decision_reason, decided_at, created_at, expires_at)
-           VALUES (?, ?, ?, 'pending', ?, ?, ?, NULL, NULL, ?, NULL)`,
+           VALUES (?, ?, ?, 'pending', ?, ?, ?, NULL, NULL, ?, ?)`,
         )
-        .run(approvalId, runId, stepId, tool.name, tool.riskLevel, t('tools.execution.approval.reason', { tool: tool.name }), timestamp);
-      this.addTrace(runId, stepId, 'approval_requested', t('tools.execution.trace.approvalRequested'), { approvalId, toolId: tool.id });
+        .run(approvalId, runId, stepId, tool.name, tool.riskLevel, t('tools.execution.approval.reason', { tool: tool.name }), timestamp, timestamp + EXECUTION_APPROVAL_TTL_MS);
+      this.addTrace(runId, stepId, 'approval_requested', t('tools.execution.trace.approvalRequested'), { approvalId, toolId: tool.id, expiresAt: timestamp + EXECUTION_APPROVAL_TTL_MS });
     } else {
       const stepId = this.createExecutionStep({
         runId,
@@ -222,6 +226,22 @@ export function ToolService<TBase extends ServiceConstructor<ServiceContext>>(Ba
       return this.requireExecutionRun(approval.runId);
     }
     const run = this.requireExecutionRun(approval.runId);
+    if (approval.expiresAt !== null && approval.expiresAt <= timestamp) {
+      this.db
+        .prepare('UPDATE approval_requests SET status = ?, decision_reason = ?, decided_at = ? WHERE id = ?')
+        .run('expired', APPROVAL_EXPIRED_MESSAGE, timestamp, approval.id);
+      if (approval.stepId) {
+        this.db
+          .prepare('UPDATE execution_steps SET status = ?, error_message = ?, completed_at = ?, updated_at = ? WHERE id = ?')
+          .run('cancelled', APPROVAL_EXPIRED_MESSAGE, timestamp, timestamp, approval.stepId);
+      }
+      this.db
+        .prepare('UPDATE execution_runs SET status = ?, approval_status = ?, error_message = ?, updated_at = ?, completed_at = ? WHERE id = ?')
+        .run('cancelled', 'expired', APPROVAL_EXPIRED_MESSAGE, timestamp, timestamp, run.id);
+      this.addTrace(run.id, approval.stepId, 'run_cancelled', t('tools.execution.trace.runCancelled'), { approvalId: approval.id, reason: 'approval_expired' });
+      this.audit('execution.approval.expired', 'execution_run', run.id, { approvalId: approval.id });
+      return this.requireExecutionRun(run.id);
+    }
     const tool = run.toolId ? this.requireTool(run.toolId) : this.requireTool(EXECUTION_TOOL_IDS.statusRead);
     const approved = normalized.decision === 'approved';
     const decisionReason = normalized.reason ?? null;

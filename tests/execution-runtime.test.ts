@@ -1,7 +1,8 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EXECUTION_TOOL_IDS, EXECUTION_RUN_STATUSES, TOOL_FIXTURES } from '../src/shared/executionRuntime';
+import { EXECUTION_APPROVAL_TTL_MS, EXECUTION_RESERVED_RUN_KINDS, EXECUTION_TOOL_IDS, EXECUTION_RUN_STATUSES, TOOL_FIXTURES } from '../src/shared/executionRuntime';
+import { translate } from '../src/shared/i18n';
 
 let dataDir = '';
 
@@ -57,6 +58,8 @@ describe('Round 10 execution runtime', () => {
     expect(gated.status).toBe('waiting_approval');
     const approval = store.getApprovalRequests().find((item) => item.runId === gated.id);
     expect(approval?.status).toBe('pending');
+    expect(approval?.expiresAt).toEqual(expect.any(Number));
+    expect(approval!.expiresAt! - approval!.createdAt).toBe(EXECUTION_APPROVAL_TTL_MS);
 
     const completed = store.decideApproval({ approvalId: approval!.id, decision: 'approved', reason: 'test approval' });
     expect(completed.status).toBe('completed');
@@ -64,5 +67,32 @@ describe('Round 10 execution runtime', () => {
     expect(store.getExecutionTraceEvents(completed.id).map((event) => event.eventType)).toEqual(
       expect.arrayContaining(['approval_requested', 'approval_decided', 'tool_called', 'run_completed']),
     );
+  });
+
+  it('expires approval requests before execution and keeps reserved run kinds blocked', async () => {
+    const { store } = await import('../src/main/services/store');
+
+    for (const kind of EXECUTION_RESERVED_RUN_KINDS) {
+      expect(() => store.startExecutionRun({ kind, mode: 'preview', inputJson: '{}' })).toThrow(translate('zh-CN', 'tools.execution.reservedKinds.detail'));
+    }
+
+    const gated = store.startExecutionRun({
+      kind: 'tool',
+      mode: 'execute',
+      toolId: EXECUTION_TOOL_IDS.echo,
+      inputJson: JSON.stringify({ message: 'expire me' }),
+    });
+    const approval = store.getApprovalRequests().find((item) => item.runId === gated.id);
+    expect(approval?.status).toBe('pending');
+    store.getRawDatabaseForTesting()
+      .prepare('UPDATE approval_requests SET expires_at = ? WHERE id = ?')
+      .run(Date.now() - 1, approval!.id);
+
+    const expired = store.decideApproval({ approvalId: approval!.id, decision: 'approved', reason: 'too late' });
+
+    expect(expired.status).toBe('cancelled');
+    expect(expired.approvalStatus).toBe('expired');
+    expect(store.getApprovalRequests().find((item) => item.id === approval!.id)?.status).toBe('expired');
+    expect(store.getExecutionTraceEvents(expired.id).map((event) => event.eventType)).toContain('run_cancelled');
   });
 });

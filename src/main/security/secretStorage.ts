@@ -1,5 +1,15 @@
 import { safeStorage } from 'electron';
 
+export type SecretStorageMode = 'safeStorage' | 'local-dev-fallback' | 'blocked';
+
+export interface SecretStorageDiagnostics {
+  mode: SecretStorageMode;
+  safeStorageAvailable: boolean;
+  releaseProfile: boolean;
+  insecureFallbackEnvPresent: boolean;
+  electronSmokeEnvPresent: boolean;
+}
+
 export function encodeSecretValue(value: string): string {
   try {
     if (safeStorage.isEncryptionAvailable()) {
@@ -27,7 +37,27 @@ export function decodeSecretValue(value: string): string {
   throw new Error('Stored secret format is unsupported.');
 }
 
+export function getSecretStorageDiagnostics(): SecretStorageDiagnostics {
+  const safeStorageAvailable = isSafeStorageAvailable();
+  const releaseProfile = isReleaseProfile();
+  const insecureFallbackEnvPresent = process.env.NEXACHAT_ALLOW_INSECURE_SECRET_STORAGE === '1';
+  const electronSmokeEnvPresent = process.env.NEXACHAT_ELECTRON_SMOKE === '1';
+  const fallbackBlocked = releaseProfile && (insecureFallbackEnvPresent || electronSmokeEnvPresent);
+  return {
+    mode: safeStorageAvailable ? 'safeStorage' : fallbackBlocked ? 'blocked' : canUseDevelopmentSecretFallback() ? 'local-dev-fallback' : 'blocked',
+    safeStorageAvailable,
+    releaseProfile,
+    insecureFallbackEnvPresent,
+    electronSmokeEnvPresent,
+  };
+}
+
 function canUseDevelopmentSecretFallback(): boolean {
+  if (isReleaseProfile()) {
+    if (process.env.NEXACHAT_ALLOW_INSECURE_SECRET_STORAGE === '1' || process.env.NEXACHAT_ELECTRON_SMOKE === '1') {
+      throw new Error('Insecure secret storage fallback is blocked in release context.');
+    }
+  }
   return (
     process.env.NODE_ENV === 'test' ||
     process.env.NODE_ENV === 'development' ||
@@ -36,4 +66,16 @@ function canUseDevelopmentSecretFallback(): boolean {
     process.env.NEXACHAT_ELECTRON_SMOKE === '1' ||
     process.env.NEXACHAT_ALLOW_INSECURE_SECRET_STORAGE === '1'
   );
+}
+
+function isSafeStorageAvailable(): boolean {
+  try {
+    return safeStorage.isEncryptionAvailable();
+  } catch {
+    return false;
+  }
+}
+
+function isReleaseProfile(): boolean {
+  return process.env.NEXACHAT_RELEASE_PROFILE === '1';
 }

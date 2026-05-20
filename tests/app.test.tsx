@@ -23,7 +23,7 @@ async function renderApp() {
 }
 
 function activePanel() {
-  return document.querySelector('main [role="tabpanel"]') as HTMLElement;
+  return document.querySelector('main [role="region"]') as HTMLElement;
 }
 
 function openModule(module: NavModule) {
@@ -73,6 +73,7 @@ describe('NexaChat renderer', () => {
     expect(document.querySelectorAll('.module-nav-item')).toHaveLength(0);
     expect(document.querySelectorAll('.module-tabs')).toHaveLength(0);
     expect(document.querySelectorAll('.module-subnav-panel')).toHaveLength(0);
+    expect(document.querySelectorAll('main [role="tabpanel"]')).toHaveLength(0);
     expect(activePanel()).toHaveAttribute('data-module', 'chat');
     expect(activePanel()).toHaveAttribute('data-tab', 'conversations');
     expect(document.querySelector('.chat-quick-actions')).toBeInTheDocument();
@@ -142,7 +143,8 @@ describe('NexaChat renderer', () => {
     await waitFor(() => {
       expect(document.querySelector('.generation-progress')).toBeInTheDocument();
     });
-    expect(document.querySelector('.generation-progress')).toHaveAttribute('data-generation-phase', expect.stringMatching(/queued|sending|generating/));
+    expect(document.querySelector('.generation-progress')).toHaveAttribute('data-generation-phase', expect.stringMatching(/queued|retrieving|sending|generating/));
+    expect(screen.getAllByRole('status').some((element) => element.classList.contains('generation-progress'))).toBe(true);
     expect(screen.getByText(translate('zh-CN', 'chat.generation.progressiveReveal'))).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole('button', { name: translate('zh-CN', 'chat.message.cancel') }).at(-1)!);
@@ -205,6 +207,13 @@ describe('NexaChat renderer', () => {
           timestamp: Date.now(),
         });
         streamHandler?.({
+          type: 'chat.stream.retrieving',
+          phase: 'retrieving',
+          requestId: capturedRequestId,
+          clientRequestId: capturedRequestId,
+          timestamp: Date.now(),
+        });
+        streamHandler?.({
           type: 'chat.stream.chunk',
           phase: 'streaming',
           requestId: capturedRequestId,
@@ -247,6 +256,7 @@ describe('NexaChat renderer', () => {
     await waitFor(() => {
       expect(screen.getByText(/first chunk/)).toBeInTheDocument();
     });
+    expect(screen.queryByText(translate('zh-CN', 'chat.generation.progressiveReveal'))).not.toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: translate('zh-CN', 'chat.message.cancel') }).at(-1)!);
 
     await waitFor(() => {

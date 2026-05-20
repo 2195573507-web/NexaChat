@@ -23,6 +23,20 @@ export function redactSensitive(value: unknown): string {
   return text;
 }
 
+export function redactKnownSecrets(value: unknown, secrets: Array<string | null | undefined>): string {
+  let text = redactSensitive(value);
+  for (const secret of secrets) {
+    const normalized = secret?.trim();
+    if (!normalized || normalized.length < 6) {
+      continue;
+    }
+    text = text
+      .replaceAll(normalized, '[REDACTED]')
+      .replaceAll(encodeURIComponent(normalized), '[REDACTED]');
+  }
+  return text;
+}
+
 export function redactHeaders(headers: Record<string, string>): Record<string, string> {
   const redacted: Record<string, string> = {};
   for (const [key, value] of Object.entries(headers)) {

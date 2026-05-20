@@ -243,7 +243,7 @@ async function expectActiveRouteAndPanel(page: Page, module: NavModule, tab: Nav
   await expect(page.locator('.module-subnav-panel')).toHaveCount(0);
   await expect(page.locator('.top-tab.is-active')).toContainText(tab.label);
   await expect(page).toHaveURL(new RegExp(`${getTabRoute(module.id, tab.id)}$`));
-  const panel = page.locator(`main [role="tabpanel"][data-module="${module.id}"][data-tab="${tab.id}"]`);
+  const panel = page.locator(`main [role="region"][data-module="${module.id}"][data-tab="${tab.id}"]`);
   await expect(panel).toBeVisible();
   await expect(panel).toHaveAttribute('aria-label', tab.label);
   await expectNoVisibleRouteLeak(page);

@@ -12,6 +12,7 @@ export function ToolsPage({ activeTab, snapshot, api, onAction }: TabPageProps) 
   const [serverTarget, setServerTarget] = useState<string>(MCP_EXAMPLE_ENDPOINT);
   const [agentName, setAgentName] = useState<string>('');
   const [agentGoal, setAgentGoal] = useState<string>('');
+  const authorizedMcpCount = snapshot.mcpServers.filter((server) => server.permissionState === 'granted').length;
 
   if (activeTab.id === 'agents') {
     return (
@@ -114,13 +115,13 @@ export function ToolsPage({ activeTab, snapshot, api, onAction }: TabPageProps) 
         eyebrow="MCP"
         title={t('tools.mcp.title')}
         description={activeTab.featureBoundary}
-        status={<StatusPillLite label={t('common.countGranted', { count: snapshot.mcpServers.filter((server) => server.permissionState === 'granted').length })} state={snapshot.mcpServers.some((server) => server.permissionState === 'granted') ? 'warning' : 'muted'} />}
+        status={<StatusPillLite label={t('tools.mcp.authorizedRecords', { count: authorizedMcpCount })} state={authorizedMcpCount > 0 ? 'warning' : 'muted'} />}
         actions={<CommandButton variant="primary" icon={<PlugZap size={15} />} disabled={!serverName.trim() || !serverTarget.trim()} onClick={() => onAction(t('tools.toast.mcpRegistered'), () => api.createMcpServer(serverName.trim(), 'http', serverTarget.trim()))}>{t('tools.mcp.register')}</CommandButton>}
       />
       <div className="tool-layout">
       <ConfigList title={t('tools.mcp.title')} description={activeTab.featureBoundary}>
         <section className="current-config-strip">
-          <div><span className="eyebrow">MCP</span><strong>{snapshot.mcpServers.length}</strong><small>{t('common.countGranted', { count: snapshot.mcpServers.filter((server) => server.permissionState === 'granted').length })}</small></div>
+          <div><span className="eyebrow">MCP</span><strong>{snapshot.mcpServers.length}</strong><small>{t('tools.mcp.authorizedRecords', { count: authorizedMcpCount })}</small></div>
           <div><span className="eyebrow">{t('tools.runs.title')}</span><strong>{snapshot.executionRuns.length}</strong><small>{t('tools.execution.sandbox.fixtureOnly')}</small></div>
           <div><span className="eyebrow">{t('tools.columns.approval')}</span><strong>{snapshot.approvalRequests.filter((approval) => approval.status === 'pending').length}</strong><small>{t('stage.environment-limited')}</small></div>
         </section>
@@ -142,10 +143,10 @@ export function ToolsPage({ activeTab, snapshot, api, onAction }: TabPageProps) 
             <div className="config-row" key={server.id}>
               <span>
                 <strong>{server.name}</strong>
-                <small>{server.transport} / {server.commandOrUrl} / {formatDate(server.updatedAt, t)} / {server.permissionState === 'granted' ? t('tools.mcp.authorizationUnchecked') : t('common.unchecked')}</small>
+                <small>{server.transport} / {server.commandOrUrl} / {formatDate(server.updatedAt, t)} / {server.permissionState === 'granted' ? t('tools.mcp.authorizedConnectivityUnchecked') : t('tools.mcp.registeredOnly')}</small>
               </span>
               <span className="row-actions">
-                <StatusPillLite label={server.permissionState === 'granted' ? t('tools.mcp.authorizationUnchecked') : statusLabel(server.permissionState, t)} state={server.permissionState === 'granted' ? 'warning' : healthState(server.permissionState)} />
+                <StatusPillLite label={server.permissionState === 'granted' ? t('tools.mcp.authorizedConnectivityUnchecked') : statusLabel(server.permissionState, t)} state={server.permissionState === 'granted' ? 'warning' : healthState(server.permissionState)} />
                 <CommandButton onClick={() => onAction(server.permissionState === 'granted' ? t('tools.toast.mcpDenied') : t('tools.toast.mcpGranted'), () => api.updateMcpPermission(server.id, server.permissionState === 'granted' ? 'denied' : 'granted'))}>
                   {server.permissionState === 'granted' ? t('tools.deny') : t('tools.grant')}
                 </CommandButton>

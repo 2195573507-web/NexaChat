@@ -46,6 +46,8 @@ export const EXECUTION_TRACE_EVENT_TYPES: ExecutionTraceEventType[] = [
 ];
 
 export const EXECUTION_RUN_KINDS: ExecutionRunKind[] = ['agent', 'tool', 'mcp-tool', 'workflow'];
+export const EXECUTION_APPROVAL_TTL_MS = 30 * 60 * 1000;
+export const EXECUTION_RESERVED_RUN_KINDS: ExecutionRunKind[] = ['mcp-tool', 'workflow'];
 
 export const TOOL_FIXTURES: ToolDefinition[] = [
   {

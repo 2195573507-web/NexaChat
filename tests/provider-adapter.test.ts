@@ -18,7 +18,7 @@ let server: Server | null = null;
 let baseUrl = '';
 let lastAuth = '';
 let chatAttempts = 0;
-let mode: 'json' | 'stream' | 'retry' | 'timeout' | 'unauthorized' | 'anthropic-json' | 'anthropic-stream' | 'gemini-json' | 'gemini-stream' = 'json';
+let mode: 'json' | 'stream' | 'stream-slow' | 'stream-malformed' | 'stream-error' | 'retry' | 'timeout' | 'unauthorized' | 'anthropic-json' | 'anthropic-stream' | 'gemini-json' | 'gemini-stream' = 'json';
 
 const provider: Provider = {
   id: 'provider_test',
@@ -149,6 +149,48 @@ describe('OpenAI-compatible provider adapter', () => {
         maxRetries: 0,
       }),
     ).rejects.toBeInstanceOf(ProviderRuntimeError);
+  });
+
+  it('keeps stream timeout active after headers and maps malformed SSE deterministically', async () => {
+    mode = 'stream-slow';
+    await expect(
+      invokeOpenAiCompatibleChat({
+        provider,
+        model,
+        apiKey: 'sk-test-secret',
+        messages: [{ role: 'user', content: 'slow stream' }],
+        stream: true,
+        timeoutMs: 25,
+        maxRetries: 0,
+      }),
+    ).rejects.toMatchObject({ code: PROVIDER_RUNTIME_ERROR_CODES.timeout, retryable: true });
+
+    mode = 'stream-malformed';
+    await expect(
+      invokeOpenAiCompatibleChat({
+        provider,
+        model,
+        apiKey: 'sk-test-secret',
+        messages: [{ role: 'user', content: 'bad stream' }],
+        stream: true,
+        maxRetries: 0,
+      }),
+    ).rejects.toMatchObject({ code: PROVIDER_RUNTIME_ERROR_CODES.invalidResponse, retryable: false });
+  });
+
+  it('maps provider stream error events without treating them as retryable network errors', async () => {
+    mode = 'stream-error';
+
+    await expect(
+      invokeOpenAiCompatibleChat({
+        provider,
+        model,
+        apiKey: 'sk-test-secret',
+        messages: [{ role: 'user', content: 'error event' }],
+        stream: true,
+        maxRetries: 0,
+      }),
+    ).rejects.toMatchObject({ code: PROVIDER_RUNTIME_ERROR_CODES.upstreamError, retryable: false });
   });
 
   it('tests provider health with a real /models request', async () => {
@@ -333,6 +375,22 @@ function handleRequest(request: IncomingMessage, response: ServerResponse): void
       response.write('data: {"choices":[{"delta":{"content":"streamed "}}]}\n\n');
       response.write('data: {"choices":[{"delta":{"content":"response"},"finish_reason":"stop"}]}\n\n');
       response.end('data: [DONE]\n\n');
+      return;
+    }
+    if (mode === 'stream-slow') {
+      response.writeHead(200, { 'content-type': 'text/event-stream' });
+      response.write('data: {"choices":[{"delta":{"content":"slow "}}]}\n\n');
+      setTimeout(() => response.end('data: {"choices":[{"delta":{"content":"stream"}}]}\n\ndata: [DONE]\n\n'), 100);
+      return;
+    }
+    if (mode === 'stream-malformed') {
+      response.writeHead(200, { 'content-type': 'text/event-stream' });
+      response.end('data: {"choices":[\n\ndata: [DONE]\n\n');
+      return;
+    }
+    if (mode === 'stream-error') {
+      response.writeHead(200, { 'content-type': 'text/event-stream' });
+      response.end('data: {"error":{"message":"upstream stream failed"}}\n\n');
       return;
     }
     writeJson(response, 200, jsonPayload());

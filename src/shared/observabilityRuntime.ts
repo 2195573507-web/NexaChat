@@ -156,8 +156,8 @@ export function normalizeObservabilityQuery(input: ObservabilityQueryInput = {})
     providerId: input.providerId ?? null,
     modelId: input.modelId ?? null,
     endpoint: input.endpoint ?? null,
-    includeAudit: input.includeAudit !== false,
-    includeTrace: input.includeTrace !== false,
+    includeAudit: input.includeAudit === true,
+    includeTrace: input.includeTrace === true,
     since: input.since ?? null,
     until: input.until ?? null,
   };
@@ -302,7 +302,11 @@ export function buildUsageTrend(
 export function redactObservabilityValue(value: unknown, settings: ObservabilityPrivacySettings = DEFAULT_OBSERVABILITY_PRIVACY_SETTINGS): unknown {
   if (value === null || value === undefined) return value;
   if (typeof value === 'string') {
-    let next = settings.includePromptSnippets ? value : value.replace(/"message"\s*:\s*"[^"]*"/gi, '"message":"[REDACTED]"');
+    let next = settings.includePromptSnippets
+      ? value
+      : value
+        .replace(/"(message|messages|prompt|input|content|notes|query|outputPreview|redactedPreview)"\s*:\s*"[^"]*"/gi, '"$1":"[REDACTED]"')
+        .replace(/"(prompt|input|content|notes|query)"\s*:\s*\[[\s\S]*?\]/gi, '"$1":["[REDACTED]"]');
     if (!settings.includeLocalPaths) {
       next = next.replace(/[A-Za-z]:\\[^"\n\r\t]+/g, '[LOCAL_PATH_REDACTED]').replace(/\/Users\/[^"\n\r\t]+/g, '[LOCAL_PATH_REDACTED]');
     }
@@ -316,6 +320,8 @@ export function redactObservabilityValue(value: unknown, settings: Observability
       Object.entries(value as Record<string, unknown>).map(([key, item]) => [
         key,
         /authorization|api.?key|secret|token|password|credential/i.test(key)
+          ? '[REDACTED]'
+          : !settings.includePromptSnippets && /prompt|input|content|messages?|notes|query|outputPreview|redactedPreview/i.test(key)
           ? '[REDACTED]'
           : redactObservabilityValue(item, settings),
       ]),

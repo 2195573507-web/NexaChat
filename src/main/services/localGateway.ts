@@ -89,9 +89,9 @@ export function createLocalGatewayServer(): Server {
       recordGatewayEvent(request, path, 404, startedAt, null, null, 'not_found');
     } catch (error) {
       const gatewayError = normalizeGatewayError(error);
-      const message = gatewayError.message;
+      const message = gatewayError.publicMessage;
       store.setGatewayRuntime(true, message, 'listening');
-      writeGatewayError(response, gatewayError.code, message);
+      writeGatewayError(response, gatewayError.code, gatewayError.publicMessage);
       recordGatewayEvent(request, path, GATEWAY_ERROR_STATUS[gatewayError.code], startedAt, null, null, gatewayError.code);
     }
   });
@@ -135,7 +135,7 @@ async function handleResponses(request: IncomingMessage, response: ServerRespons
   if (result.requestLog.status === 'failed') {
     writeJson(response, 502, {
       error: {
-        message: result.requestLog.errorMessage ?? 'Provider invocation failed.',
+        message: GATEWAY_ERROR_MESSAGES.provider_error,
         type: result.requestLog.errorCode ?? 'provider_error',
       },
       nexachat: {
@@ -182,6 +182,7 @@ async function handleResponses(request: IncomingMessage, response: ServerRespons
         'tools',
         'parallel_tool_calls',
         'background',
+        'stream',
         'multimodal_input',
         'advanced_reasoning',
       ],
@@ -257,6 +258,9 @@ async function handleChatCompletions(request: IncomingMessage, response: ServerR
     content: content || 'External gateway request',
     modelId,
     contextStrategy: 'recent_n',
+    metadata: {
+      gatewayEndpoint: GATEWAY_ENDPOINT.chatCompletions,
+    },
   });
   const payload = {
     id: result.requestLog.gatewayRequestId ?? result.requestLog.id,
@@ -287,7 +291,7 @@ async function handleChatCompletions(request: IncomingMessage, response: ServerR
   if (result.requestLog.status === 'failed') {
     writeJson(response, 502, {
       error: {
-        message: result.requestLog.errorMessage ?? 'Provider invocation failed.',
+        message: GATEWAY_ERROR_MESSAGES.provider_error,
         type: result.requestLog.errorCode ?? 'provider_error',
       },
       nexachat: {
@@ -330,6 +334,7 @@ async function handleStreamingChatCompletions(
       clientRequestId,
       contextStrategy: 'recent_n',
       metadata: {
+        gatewayEndpoint: GATEWAY_ENDPOINT.chatCompletions,
         gatewayStream: true,
       },
     }, {
@@ -363,7 +368,7 @@ async function handleStreamingChatCompletions(
           openStream();
           writeSse(response, {
             error: {
-              message: event.error ?? event.message ?? 'Provider invocation failed.',
+              message: event.type === 'chat.stream.canceled' ? (event.message ?? 'Provider request was cancelled.') : GATEWAY_ERROR_MESSAGES.provider_error,
               type: event.type === 'chat.stream.canceled' ? 'cancelled' : 'provider_error',
             },
             nexachat: {
@@ -379,7 +384,7 @@ async function handleStreamingChatCompletions(
     if (result.requestLog.status === 'failed') {
       const errorPayload = {
         error: {
-          message: result.requestLog.errorMessage ?? 'Provider invocation failed.',
+          message: GATEWAY_ERROR_MESSAGES.provider_error,
           type: result.requestLog.errorCode ?? 'provider_error',
         },
         nexachat: {
@@ -452,7 +457,7 @@ async function handleEmbeddings(request: IncomingMessage, response: ServerRespon
     recordGatewayEvent(request, GATEWAY_ENDPOINT.embeddings, 200, startedAt, auth.key, auth.scope, null, result.nexachat.requestLogId);
   } catch (error) {
     const normalized = normalizeGatewayError(error);
-    writeGatewayError(response, normalized.code, normalized.message);
+    writeGatewayError(response, normalized.code, normalized.publicMessage);
     recordGatewayEvent(request, GATEWAY_ENDPOINT.embeddings, GATEWAY_ERROR_STATUS[normalized.code], startedAt, auth.key, auth.scope, normalized.code);
   }
 }
@@ -463,11 +468,18 @@ function unsupportedResponsesFields(body: Record<string, unknown>): string[] {
     'tool_choice',
     'parallel_tool_calls',
     'background',
+    'stream',
     'modalities',
     'reasoning',
     'previous_response_id',
     'instructions',
     'include',
+    'metadata',
+    'store',
+    'truncation',
+    'max_output_tokens',
+    'temperature',
+    'top_p',
   ];
   return unsupported.filter((field) => body[field] !== undefined);
 }
@@ -626,9 +638,9 @@ class GatewayRequestError extends Error {
   }
 }
 
-function normalizeGatewayError(error: unknown): { code: GatewayErrorCode; message: string } {
+function normalizeGatewayError(error: unknown): { code: GatewayErrorCode; message: string; publicMessage: string } {
   if (error instanceof GatewayRequestError) {
-    return { code: error.code, message: error.message };
+    return { code: error.code, message: error.message, publicMessage: error.message };
   }
   if (error instanceof Error && 'code' in error) {
     const code = String((error as { code?: unknown }).code);
@@ -639,7 +651,7 @@ function normalizeGatewayError(error: unknown): { code: GatewayErrorCode; messag
       code === PROVIDER_RUNTIME_ERROR_CODES.invalidBaseUrl ||
       code === PROVIDER_RUNTIME_ERROR_CODES.unsupportedProvider
     ) {
-      return { code: 'invalid_request', message: error.message };
+      return { code: 'invalid_request', message: error.message, publicMessage: error.message };
     }
     if (
       code === PROVIDER_RUNTIME_ERROR_CODES.authFailed ||
@@ -651,8 +663,12 @@ function normalizeGatewayError(error: unknown): { code: GatewayErrorCode; messag
       code === PROVIDER_RUNTIME_ERROR_CODES.invalidResponse ||
       code === PROVIDER_RUNTIME_ERROR_CODES.modelNotFound
     ) {
-      return { code: 'provider_error', message: error.message };
+      return { code: 'provider_error', message: error.message, publicMessage: GATEWAY_ERROR_MESSAGES.provider_error };
     }
   }
-  return { code: 'internal_error', message: error instanceof Error ? error.message : String(error) };
+  return {
+    code: 'internal_error',
+    message: error instanceof Error ? error.message : String(error),
+    publicMessage: GATEWAY_ERROR_MESSAGES.internal_error,
+  };
 }

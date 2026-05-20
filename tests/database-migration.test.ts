@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -132,9 +132,56 @@ describe('database startup migrations', () => {
     expect(getColumnNames(db, 'conversations')).toContain('workspace_id');
     expect(getColumnNames(db, 'messages')).toContain('workspace_id');
     expect(getColumnNames(db, 'usage_records')).toContain('workspace_id');
-    expect(getColumnNames(db, 'files')).toEqual(expect.arrayContaining(['workspace_id', 'index_status', 'deleted_at']));
-    expect(getColumnNames(db, 'knowledge_chunks')).toContain('status');
+    expect(getColumnNames(db, 'files')).toEqual(expect.arrayContaining([
+      'workspace_id',
+      'knowledge_base_id',
+      'index_status',
+      'embedding_status',
+      'parser_type',
+      'token_count',
+      'content_hash',
+      'storage_ref',
+      'metadata_json',
+      'parse_started_at',
+      'parse_completed_at',
+      'deleted_at',
+    ]));
+    expect(getColumnNames(db, 'knowledge_chunks')).toEqual(expect.arrayContaining([
+      'knowledge_base_id',
+      'token_count',
+      'content_hash',
+      'source_start',
+      'source_end',
+      'page_number',
+      'section_title',
+      'status',
+      'embedding_id',
+      'metadata_json',
+      'updated_at',
+    ]));
+    expect(getColumnNames(db, 'knowledge_retrieval_traces')).toEqual(expect.arrayContaining([
+      'provider_id',
+      'model_id',
+      'model_name_snapshot',
+      'knowledge_scope_json',
+      'candidate_count',
+      'vector_candidate_count',
+      'lexical_candidate_count',
+      'final_citation_count',
+      'score_summary_json',
+      'timings_json',
+      'error_code',
+      'error_message',
+    ]));
     expect(getColumnNames(db, 'models')).toContain('deleted_at');
+    expect(db.prepare("PRAGMA foreign_keys").get()).toMatchObject({ foreign_keys: 1 });
+    expect(db.prepare("PRAGMA busy_timeout").get()).toMatchObject({ timeout: 5000 });
+    expect(String((db.prepare("PRAGMA journal_mode").get() as { journal_mode?: string }).journal_mode).toLowerCase()).toBe('wal');
+    expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'schema_migration_runs'").get()).toBeTruthy();
+    expect(
+      (db.prepare("SELECT version FROM schema_migration_runs WHERE status = 'completed' ORDER BY version").all() as Array<{ version: string }>).map((row) => row.version),
+    ).toEqual(expect.arrayContaining(['schema-preflight-v1', 'schema-core-v1', 'schema-additive-v1']));
+    expect(db.prepare("SELECT status FROM schema_migration_runs WHERE version = 'schema-additive-v1'").get()).toMatchObject({ status: 'completed' });
     expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_conversations_workspace_updated'").get()).toBeTruthy();
     expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_files_workspace_status'").get()).toBeTruthy();
     for (const indexName of [
@@ -149,9 +196,26 @@ describe('database startup migrations', () => {
       'idx_audit_logs_actor_created',
       'idx_audit_logs_action_created',
       'idx_provider_health_created',
+      'idx_files_deleted_updated',
+      'idx_knowledge_chunks_status_created',
+      'idx_knowledge_retrieval_traces_created',
+      'idx_message_citations_message_score',
+      'idx_message_citations_created',
     ]) {
       expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?").get(indexName), indexName).toBeTruthy();
     }
+  });
+
+  it('keeps migration transaction start inside failure recording guard', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/database/connection.ts'), 'utf8');
+    const functionStart = source.indexOf('function runSchemaMigration');
+    const functionEnd = source.indexOf('function runPreSchemaMigrations');
+    const migrationSource = source.slice(functionStart, functionEnd);
+
+    expect(migrationSource).toContain('let transactionStarted = false');
+    expect(migrationSource.indexOf("db.exec('BEGIN IMMEDIATE')")).toBeGreaterThan(migrationSource.indexOf('try {'));
+    expect(migrationSource.indexOf("UPDATE schema_migration_runs SET status = 'failed'")).toBeGreaterThan(migrationSource.indexOf('catch (error)'));
+    expect(migrationSource).toContain('if (transactionStarted)');
   });
 });
 

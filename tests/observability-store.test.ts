@@ -77,12 +77,45 @@ describe('Round 13 observability store chain', () => {
     const evalResult = await store.runEvaluation({ evalSetId: evalSet.id, modelId: model.id });
     expect(evalResult.status).toBe('completed');
     expect(evalResult.requestLogId).toBeTruthy();
-    expect(store.getUsageRecords().length).toBeGreaterThanOrEqual(2);
+    const usageRecords = store.getUsageRecords();
+    expect(usageRecords.length).toBeGreaterThanOrEqual(2);
+    expect(usageRecords).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        requestType: 'chat',
+        providerId: provider.id,
+        modelId: model.id,
+        status: 'completed',
+        inputTokens: expect.any(Number),
+        outputTokens: expect.any(Number),
+        totalTokens: expect.any(Number),
+        tokenUsageEstimated: false,
+        latencyMs: expect.any(Number),
+        errorCode: null,
+      }),
+      expect.objectContaining({
+        requestType: 'eval',
+        providerId: provider.id,
+        modelId: model.id,
+        status: 'completed',
+        inputTokens: expect.any(Number),
+        outputTokens: expect.any(Number),
+        totalTokens: expect.any(Number),
+        tokenUsageEstimated: false,
+        latencyMs: expect.any(Number),
+        errorCode: null,
+      }),
+    ]));
 
     const snapshot = store.queryObservability({ providerId: provider.id });
     expect(snapshot.summary.requestCount).toBeGreaterThanOrEqual(2);
     expect(snapshot.feedbackItems.some((item) => item.id === feedback.id)).toBe(true);
     expect(snapshot.evalResults.some((item) => item.id === evalResult.id)).toBe(true);
+    expect(snapshot.auditLogs).toEqual([]);
+    expect(snapshot.executionTraceEvents).toEqual([]);
+
+    const detailedSnapshot = store.queryObservability({ providerId: provider.id, includeAudit: true, includeTrace: true });
+    expect(detailedSnapshot.auditLogs.length).toBeGreaterThan(0);
+    expect(detailedSnapshot.executionTraceEvents.length).toBeGreaterThanOrEqual(0);
 
     const privacy = store.saveObservabilityPrivacy({ includePromptSnippets: false, includeLocalPaths: false });
     expect(privacy.cloudTelemetryEnabled).toBe(false);
@@ -90,7 +123,17 @@ describe('Round 13 observability store chain', () => {
     expect(exported.redacted).toBe(true);
     expect(exported.content).not.toContain('sk-round-13-secret');
     expect(exported.content).not.toContain('C:\\Users\\Example');
+    expect(exported.content).not.toContain(evalSet.prompt);
     expect(store.getAuditLogs().some((entry) => entry.action === 'observability.exported')).toBe(true);
+
+    store.saveObservabilityPrivacy({ exportScope: 'summary', includePromptSnippets: false, includeLocalPaths: false });
+    const summaryExport = store.exportObservability({ providerId: provider.id, includeAudit: true, includeTrace: true });
+    const summaryContent = JSON.parse(summaryExport.content) as { data?: Record<string, unknown> };
+    expect(summaryContent.data).toHaveProperty('summary');
+    expect(summaryContent.data).toHaveProperty('query');
+    expect(summaryContent.data).not.toHaveProperty('requestLogs');
+    expect(summaryContent.data).not.toHaveProperty('auditLogs');
+    expect(summaryContent.data).not.toHaveProperty('executionTraceEvents');
   });
 });
 

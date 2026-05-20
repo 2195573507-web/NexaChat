@@ -9,6 +9,15 @@ let upstreamBaseUrl = '';
 let dataDir = '';
 let upstreamStatus = 200;
 let upstreamMode: 'json' | 'stream' = 'json';
+let upstreamRequests: RecordedUpstreamRequest[] = [];
+
+type RecordedUpstreamRequest = {
+  method: string;
+  url: string;
+  headers: IncomingMessage['headers'];
+  bodyText: string;
+  bodyJson: unknown | null;
+};
 
 vi.mock('electron', () => ({
   app: {
@@ -25,10 +34,15 @@ beforeEach(async () => {
   vi.resetModules();
   upstreamStatus = 200;
   upstreamMode = 'json';
+  upstreamRequests = [];
   dataDir = join(process.cwd(), 'test-results', `round-06-gateway-${Date.now()}-${Math.random().toString(16).slice(2)}`);
   mkdirSync(dataDir, { recursive: true });
   process.env.NEXACHAT_DATA_DIR = dataDir;
-  upstream = createServer(handleUpstream);
+  upstream = createServer((request, response) => {
+    void handleUpstream(request, response).catch((error) => {
+      writeJson(response, 500, { error: { message: error instanceof Error ? error.message : String(error) } });
+    });
+  });
   await new Promise<void>((resolve) => upstream?.listen(0, '127.0.0.1', resolve));
   const address = upstream.address();
   if (!address || typeof address === 'string') throw new Error('Missing upstream address.');
@@ -47,6 +61,46 @@ afterEach(async () => {
 });
 
 describe('local gateway provider forwarding chain', () => {
+  it('lists enabled models with gateway metadata without disturbing provider execution coverage', async () => {
+    const { store } = await import('../src/main/services/store');
+    const { createLocalGatewayServer } = await import('../src/main/services/localGateway');
+    const provider = store.createProvider({
+      name: 'Gateway Model List Upstream',
+      type: 'openai-compatible',
+      baseUrl: upstreamBaseUrl,
+      apiKey: 'sk-gateway-secret',
+    });
+    const chatModel = store.createModel({ providerId: provider.id, name: 'gateway-chat', supportsStreaming: false });
+    const embeddingModel = store.createModel({ providerId: provider.id, name: 'gateway-embedding', supportsStreaming: false, supportsEmbeddings: true });
+    const createdKey = store.createGatewayKey({
+      name: 'Round models gateway smoke',
+      scopes: ['models:read'],
+      quotaLimit: 10,
+      rateLimitPerMinute: 10,
+    });
+    gateway = createLocalGatewayServer();
+    const gatewayUrl = await listen(gateway);
+
+    const response = await fetch(`${gatewayUrl}/v1/models`, {
+      headers: {
+        authorization: `Bearer ${createdKey.key}`,
+      },
+    });
+    const body = await response.json() as {
+      object?: string;
+      data?: Array<{ id?: string; nexachat?: { modelId?: string; supportsEmbeddings?: boolean } }>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.object).toBe('list');
+    expect(body.data).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: chatModel.name, nexachat: expect.objectContaining({ modelId: chatModel.id, supportsEmbeddings: false }) }),
+      expect.objectContaining({ id: embeddingModel.name, nexachat: expect.objectContaining({ modelId: embeddingModel.id, supportsEmbeddings: true }) }),
+    ]));
+    expect(store.getGatewayLogs().some((entry) => entry.statusCode === 200 && entry.path === '/v1/models')).toBe(true);
+    expect(store.getUsageRecords()).toHaveLength(0);
+  });
+
   it('forwards /v1/chat/completions through the real provider adapter chain', async () => {
     const { store } = await import('../src/main/services/store');
     const { createLocalGatewayServer } = await import('../src/main/services/localGateway');
@@ -81,6 +135,7 @@ describe('local gateway provider forwarding chain', () => {
     expect(JSON.stringify(body)).not.toContain('本地历史');
     expect(body.nexachat?.requestLogId).toBeTruthy();
     expect(store.getGatewayLogs().some((entry) => entry.statusCode === 200 && entry.requestLogId === body.nexachat?.requestLogId)).toBe(true);
+    expect(store.getUsageRecords().some((record) => record.requestLogId === body.nexachat?.requestLogId && record.requestType === 'gateway_chat' && record.status === 'completed')).toBe(true);
   });
 
   it('returns a gateway error when the shared provider chain fails', async () => {
@@ -113,8 +168,10 @@ describe('local gateway provider forwarding chain', () => {
 
     expect(response.status).toBe(502);
     expect(body.error?.type).toBe('provider_upstream_error');
+    expect(body.error?.message).toBe('Provider invocation failed.');
     expect(body.nexachat?.requestLogId).toBeTruthy();
     expect(store.getGatewayLogs().some((entry) => entry.statusCode === 502)).toBe(true);
+    expect(store.getUsageRecords().some((record) => record.requestLogId === body.nexachat?.requestLogId && record.requestType === 'gateway_chat' && record.status === 'failed')).toBe(true);
   });
 
   it('maps /v1/responses basic text input through the same audited provider chain', async () => {
@@ -167,10 +224,14 @@ describe('local gateway provider forwarding chain', () => {
     expect(body.nexachat?.unsupported).toContain('tools');
     expect(body.nexachat?.requestLogId).toBeTruthy();
     expect(store.getUsageRecords()).toHaveLength(1);
+    expect(store.getUsageRecords()[0]).toMatchObject({ requestType: 'gateway_responses', status: 'completed' });
+    expect(store.getRequestLogs().find((entry) => entry.id === body.nexachat?.requestLogId)).toMatchObject({
+      endpoint: '/v1/responses',
+    });
     expect(store.getGatewayLogs().some((entry) => entry.statusCode === 200 && entry.path === '/v1/responses' && entry.requestLogId === body.nexachat?.requestLogId)).toBe(true);
   });
 
-  it('forwards /v1/embeddings through the configured embedding provider and records usage', async () => {
+  it('forwards /v1/embeddings only through the configured embedding provider, redacts logs, and records usage', async () => {
     const { store } = await import('../src/main/services/store');
     const { createLocalGatewayServer } = await import('../src/main/services/localGateway');
     const provider = store.createProvider({
@@ -193,11 +254,12 @@ describe('local gateway provider forwarding chain', () => {
       method: 'POST',
       headers: {
         authorization: `Bearer ${createdKey.key}`,
+        'x-api-key': 'sk-client-gateway-header-secret',
         'content-type': 'application/json',
       },
       body: JSON.stringify({
         model: model.name,
-        input: ['embedding request'],
+        input: ['embedding request with sk-client-embedding-input-secret', 'second vector'],
       }),
     });
     const body = await response.json() as {
@@ -206,14 +268,143 @@ describe('local gateway provider forwarding chain', () => {
       usage?: { estimated?: boolean };
       nexachat?: { strategy?: string; providerId?: string | null; modelId?: string | null; requestLogId?: string | null };
     };
+    const embeddingUpstreamRequests = upstreamRequests.filter((entry) => entry.url === '/v1/embeddings');
+    const upstreamBody = embeddingUpstreamRequests[0]?.bodyJson as { model?: string; input?: string[] } | undefined;
+    const requestLog = store.getRequestLogs().find((entry) => entry.id === body.nexachat?.requestLogId);
+    const requestSummary = JSON.parse(requestLog?.requestSummaryJson ?? '{}') as {
+      adapter?: string;
+      inputCount?: number;
+      requestType?: string;
+      inputHash?: string;
+      headers?: Record<string, string>;
+    };
+    const usageRecord = store.getUsageRecords().find((record) => record.requestLogId === body.nexachat?.requestLogId);
+    const gatewayLog = store.getGatewayLogs().find((entry) => entry.statusCode === 200 && entry.path === '/v1/embeddings' && entry.requestLogId === body.nexachat?.requestLogId);
 
     expect(response.status).toBe(200);
     expect(body.object).toBe('list');
-    expect(body.data?.[0]?.embedding).toEqual([0.5, 0.25, 0.75]);
+    expect(body.data?.map((item) => item.embedding)).toEqual([[0.5, 0.25, 0.75], [0.6, 0.25, 0.75]]);
     expect(body.usage?.estimated).toBe(false);
     expect(body.nexachat).toMatchObject({ strategy: 'vector', providerId: provider.id, modelId: model.id });
-    expect(store.getUsageRecords().some((record) => record.requestType === 'embeddings' && record.requestLogId === body.nexachat?.requestLogId)).toBe(true);
-    expect(store.getGatewayLogs().some((entry) => entry.statusCode === 200 && entry.path === '/v1/embeddings' && entry.requestLogId === body.nexachat?.requestLogId)).toBe(true);
+    expect(embeddingUpstreamRequests).toHaveLength(1);
+    expect(embeddingUpstreamRequests[0]?.headers.authorization).toBe('Bearer sk-gateway-embedding-secret');
+    expect(upstreamBody).toMatchObject({
+      model: model.name,
+      input: ['embedding request with sk-client-embedding-input-secret', 'second vector'],
+    });
+    expect(requestLog).toMatchObject({
+      providerId: provider.id,
+      modelId: model.id,
+      status: 'completed',
+      endpoint: '/v1/embeddings',
+    });
+    expect(requestLog?.gatewayRequestId).toMatch(/^gwemb_/);
+    expect(requestLog?.requestSummaryJson).not.toContain('sk-gateway-embedding-secret');
+    expect(requestLog?.requestSummaryJson).not.toContain('sk-client-embedding-input-secret');
+    expect(requestSummary).toMatchObject({
+      adapter: 'openai-compatible',
+      inputCount: 2,
+      requestType: 'embeddings',
+    });
+    expect(requestSummary.inputHash).toMatch(/^[a-f0-9]{16}$/);
+    expect(requestSummary.headers?.authorization).toBe('[REDACTED]');
+    expect(usageRecord).toMatchObject({
+      providerId: provider.id,
+      modelId: model.id,
+      requestType: 'embeddings',
+      inputTokens: 4,
+      outputTokens: 0,
+      totalTokens: 4,
+      tokenUsageEstimated: false,
+      status: 'completed',
+    });
+    expect(gatewayLog?.redactedHeadersJson).not.toContain(createdKey.key);
+    expect(gatewayLog?.redactedHeadersJson).not.toContain('sk-client-gateway-header-secret');
+    expect(gatewayLog?.redactedHeadersJson).toContain('[REDACTED]');
+  });
+
+  it('does not fabricate /v1/embeddings when no provider-backed embedding model is configured', async () => {
+    const { store } = await import('../src/main/services/store');
+    const { createLocalGatewayServer } = await import('../src/main/services/localGateway');
+    const provider = store.createProvider({
+      name: 'Gateway Chat-Only Upstream',
+      type: 'openai-compatible',
+      baseUrl: upstreamBaseUrl,
+      apiKey: 'sk-gateway-chat-only-secret',
+    });
+    const chatOnlyModel = store.createModel({ providerId: provider.id, name: 'gateway-chat-only', supportsStreaming: false, supportsEmbeddings: false });
+    const createdKey = store.createGatewayKey({
+      name: 'Round embeddings no fake vector',
+      scopes: ['embeddings:write'],
+      quotaLimit: 10,
+      rateLimitPerMinute: 10,
+    });
+    gateway = createLocalGatewayServer();
+    const gatewayUrl = await listen(gateway);
+
+    const response = await fetch(`${gatewayUrl}/v1/embeddings`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${createdKey.key}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: chatOnlyModel.name,
+        input: ['should not receive a lexical fake vector'],
+      }),
+    });
+    const body = await response.json() as {
+      data?: unknown;
+      nexachat?: unknown;
+      error?: { type?: string; message?: string };
+    };
+
+    expect(response.status).toBe(400);
+    expect(body.error?.type).toBe('invalid_request');
+    expect(body.error?.message).toContain('does not support embeddings');
+    expect(body.data).toBeUndefined();
+    expect(body.nexachat).toBeUndefined();
+    expect(upstreamRequests.filter((entry) => entry.url === '/v1/embeddings')).toHaveLength(0);
+    expect(store.getRequestLogs().filter((entry) => entry.endpoint === '/v1/embeddings')).toHaveLength(0);
+    expect(store.getUsageRecords().filter((record) => record.requestType === 'embeddings')).toHaveLength(0);
+    expect(store.getGatewayLogs().some((entry) => entry.path === '/v1/embeddings' && entry.statusCode === 400 && entry.errorCode === 'invalid_request')).toBe(true);
+  });
+
+  it('rejects malformed /v1/embeddings JSON before invoking the provider or recording usage', async () => {
+    const { store } = await import('../src/main/services/store');
+    const { createLocalGatewayServer } = await import('../src/main/services/localGateway');
+    const provider = store.createProvider({
+      name: 'Gateway Malformed Embedding Upstream',
+      type: 'openai-compatible',
+      baseUrl: upstreamBaseUrl,
+      apiKey: 'sk-gateway-embedding-secret',
+    });
+    store.createModel({ providerId: provider.id, name: 'gateway-embedding', supportsStreaming: false, supportsEmbeddings: true });
+    const createdKey = store.createGatewayKey({
+      name: 'Round embeddings malformed request',
+      scopes: ['embeddings:write'],
+      quotaLimit: 10,
+      rateLimitPerMinute: 10,
+    });
+    gateway = createLocalGatewayServer();
+    const gatewayUrl = await listen(gateway);
+
+    const response = await fetch(`${gatewayUrl}/v1/embeddings`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${createdKey.key}`,
+        'content-type': 'application/json',
+      },
+      body: '{"input":',
+    });
+    const body = await response.json() as { error?: { type?: string } };
+
+    expect(response.status).toBe(400);
+    expect(body.error?.type).toBe('invalid_json');
+    expect(upstreamRequests.filter((entry) => entry.url === '/v1/embeddings')).toHaveLength(0);
+    expect(store.getRequestLogs().filter((entry) => entry.endpoint === '/v1/embeddings')).toHaveLength(0);
+    expect(store.getUsageRecords().filter((record) => record.requestType === 'embeddings')).toHaveLength(0);
+    expect(store.getGatewayLogs().some((entry) => entry.path === '/v1/embeddings' && entry.statusCode === 400 && entry.errorCode === 'invalid_json')).toBe(true);
   });
 
   it('streams /v1/chat/completions as OpenAI-compatible SSE chunks', async () => {
@@ -374,7 +565,22 @@ describe('local gateway provider forwarding chain', () => {
   });
 });
 
-function handleUpstream(request: IncomingMessage, response: ServerResponse): void {
+async function handleUpstream(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  const bodyText = await readBody(request);
+  let bodyJson: unknown | null = null;
+  try {
+    bodyJson = bodyText ? JSON.parse(bodyText) : null;
+  } catch {
+    bodyJson = null;
+  }
+  upstreamRequests.push({
+    method: request.method ?? 'GET',
+    url: request.url ?? '/',
+    headers: request.headers,
+    bodyText,
+    bodyJson,
+  });
+
   if (request.url === '/v1/models') {
     writeJson(response, upstreamStatus, upstreamStatus === 200 ? { object: 'list', data: [{ id: 'gateway-chat', object: 'model' }] } : { error: { message: 'upstream failed' } });
     return;
@@ -400,12 +606,20 @@ function handleUpstream(request: IncomingMessage, response: ServerResponse): voi
     return;
   }
   if (request.url === '/v1/embeddings') {
+    const input = Array.isArray((bodyJson as { input?: unknown } | null)?.input)
+      ? (bodyJson as { input: unknown[] }).input
+      : [(bodyJson as { input?: unknown } | null)?.input].filter((item) => item !== undefined);
+    const data = input.map((_, index) => ({
+      object: 'embedding',
+      index,
+      embedding: [0.5 + index * 0.1, 0.25, 0.75],
+    }));
     writeJson(response, upstreamStatus, upstreamStatus === 200
       ? {
           object: 'list',
-          data: [{ object: 'embedding', index: 0, embedding: [0.5, 0.25, 0.75] }],
+          data,
           model: 'gateway-embedding',
-          usage: { prompt_tokens: 2, total_tokens: 2 },
+          usage: { prompt_tokens: data.length * 2, total_tokens: data.length * 2 },
         }
       : { error: { message: 'upstream failed' } });
     return;
@@ -416,6 +630,17 @@ function handleUpstream(request: IncomingMessage, response: ServerResponse): voi
 function writeJson(response: ServerResponse, statusCode: number, payload: unknown): void {
   response.writeHead(statusCode, { 'content-type': 'application/json; charset=utf-8' });
   response.end(JSON.stringify(payload));
+}
+
+function readBody(request: IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    request.on('data', (chunk) => {
+      data += chunk;
+    });
+    request.on('end', () => resolve(data));
+    request.on('error', reject);
+  });
 }
 
 function parseSse(text: string): Array<{ event: string | null; data: string }> {

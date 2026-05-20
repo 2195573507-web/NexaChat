@@ -1026,7 +1026,7 @@ export function createMockApi(): AppApi {
       status,
       source: 'browser-mock',
       manifestVersion: DATA_MANIFEST_VERSION,
-      profile: action === 'encrypted-backup' ? 'encrypted-full' : 'metadata-redacted',
+      profile: action === 'encrypted-backup' ? 'encrypted-redacted' : 'metadata-redacted',
       summary,
       manifestHash: stableHash(manifest),
       manifestJson: JSON.stringify(manifest),
@@ -2160,11 +2160,20 @@ export function createMockApi(): AppApi {
       const backup: DataBackupRecord = {
         id: createId('backup'),
         jobId: result.id,
-        profile: 'encrypted-full',
+        profile: 'encrypted-redacted',
         encrypted: true,
         redacted: true,
         manifestHash: stableHash(result.manifestJson ?? result.id),
-        packageJson: JSON.stringify({ version: DATA_MANIFEST_VERSION, encrypted: true, payload: '[ENCRYPTED_PAYLOAD]' }),
+        packageJson: JSON.stringify({
+          version: DATA_MANIFEST_VERSION,
+          profile: 'encrypted-redacted',
+          encrypted: true,
+          redacted: true,
+          fullDatabase: false,
+          rawDatabaseIncluded: false,
+          secrets: 'stripped',
+          payload: '[ENCRYPTED_PAYLOAD]',
+        }),
         createdAt: now(),
       };
       state.dataBackups.unshift(backup);

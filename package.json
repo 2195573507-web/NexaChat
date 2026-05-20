@@ -29,6 +29,7 @@
     "scan:hardcode": "node scripts/quality-gates.mjs hardcode",
     "scan:duplicates": "node scripts/quality-gates.mjs duplicates",
     "scan:security": "node scripts/quality-gates.mjs security",
+    "scan:release-safety": "node scripts/quality-gates.mjs release-safety",
     "scan:dead-links": "node scripts/quality-gates.mjs dead-links",
     "scan:docs": "node scripts/quality-gates.mjs docs",
     "scan:quality": "node scripts/quality-gates.mjs all-scans",

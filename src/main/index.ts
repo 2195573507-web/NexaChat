@@ -1,10 +1,7 @@
-import { app, BrowserWindow, protocol, shell } from 'electron';
+import { app, BrowserWindow, protocol, session, shell } from 'electron';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { registerIpcHandlers } from './ipc.js';
-import { closeDatabase } from './database/connection.js';
-import { stopLocalGateway } from './services/localGateway.js';
 import { DESKTOP_ENTRY } from '../shared/desktopEntry.js';
 import { installDesktopDiagnostics, recordDesktopDiagnostic } from './desktopDiagnostics.js';
 
@@ -12,6 +9,21 @@ const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 const currentDir = fileURLToPath(new URL('.', import.meta.url));
 const rendererDistDir = normalize(join(currentDir, '../../dist'));
 const isElectronSmoke = process.env.NEXACHAT_ELECTRON_SMOKE === '1';
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data:",
+  "font-src 'self'",
+  "connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:*",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'none'",
+].join('; ');
+
+let stopLocalGatewayRuntime: (() => Promise<void>) | null = null;
+let closeDatabaseRuntime: (() => void) | null = null;
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -35,7 +47,6 @@ if (isElectronSmoke) {
 }
 
 installDesktopDiagnostics();
-registerIpcHandlers();
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -78,8 +89,17 @@ function registerRendererProtocol(): void {
     return new Response(bytes, {
       headers: {
         'content-type': getContentType(assetPath),
+        'content-security-policy': CONTENT_SECURITY_POLICY,
+        'x-content-type-options': 'nosniff',
       },
     });
+  });
+}
+
+function installPermissionRequestHandler(): void {
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    recordDesktopDiagnostic('session.permission-request-denied', { permission });
+    callback(false);
   });
 }
 
@@ -160,10 +180,31 @@ if (!singleInstanceLock) {
 } else {
   app.whenReady().then(async () => {
     recordDesktopDiagnostic('app.ready', { mode: isDev ? 'dev' : 'production' });
+    installPermissionRequestHandler();
+    const [{ store }, { registerIpcHandlers }, gatewayRuntime, databaseRuntime] = await Promise.all([
+      import('./services/store.js'),
+      import('./ipc.js'),
+      import('./services/localGateway.js'),
+      import('./database/connection.js'),
+    ]);
+    stopLocalGatewayRuntime = gatewayRuntime.stopLocalGateway;
+    closeDatabaseRuntime = databaseRuntime.closeDatabase;
+    registerIpcHandlers({
+      store,
+      startLocalGateway: gatewayRuntime.startLocalGateway,
+      stopLocalGateway: gatewayRuntime.stopLocalGateway,
+    });
     if (!isDev) {
       registerRendererProtocol();
     }
     await createMainWindow();
+    if (store.isGatewayPersistedEnabled()) {
+      try {
+        await gatewayRuntime.startLocalGateway();
+      } catch (error) {
+        recordDesktopDiagnostic('gateway.autostart-failed', { error: error instanceof Error ? error.message : String(error) });
+      }
+    }
 
     app.on('activate', async () => {
       if (BrowserWindow.getAllWindows().length === 0) {
@@ -190,6 +231,6 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
-  void stopLocalGateway();
-  closeDatabase();
+  void stopLocalGatewayRuntime?.();
+  closeDatabaseRuntime?.();
 });

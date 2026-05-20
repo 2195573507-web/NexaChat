@@ -20,6 +20,13 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
   const pending = useLocalPending();
   const activeFiles = filePage.items;
   const indexedFiles = activeFiles.filter((file) => file.indexStatus === 'indexed');
+  const embeddingModels = snapshot.models.filter((model) => model.enabled && model.supportsEmbeddings && snapshot.providers.some((provider) => provider.id === model.providerId && provider.enabled));
+  const embeddingProviderReady = embeddingModels.length > 0;
+  const embeddingModelSelected = Boolean(snapshot.dashboard.workspace.defaultModelId && embeddingModels.some((model) => model.id === snapshot.dashboard.workspace.defaultModelId)) || embeddingModels.length > 0;
+  const lastEmbeddingHealth = snapshot.providerHealthRecords.find((record) => record.source === 'embeddings');
+  const lastEmbeddingLog = snapshot.requestLogs.find((log) => log.endpoint === '/v1/embeddings');
+  const gatewayEmbeddingsReady = snapshot.dashboard.gatewayStatus.endpoints.includes('/v1/embeddings') && embeddingProviderReady;
+  const retrievalStrategy = embeddingProviderReady ? 'vector' : 'lexical';
   const totals = useMemo(() => ({
     files: activeFiles.length,
     chunks: chunkPage.total || snapshot.knowledgeChunks.filter((chunk) => chunk.status === 'indexed').length,
@@ -116,15 +123,16 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
 
   if (activeTab.id === 'retrieval') {
     const latest = retrieval?.citations ?? snapshot.knowledgeCitations.slice(0, 8);
+    const timings = parseJsonObject(retrieval?.trace.timingsJson);
     return (
       <TabPanel moduleId="knowledge" tab={activeTab}>
         <PageHeader
-          eyebrow={retrieval?.trace.strategy ?? 'vector'}
+          eyebrow={retrieval?.trace.strategy ?? retrievalStrategy}
           title={t('knowledge.retrieval.title')}
           description={activeTab.featureBoundary}
           status={<StatusPillLite label={indexedFiles.length > 0 ? t('common.indexed') : t('common.notConfigured')} state={indexedFiles.length > 0 ? 'ready' : 'warning'} />}
           actions={<CommandButton variant="primary" icon={<Search size={15} />} disabled={!query.trim() || indexedFiles.length === 0 || pending.isPending('knowledge.retrieve')} disabledReason={indexedFiles.length === 0 ? t('knowledge.retrieval.dependency') : undefined} onClick={() => onAction(t('knowledge.toast.retrieved'), () => pending.runPending('knowledge.retrieve', async () => {
-            const result = await api.previewKnowledgeRetrieval({ query, topK: KNOWLEDGE_RUNTIME_POLICY.defaultTopK, strategy: 'vector' });
+            const result = await api.previewKnowledgeRetrieval({ query, topK: KNOWLEDGE_RUNTIME_POLICY.defaultTopK, strategy: retrievalStrategy });
             setRetrieval(result);
           }))}>{pending.isPending('knowledge.retrieve') ? t('app.status.busy') : t('knowledge.retrieval.run')}</CommandButton>}
         />
@@ -149,7 +157,18 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
           />
         </ConfigList>
         <ConfigDetail title={t('stage.environment-limited')} description={t('nav.knowledge.retrieval.boundary')}>
-          <StatusPillLite label={retrieval?.trace.strategy ?? 'vector'} state={retrieval?.trace.strategy === 'vector' ? 'ready' : 'warning'} />
+          <StatusPillLite label={retrieval?.trace.strategy ?? retrievalStrategy} state={(retrieval?.trace.strategy ?? retrievalStrategy) === 'vector' ? 'ready' : 'warning'} />
+          <DataRows
+            rows={[
+              { label: t('knowledge.columns.score'), value: retrieval ? `${retrieval.trace.finalCitationCount}/${retrieval.trace.candidateCount}` : t('common.none') },
+              { label: t('knowledge.columns.file'), value: retrieval ? retrieval.trace.vectorCandidateCount : embeddingModels.length },
+              { label: t('knowledge.columns.fallback'), value: retrieval?.trace.fallbackReason ?? t('common.none') },
+              { label: t('knowledge.columns.error'), value: retrieval?.trace.errorMessage ?? t('common.none') },
+              { label: 'totalMs', value: formatTiming(timings.totalMs) },
+              { label: 'queryMs', value: formatTiming(timings.queryEmbeddingAttemptMs ?? timings.queryEmbeddingMs) },
+              { label: 'scoreMs', value: formatTiming(timings.scoringMs) },
+            ]}
+          />
           {retrieval?.trace.fallbackReason ? <InlineNotice tone="warning" title={t('knowledge.columns.fallback')} detail={retrieval.trace.fallbackReason} /> : null}
           <InlineNotice tone="warning" title={t('common.required')} detail={t('knowledge.retrieval.dependency')} />
           <InlineNotice tone="info" title={t('knowledge.columns.citation')} detail={t('knowledge.retrieval.note')} />
@@ -174,6 +193,7 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
           <div><span className="eyebrow">{t('knowledge.columns.file')}</span><strong>{totals.files}</strong><small>{t('common.countConfigured', { count: indexedFiles.length })}</small></div>
           <div><span className="eyebrow">{t('knowledge.chunks.activeTitle')}</span><strong>{totals.chunks}</strong><small>{t('common.indexed')}</small></div>
           <div><span className="eyebrow">{t('knowledge.columns.tokens')}</span><strong>{totals.tokens}</strong><small>{t('stage.environment-limited')}</small></div>
+          <div><span className="eyebrow">{t('knowledge.index.embeddingModel')}</span><strong>{embeddingModels.length}</strong><small>{gatewayEmbeddingsReady ? '/v1/embeddings' : t('common.notConfigured')}</small></div>
         </section>
 
         <ToolSection title={t('knowledge.createTextRecord')} description={t('knowledge.files.note')}>
@@ -224,6 +244,10 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
             { label: t('common.parsing'), value: activeFiles.filter((file) => file.parseStatus === 'parsing').length },
             { label: t('common.indexing'), value: activeFiles.filter((file) => file.indexStatus === 'indexing').length },
             { label: t('common.failed'), value: activeFiles.filter((file) => file.indexStatus === 'failed' || file.parseStatus === 'failed').length },
+            { label: t('common.embeddings'), value: embeddingProviderReady ? t('common.countConfigured', { count: embeddingModels.length }) : t('common.notConfigured') },
+            { label: t('knowledge.index.embeddingModel'), value: embeddingModelSelected ? (embeddingModels[0]?.displayName ?? t('common.countConfigured', { count: embeddingModels.length })) : t('common.notConfigured') },
+            { label: '/v1/embeddings', value: gatewayEmbeddingsReady ? t('stage.ready') : t('common.notConfigured') },
+            { label: t('models.columns.lastChecked'), value: lastEmbeddingHealth ? `${statusLabel(lastEmbeddingHealth.status, t)} / ${formatDate(lastEmbeddingHealth.createdAt, t)}` : lastEmbeddingLog ? `${statusLabel(lastEmbeddingLog.status, t)} / ${formatDate(lastEmbeddingLog.createdAt, t)}` : t('common.none') },
           ]}
         />
         <InlineNotice tone="info" title={t('stage.environment-limited')} detail={t('knowledge.chunks.note')} />
@@ -232,6 +256,22 @@ export function KnowledgePage({ activeTab, snapshot, api, onAction }: TabPagePro
       </div>
     </TabPanel>
   );
+}
+
+function parseJsonObject(value: string | null | undefined): Record<string, number> {
+  if (!value) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    return Object.fromEntries(Object.entries(parsed).filter(([, item]) => typeof item === 'number')) as Record<string, number>;
+  } catch {
+    return {};
+  }
+}
+
+function formatTiming(value: number | null | undefined): string {
+  return typeof value === 'number' && Number.isFinite(value) ? `${Math.max(0, Math.round(value))}ms` : '-';
 }
 
 function KnowledgeFileRow({

@@ -269,10 +269,10 @@ async function waitForAppReady(page, timeoutMs = APP_READY_TIMEOUT_MS) {
   await page.waitForLoadState('domcontentloaded', { timeout: timeoutMs });
   await page.locator('.app-frame').waitFor({ state: 'visible', timeout: timeoutMs });
   await page.locator('.module-rail .rail-item').first().waitFor({ state: 'visible', timeout: timeoutMs });
-  await page.locator('main [role="tabpanel"]').first().waitFor({ state: 'visible', timeout: timeoutMs });
+  await page.locator('main [role="region"]').first().waitFor({ state: 'visible', timeout: timeoutMs });
   const ready = await page.locator('.app-frame').evaluate((element) => {
     const railItems = document.querySelectorAll('.module-rail .rail-item').length;
-    const panel = document.querySelector('main [role="tabpanel"]');
+    const panel = document.querySelector('main [role="region"]');
     const style = getComputedStyle(element);
     return {
       railItems,
@@ -313,11 +313,11 @@ async function openTab(page, moduleId, tabId) {
   const tabIndex = module.tabs.indexOf(tabId);
   if (tabIndex < 0) throw new Error(`Unknown tab ${moduleId}.${tabId}`);
   await page.locator('.rail-item').nth(module.rail).click({ timeout: 10_000 });
-  await page.locator(`main [role="tabpanel"][data-module="${moduleId}"]`).waitFor({ state: 'visible', timeout: 10_000 });
+  await page.locator(`main [role="region"][data-module="${moduleId}"]`).waitFor({ state: 'visible', timeout: 10_000 });
   if (module.tabs.length > 1) {
     await page.locator('.top-tabs .top-tab').nth(tabIndex).click({ timeout: 10_000 });
   }
-  await page.locator(`main [role="tabpanel"][data-module="${moduleId}"][data-tab="${tabId}"]`).waitFor({ state: 'visible', timeout: 10_000 });
+  await page.locator(`main [role="region"][data-module="${moduleId}"][data-tab="${tabId}"]`).waitFor({ state: 'visible', timeout: 10_000 });
   await assertSharedShell(page);
 }
 
@@ -385,7 +385,7 @@ async function selectIfAvailable(agentRecord, moduleId, functionName, locator, v
 }
 
 function panel(page, moduleId, tabId) {
-  return page.locator(`main [role="tabpanel"][data-module="${moduleId}"][data-tab="${tabId}"]`);
+  return page.locator(`main [role="region"][data-module="${moduleId}"][data-tab="${tabId}"]`);
 }
 
 async function chatWorkflow(agent, page) {

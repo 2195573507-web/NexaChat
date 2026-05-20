@@ -250,20 +250,26 @@ export function ObservabilityService<TBase extends ServiceConstructor<ServiceCon
     const snapshot = this.queryObservability(input);
     const id = createId('observability_export');
     const createdAt = now();
+    const exportData = snapshot.privacy.exportScope === 'summary'
+      ? {
+          summary: snapshot.summary,
+          query: snapshot.query,
+        }
+      : {
+          summary: snapshot.summary,
+          requestLogs: snapshot.requestLogs,
+          gatewayLogs: snapshot.gatewayLogs,
+          usageRecords: snapshot.usageRecords,
+          providerHealthRecords: snapshot.providerHealthRecords,
+          feedbackItems: snapshot.feedbackItems,
+          evalSets: snapshot.evalSets,
+          evalResults: snapshot.evalResults,
+          auditLogs: snapshot.auditLogs,
+          executionTraceEvents: snapshot.executionTraceEvents,
+          knowledgeRetrievals: snapshot.knowledgeRetrievals,
+        };
     const content = buildRedactedObservabilityExport(
-      {
-        summary: snapshot.summary,
-        requestLogs: snapshot.requestLogs,
-        gatewayLogs: snapshot.gatewayLogs,
-        usageRecords: snapshot.usageRecords,
-        providerHealthRecords: snapshot.providerHealthRecords,
-        feedbackItems: snapshot.feedbackItems,
-        evalSets: snapshot.evalSets,
-        evalResults: snapshot.evalResults,
-        auditLogs: snapshot.auditLogs,
-        executionTraceEvents: snapshot.executionTraceEvents,
-        knowledgeRetrievals: snapshot.knowledgeRetrievals,
-      },
+      exportData,
       snapshot.privacy,
     );
     this.audit('observability.exported', 'observability', id, { requestCount: snapshot.summary.requestCount, redacted: true }, SECURITY_ACTION_PERMISSIONS.observabilityExport);

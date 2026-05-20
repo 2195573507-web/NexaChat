@@ -153,7 +153,6 @@ export function KnowledgeService<TBase extends ServiceConstructor<ServiceContext
     }
     const sourceText = existingChunks.map((chunk) => chunk.content).join('\n\n');
     const chunks = chunkKnowledgeText(sourceText);
-    this.db.prepare('UPDATE knowledge_chunks SET status = ?, updated_at = ? WHERE file_id = ?').run('deleted', timestamp, file.id);
     this.db
       .prepare(
         `UPDATE knowledge_embeddings
@@ -204,6 +203,13 @@ export function KnowledgeService<TBase extends ServiceConstructor<ServiceContext
          VALUES (?, ?, ?, ?, ?, ?)`,
       )
       .run(createId('tombstone'), file.id, file.name, file.chunkCount, 'user-delete', timestamp);
+    this.db
+      .prepare(
+        `UPDATE knowledge_embeddings
+         SET status = 'deleted'
+         WHERE chunk_id IN (SELECT id FROM knowledge_chunks WHERE file_id = ?)`,
+      )
+      .run(file.id);
     this.db.prepare('UPDATE knowledge_chunks SET status = ?, updated_at = ? WHERE file_id = ?').run('deleted', timestamp, file.id);
     this.db
       .prepare(

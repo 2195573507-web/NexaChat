@@ -43,10 +43,11 @@ const CHAT_MESSAGE_PAGE_SIZE = 60;
 const CHAT_CONVERSATION_PAGE_SIZE = 30;
 const VIRTUAL_MESSAGE_WINDOW = 90;
 
-type GenerationPhase = 'queued' | 'sending' | 'generating' | 'completed' | 'failed' | 'canceled';
+type GenerationPhase = 'queued' | 'retrieving' | 'sending' | 'generating' | 'completed' | 'failed' | 'canceled';
 
 const generationLabelKeys: Record<GenerationPhase, I18nKey> = {
   queued: 'chat.generation.queued',
+  retrieving: 'chat.generation.retrieving',
   sending: 'chat.generation.sending',
   generating: 'chat.generation.generating',
   completed: 'chat.generation.completed',
@@ -244,6 +245,13 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
         if (!current || event.requestId !== current.requestLogId || canceledRequestIds.current.has(event.requestId)) {
           return current;
         }
+        if (event.type === 'chat.stream.retrieving') {
+          return {
+            ...current,
+            phase: 'retrieving',
+            conversationId: event.conversationId ?? current.conversationId,
+          };
+        }
         if (event.type === 'chat.stream.started') {
           return {
             ...current,
@@ -337,7 +345,7 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
 
   const sendCurrentMessage = async () => {
     const content = draft.trim();
-    if (!content || !selectedModel || generation?.phase === 'sending' || generation?.phase === 'generating' || generation?.phase === 'queued') {
+    if (!content || !selectedModel || generation?.phase === 'sending' || generation?.phase === 'generating' || generation?.phase === 'queued' || generation?.phase === 'retrieving') {
       return;
     }
     const requestLogId = createClientRequestId();
@@ -601,7 +609,7 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
             placeholder={t('chat.composer.placeholder')}
             contextControl={<span>{selectedModel ? `${selectedModel.displayName} / ${generationInActiveConversation ? t(generationLabelKeys[generationInActiveConversation.phase]) : t('app.status.idle')}` : t('common.notConfigured')}</span>}
             utilityActions={
-              generationInActiveConversation && (generationInActiveConversation.phase === 'sending' || generationInActiveConversation.phase === 'generating' || generationInActiveConversation.phase === 'queued') ? (
+              generationInActiveConversation && (generationInActiveConversation.phase === 'sending' || generationInActiveConversation.phase === 'generating' || generationInActiveConversation.phase === 'queued' || generationInActiveConversation.phase === 'retrieving') ? (
                 <button type="button" className="ghost-button" onClick={cancelGeneration}><XCircle size={14} />{t('chat.message.cancel')}</button>
               ) : (
                 <ConversationTools
@@ -613,7 +621,7 @@ export function ChatPage({ activeTab, snapshot, api, onAction, onOpenModule }: T
             }
             sendLabel={t('chat.send')}
             sendIcon={<Send size={15} />}
-            disabled={!selectedModel || Boolean(generationInActiveConversation && ['queued', 'sending', 'generating'].includes(generationInActiveConversation.phase))}
+            disabled={!selectedModel || Boolean(generationInActiveConversation && ['queued', 'retrieving', 'sending', 'generating'].includes(generationInActiveConversation.phase))}
             disabledReason={!selectedModel ? t('common.notConfigured') : t('chat.generation.generating')}
             onChange={setDraft}
             onSend={() => onAction(t('chat.toast.sent'), sendCurrentMessage, { refresh: 'none' })}
@@ -692,7 +700,7 @@ const QuickAction = memo(function QuickAction({ icon, title, detail, onClick, pr
 
 function GenerationBubble({ generation, onCancel }: { generation: LocalGenerationState; onCancel: () => void }) {
   const { t } = useI18n();
-  const isBusy = generation.phase === 'queued' || generation.phase === 'sending' || generation.phase === 'generating';
+  const isBusy = generation.phase === 'queued' || generation.phase === 'retrieving' || generation.phase === 'sending' || generation.phase === 'generating';
   return (
     <MessageBubble
       role="assistant"
@@ -703,11 +711,13 @@ function GenerationBubble({ generation, onCancel }: { generation: LocalGeneratio
         <button type="button" className="ghost-button" onClick={onCancel}><XCircle size={14} />{t('chat.message.cancel')}</button>
       ) : null}
     >
-      <div className="generation-progress" data-generation-phase={generation.phase}>
+      <div className="generation-progress" data-generation-phase={generation.phase} role="status" aria-live="polite" aria-atomic="true">
         <StatusPillLite label={t(generationLabelKeys[generation.phase])} state={generation.phase === 'failed' ? 'danger' : generation.phase === 'canceled' ? 'warning' : 'info'} />
         <p>{generation.visibleContent || t('chat.generation.placeholder')}</p>
         {generation.error ? <small>{generation.error}</small> : null}
-        <InlineNotice tone="muted" title={t('chat.generation.progressiveReveal')} detail={t('chat.generation.progressiveReveal.detail')} />
+        {generation.source === 'send-message-fallback' ? (
+          <InlineNotice tone="muted" title={t('chat.generation.progressiveReveal')} detail={t('chat.generation.progressiveReveal.detail')} />
+        ) : null}
       </div>
     </MessageBubble>
   );

@@ -172,6 +172,11 @@ export function GatewayService<TBase extends ServiceConstructor<ServiceContext>>
   }
 
 
+  isGatewayPersistedEnabled(): boolean {
+    return this.getSetting(GATEWAY_ENABLED_SETTING_KEY) === 'true';
+  }
+
+
   authorizeGatewayKey(rawKey: string | null, scope: GatewayScope): GatewayAuthorizationResult {
     if (!rawKey) {
       return { ok: false, key: null, scope, errorCode: 'missing_key' };

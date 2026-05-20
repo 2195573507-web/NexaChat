@@ -73,9 +73,20 @@ describe('desktop entry authority', () => {
   it('keeps launch diagnostics and single-window recovery in the main process', () => {
     const mainSource = readFileSync(join(repoRoot, 'src/main/index.ts'), 'utf8');
     const diagnosticsSource = readFileSync(join(repoRoot, 'src/main/desktopDiagnostics.ts'), 'utf8');
+    const lockIndex = mainSource.indexOf('requestSingleInstanceLock');
+    const storeImportIndex = mainSource.indexOf("import('./services/store.js')");
+    const ipcImportIndex = mainSource.indexOf("import('./ipc.js')");
+    const databaseImportIndex = mainSource.indexOf("import('./database/connection.js')");
 
     expect(mainSource).toContain('DESKTOP_ENTRY');
     expect(mainSource).toContain('requestSingleInstanceLock');
+    expect(lockIndex).toBeGreaterThanOrEqual(0);
+    expect(storeImportIndex).toBeGreaterThan(lockIndex);
+    expect(ipcImportIndex).toBeGreaterThan(lockIndex);
+    expect(databaseImportIndex).toBeGreaterThan(lockIndex);
+    expect(mainSource).not.toMatch(/import\s+\{[^}]*registerIpcHandlers[^}]*\}\s+from\s+['"]\.\/ipc\.js['"]/);
+    expect(mainSource).not.toMatch(/import\s+\{[^}]*store[^}]*\}\s+from\s+['"]\.\/services\/store\.js['"]/);
+    expect(mainSource).not.toMatch(/import\s+\{[^}]*closeDatabase[^}]*\}\s+from\s+['"]\.\/database\/connection\.js['"]/);
     expect(mainSource).toContain('second-instance');
     expect(mainSource).toContain('installDesktopDiagnostics');
     expect(diagnosticsSource).toContain('uncaughtException');
@@ -92,6 +103,9 @@ describe('desktop entry authority', () => {
     expect(mainSource).toContain('contextIsolation: true');
     expect(mainSource).toContain('nodeIntegration: false');
     expect(mainSource).toContain('sandbox: false');
+    expect(mainSource).toContain('CONTENT_SECURITY_POLICY');
+    expect(mainSource).toContain('content-security-policy');
+    expect(mainSource).toContain('setPermissionRequestHandler');
     expect(mainSource).toContain('resolveRendererAsset');
     expect(mainSource).toContain('setWindowOpenHandler');
     expect(mainSource).toContain('will-navigate');

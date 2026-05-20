@@ -1204,6 +1204,10 @@ export interface UiPreferences {
 }
 
 export interface DashboardSummary {
+  /**
+   * Legacy/default workspace compatibility object.
+   * Product navigation remains chat-first; new renderer state should prefer chat/module contracts.
+   */
   workspace: Workspace;
   recentConversations: Conversation[];
   providers: Provider[];
@@ -1216,6 +1220,14 @@ export interface DashboardSummary {
     costEstimate: number;
   };
   setupGaps: string[];
+}
+
+export interface ShellSnapshot {
+  activeProduct: 'chat-first';
+  rootRoute: string;
+  legacyWorkspaceId: string;
+  defaultModelId: string | null;
+  gatewayStatus: GatewayStatus;
 }
 
 export interface AppSnapshot {

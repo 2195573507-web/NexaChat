@@ -17,7 +17,7 @@ UI 文案必须诚实标注能力边界：
 - `/v1/responses`: basic text，不是完整 OpenAI Responses API。
 - Anthropic / Gemini: native first version 可用；tool use、vision 和高级 reasoning 仍不可显示为已完成。
 - Knowledge Base: text-like、provider embedding/vector when configured、lexical fallback、retrieval trace、citations。
-- Tools / Agent / MCP: dry-run、fixture-only、approval、trace。
+- Tools / Agent / MCP: metadata registration、dry-run、fixture-only、approval、trace；授权不代表已连接或可执行。
 - Data rollback: limited rollback records，不是 full database restore。
 - Gateway: local-only，除非明确实现并验证外部网络发布。
 - experimental 或 reserved 能力不得显示为 available。
@@ -27,4 +27,5 @@ UI 文案必须诚实标注能力边界：
 - 不恢复旧 8 模块描述。
 - 不引入 Workspace/Dashboard-first 入口。
 - 不把 `/v1/responses` basic text 描述为完整 OpenAI Responses API；不把 PDF/OCR/rerank/full vector DB RAG、arbitrary MCP execution 或 full restore 描述为当前已实现。
+- 不把 encrypted redacted backup package 描述为 full database backup/restore。
 - 不用视觉装饰掩盖功能未完成状态。

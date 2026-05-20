@@ -91,6 +91,61 @@ export interface KnowledgeScoredChunk extends KnowledgeScoredChunkInput {
   lexicalScore: number;
 }
 
+export type KnowledgeRerankStatus = 'disabled' | 'completed' | 'error';
+
+export interface KnowledgeRerankResult {
+  status: KnowledgeRerankStatus;
+  chunks: KnowledgeScoredChunk[];
+  latencyMs: number;
+  errorCode: string | null;
+  errorMessage: string | null;
+}
+
+export async function applyKnowledgeRerank(
+  chunks: KnowledgeScoredChunk[],
+  options: {
+    enabled?: boolean;
+    reranker?: (chunks: KnowledgeScoredChunk[]) => Promise<KnowledgeScoredChunk[]>;
+  } = {},
+): Promise<KnowledgeRerankResult> {
+  const startedAt = Date.now();
+  if (!options.enabled) {
+    return {
+      status: 'disabled',
+      chunks,
+      latencyMs: 0,
+      errorCode: null,
+      errorMessage: null,
+    };
+  }
+  if (!options.reranker) {
+    return {
+      status: 'disabled',
+      chunks,
+      latencyMs: Math.max(0, Date.now() - startedAt),
+      errorCode: null,
+      errorMessage: null,
+    };
+  }
+  try {
+    return {
+      status: 'completed',
+      chunks: await options.reranker(chunks),
+      latencyMs: Math.max(1, Date.now() - startedAt),
+      errorCode: null,
+      errorMessage: null,
+    };
+  } catch (error) {
+    return {
+      status: 'error',
+      chunks,
+      latencyMs: Math.max(1, Date.now() - startedAt),
+      errorCode: 'rerank_failed',
+      errorMessage: error instanceof Error ? error.message : 'Rerank failed.',
+    };
+  }
+}
+
 export function normalizeKnowledgeImport(input: {
   name: string;
   type?: string | null;

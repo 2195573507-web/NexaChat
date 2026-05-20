@@ -6,11 +6,10 @@ import {
   PROVIDER_RUNTIME_POLICY,
   type ProviderAdapterName,
   type ProviderNativeAdapterName,
-  type ProviderRuntimeErrorCode,
   isRetryableProviderStatus,
   normalizeProviderHttpErrorCode,
 } from '../../shared/providerRuntime.js';
-import { redactHeaders, redactSensitive } from '../security/redaction.js';
+import { redactHeaders, redactKnownSecrets, redactSensitive } from '../security/redaction.js';
 import {
   ProviderRuntimeError,
   fetchOpenAiCompatibleModels,
@@ -194,9 +193,8 @@ const ANTHROPIC_ADAPTER: ProviderAdapter = createNativeAdapter({
       },
       signal: AbortSignal.timeout(PROVIDER_RUNTIME_POLICY.healthTimeoutMs),
     });
-    return parseNativeModelsResponse(response, startedAt);
+    return parseNativeModelsResponse(response, startedAt, apiKey);
   },
-  fallbackModels: ['claude-3-5-sonnet-latest', 'claude-3-5-haiku-latest'],
 });
 
 const GEMINI_ADAPTER: ProviderAdapter = createNativeAdapter({
@@ -294,7 +292,7 @@ const GEMINI_ADAPTER: ProviderAdapter = createNativeAdapter({
       },
       signal: AbortSignal.timeout(PROVIDER_RUNTIME_POLICY.healthTimeoutMs),
     });
-    return parseNativeModelsResponse(response, startedAt, (body) => {
+    return parseNativeModelsResponse(response, startedAt, apiKey, (body) => {
       const models = (body as { models?: Array<{ name?: unknown; supportedGenerationMethods?: unknown }> }).models;
       return Array.isArray(models)
         ? models
@@ -307,7 +305,6 @@ const GEMINI_ADAPTER: ProviderAdapter = createNativeAdapter({
         : [];
     });
   },
-  fallbackModels: ['gemini-1.5-pro', 'gemini-1.5-flash'],
 });
 
 const ADAPTERS: Record<ProviderNativeAdapterName, ProviderAdapter> = {
@@ -345,7 +342,6 @@ function createNativeAdapter(input: {
   parseJson(body: unknown): Omit<ProviderInvocationResult, 'latencyMs' | 'retryCount'>;
   parseStreamData(data: string, state: NativeStreamState): void;
   fetchModels(provider: Provider, apiKey: string | null): Promise<ProviderModelListResult>;
-  fallbackModels: string[];
 }): ProviderAdapter {
   return {
     name: input.name,
@@ -355,18 +351,8 @@ function createNativeAdapter(input: {
     invokeEmbeddings: async () => {
       throw new ProviderRuntimeError('This provider adapter does not support embeddings.', PROVIDER_RUNTIME_ERROR_CODES.embeddingsUnsupported);
     },
-    testProvider: (provider, apiKey) => testNativeProvider(provider, apiKey, input.fetchModels, input.fallbackModels),
-    fetchModels: (provider, apiKey) => input.fetchModels(provider, apiKey).catch((error) => {
-      const normalized = normalizeInvocationError(error);
-      if (normalized.code === PROVIDER_RUNTIME_ERROR_CODES.modelNotFound || normalized.code === PROVIDER_RUNTIME_ERROR_CODES.invalidResponse) {
-        return {
-          modelNames: input.fallbackModels,
-          status: normalized.status ?? 0,
-          latencyMs: 1,
-        };
-      }
-      throw normalized;
-    }),
+    testProvider: (provider, apiKey) => testNativeProvider(provider, apiKey, input.fetchModels),
+    fetchModels: (provider, apiKey) => input.fetchModels(provider, apiKey),
     getRequestSummary(invocation) {
       return {
         providerId: invocation.provider.id,
@@ -425,10 +411,10 @@ async function invokeNativeChat(
         body: JSON.stringify(endpoint.body),
         signal: controller.signal,
       });
-      clearTimeout(timer);
-      invocation.signal?.removeEventListener('abort', upstreamAbort);
       if (!response.ok) {
-        const error = await buildHttpError(response);
+        clearTimeout(timer);
+        invocation.signal?.removeEventListener('abort', upstreamAbort);
+        const error = await buildHttpError(response, invocation.apiKey);
         if (attempt < maxRetries && error.retryable) {
           lastError = error;
           attempt += 1;
@@ -438,8 +424,10 @@ async function invokeNativeChat(
         throw error;
       }
       const parsed = invocation.stream === true
-        ? await parseNativeStreamingResponse(response, adapter.parseStreamData, invocation)
+        ? await parseNativeStreamingResponse(response, adapter.parseStreamData, invocation, controller.signal)
         : adapter.parseJson(await response.json());
+      clearTimeout(timer);
+      invocation.signal?.removeEventListener('abort', upstreamAbort);
       if (!parsed.content) {
         throw new ProviderRuntimeError('Provider response did not include assistant content.', PROVIDER_RUNTIME_ERROR_CODES.invalidResponse);
       }
@@ -451,7 +439,7 @@ async function invokeNativeChat(
     } catch (error) {
       clearTimeout(timer);
       invocation.signal?.removeEventListener('abort', upstreamAbort);
-      const normalized = normalizeInvocationError(error);
+      const normalized = normalizeInvocationError(error, invocation.apiKey);
       if (attempt < maxRetries && normalized.retryable) {
         lastError = normalized;
         attempt += 1;
@@ -468,21 +456,10 @@ async function testNativeProvider(
   provider: Provider,
   apiKey: string | null,
   fetchModels: (provider: Provider, apiKey: string | null) => Promise<ProviderModelListResult>,
-  fallbackModels: string[],
 ): Promise<ProviderHealthResult> {
   const startedAt = Date.now();
   try {
-    const result = await fetchModels(provider, apiKey).catch((error) => {
-      const normalized = normalizeInvocationError(error);
-      if (normalized.code === PROVIDER_RUNTIME_ERROR_CODES.modelNotFound || normalized.code === PROVIDER_RUNTIME_ERROR_CODES.invalidResponse) {
-        return {
-          modelNames: fallbackModels,
-          status: normalized.status ?? 0,
-          latencyMs: Math.max(1, Date.now() - startedAt),
-        };
-      }
-      throw normalized;
-    });
+    const result = await fetchModels(provider, apiKey);
     return {
       ok: true,
       latencyMs: result.latencyMs,
@@ -492,13 +469,13 @@ async function testNativeProvider(
       modelNames: result.modelNames,
     };
   } catch (error) {
-    const normalized = normalizeInvocationError(error);
+    const normalized = normalizeInvocationError(error, apiKey);
     return {
       ok: false,
       latencyMs: Math.max(1, Date.now() - startedAt),
       status: normalized.status,
       errorCode: normalized.code,
-      errorMessage: normalized.message,
+      errorMessage: redactKnownSecrets(normalized.message, [apiKey]),
       modelNames: [],
     };
   }
@@ -525,6 +502,7 @@ async function parseNativeStreamingResponse(
   response: Response,
   parseData: (data: string, state: NativeStreamState) => void,
   invocation: Pick<ProviderInvocationInput, 'onChunk' | 'onProgress'>,
+  signal?: AbortSignal,
 ): Promise<Omit<ProviderInvocationResult, 'latencyMs' | 'retryCount'>> {
   if (!response.body) {
     throw new ProviderRuntimeError('Provider streaming response did not include a body.', PROVIDER_RUNTIME_ERROR_CODES.invalidResponse);
@@ -534,20 +512,42 @@ async function parseNativeStreamingResponse(
   const decoder = new TextDecoder();
   let buffer = '';
 
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split(/\r?\n/);
-    buffer = lines.pop() ?? '';
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || !trimmed.startsWith('data:')) continue;
-      const data = trimmed.slice('data:'.length).trim();
-      if (data === '[DONE]') continue;
-      parseData(data, state);
-      invocation.onProgress?.('stream');
+  try {
+    while (true) {
+      if (signal?.aborted) {
+        await reader.cancel(signal.reason).catch(() => undefined);
+        throw new ProviderRuntimeError('Provider request was cancelled.', PROVIDER_RUNTIME_ERROR_CODES.cancelled);
+      }
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (signal?.aborted) {
+        await reader.cancel(signal.reason).catch(() => undefined);
+        throw new ProviderRuntimeError('Provider request was cancelled.', PROVIDER_RUNTIME_ERROR_CODES.cancelled);
+      }
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data:')) continue;
+        const data = trimmed.slice('data:'.length).trim();
+        if (data === '[DONE]') continue;
+        try {
+          parseData(data, state);
+        } catch (error) {
+          if (error instanceof ProviderRuntimeError) {
+            throw error;
+          }
+          throw new ProviderRuntimeError('Provider stream included malformed SSE JSON.', PROVIDER_RUNTIME_ERROR_CODES.invalidResponse);
+        }
+        invocation.onProgress?.('stream');
+      }
     }
+  } finally {
+    reader.releaseLock();
+  }
+  if (!state.content) {
+    throw new ProviderRuntimeError('Provider stream did not include assistant content.', PROVIDER_RUNTIME_ERROR_CODES.invalidResponse);
   }
   return {
     content: state.content,
@@ -583,6 +583,7 @@ function messagesToGeminiContents(messages: ChatMessageInput[]): Array<{ role: '
 async function parseNativeModelsResponse(
   response: Response,
   startedAt: number,
+  apiKey?: string | null,
   parser: (body: unknown) => string[] = (body) => {
     const data = (body as { data?: Array<{ id?: unknown }> }).data;
     return Array.isArray(data) ? data.map((item) => String(item.id ?? '')).filter(Boolean) : [];
@@ -590,7 +591,7 @@ async function parseNativeModelsResponse(
 ): Promise<ProviderModelListResult> {
   const latencyMs = Math.max(1, Date.now() - startedAt);
   if (!response.ok) {
-    throw await buildHttpError(response);
+    throw await buildHttpError(response, apiKey);
   }
   const body = await response.json();
   const modelNames = Array.from(new Set(parser(body)));
@@ -634,10 +635,10 @@ function buildGeminiModelEndpoint(modelName: string, method: string): string {
   return `/${modelPath}:${method}`;
 }
 
-async function buildHttpError(response: Response): Promise<ProviderRuntimeError> {
+async function buildHttpError(response: Response, apiKey?: string | null): Promise<ProviderRuntimeError> {
   const text = await response.text();
   const message = parseErrorMessage(text) ?? `Provider returned HTTP ${response.status}.`;
-  return new ProviderRuntimeError(redactSensitive(message), normalizeProviderHttpErrorCode(response.status), {
+  return new ProviderRuntimeError(redactKnownSecrets(message, [apiKey]), normalizeProviderHttpErrorCode(response.status), {
     status: response.status,
     retryable: isRetryableProviderStatus(response.status),
   });
@@ -655,9 +656,12 @@ function parseErrorMessage(text: string): string | null {
   return cleaned ? cleaned.slice(0, 500) : null;
 }
 
-function normalizeInvocationError(error: unknown): ProviderRuntimeError {
+function normalizeInvocationError(error: unknown, apiKey?: string | null): ProviderRuntimeError {
   if (error instanceof ProviderRuntimeError) {
-    return error;
+    return new ProviderRuntimeError(redactKnownSecrets(error.message, [apiKey]), error.code, {
+      status: error.status,
+      retryable: error.retryable,
+    });
   }
   if (error instanceof DOMException && error.name === 'AbortError') {
     return new ProviderRuntimeError('Provider request was cancelled or timed out.', PROVIDER_RUNTIME_ERROR_CODES.cancelled);
@@ -672,7 +676,7 @@ function normalizeInvocationError(error: unknown): ProviderRuntimeError {
     return new ProviderRuntimeError('Provider request timed out.', PROVIDER_RUNTIME_ERROR_CODES.timeout, { retryable: true });
   }
   if (error instanceof Error) {
-    return new ProviderRuntimeError(redactSensitive(error.message), PROVIDER_RUNTIME_ERROR_CODES.networkError, { retryable: true });
+    return new ProviderRuntimeError(redactKnownSecrets(error.message, [apiKey]), PROVIDER_RUNTIME_ERROR_CODES.networkError, { retryable: true });
   }
   return new ProviderRuntimeError('Provider request failed.', PROVIDER_RUNTIME_ERROR_CODES.networkError, { retryable: true });
 }

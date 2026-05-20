@@ -63,6 +63,7 @@ describe('IPC contract authority', () => {
     expect(() => assertIpcPayload(IPC_CHANNELS.dataApplyImportPlan, ['import_1', { mode: 'apply-metadata', conflictStrategy: 'keep-local' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.dataRestoreSnapshot, ['snapshot_1', { mode: 'rollback' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.dataExportPackage, [{ profile: 'metadata-redacted' }])).not.toThrow();
+    expect(() => assertIpcPayload(IPC_CHANNELS.dataCreateEncryptedBackup, [{ profile: 'encrypted-redacted', passphrase: 'round-12-passphrase' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.dataCreateEncryptedBackup, [{ profile: 'encrypted-full', passphrase: 'round-12-passphrase' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.dataCreateRestorePreflight, [{ backupId: 'backup_1', passphrase: 'round-12-passphrase' }])).not.toThrow();
     expect(() => assertIpcPayload(IPC_CHANNELS.dataApplyRollback, [{ rollbackId: 'rollback_1', confirmationPhrase: 'ROLLBACK DATA' }])).not.toThrow();
@@ -146,6 +147,13 @@ describe('IPC contract authority', () => {
       progress: 0.5,
       chunk: 'partial',
     };
+    const retrieving: ChatStreamEventPayload = {
+      type: 'chat.stream.retrieving',
+      phase: 'retrieving',
+      requestId: 'req_1',
+      clientRequestId: 'client_1',
+      timestamp: Date.now(),
+    };
     const completed: TaskEventPayload = {
       type: 'task.completed',
       phase: 'completed',
@@ -158,6 +166,7 @@ describe('IPC contract authority', () => {
 
     expect(chunk.requestId).toBe('req_1');
     expect(chunk.type).toBe('chat.stream.chunk');
+    expect(retrieving.phase).toBe('retrieving');
     expect(completed.taskId).toBe('task_1');
     expect(completed.progress).toBe(1);
   });
@@ -166,6 +175,9 @@ describe('IPC contract authority', () => {
     const mainIpc = readFileSync(join(projectRoot, 'src/main/ipc.ts'), 'utf8');
     const preload = readFileSync(join(projectRoot, 'src/preload/index.ts'), 'utf8');
 
+    expect(mainIpc).not.toMatch(/from ['"]\.\/services\/store/);
+    expect(mainIpc).not.toMatch(/from ['"]\.\/services\/localGateway/);
+    expect(mainIpc).toContain('registerIpcHandlers(deps');
     expect(mainIpc).not.toMatch(/ipcMain\.handle\(['"]/);
     expect(preload).not.toMatch(/ipcRenderer\.invoke\(['"]/);
     expect(preload).not.toMatch(/exposeInMainWorld\([^)]*ipcRenderer/);

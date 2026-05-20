@@ -144,6 +144,19 @@ describe('Round 8 gateway runtime authority', () => {
     expect(unsupportedBody.error.type).toBe('unsupported_field');
     expect(unsupportedBody.error.message).toContain('tools');
 
+    const unsupportedStream = await fetch(`${url}/v1/responses`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${responseKey.key}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ input: 'stream should be rejected in basic responses', stream: true }),
+    });
+    const unsupportedStreamBody = await unsupportedStream.json() as { error: { type: string; message: string } };
+    expect(unsupportedStream.status).toBe(400);
+    expect(unsupportedStreamBody.error.type).toBe('unsupported_field');
+    expect(unsupportedStreamBody.error.message).toContain('stream');
+
     const invalidInput = await fetch(`${url}/v1/responses`, {
       method: 'POST',
       headers: {

@@ -338,13 +338,14 @@ export function DataService<TBase extends ServiceConstructor<ServiceContext>>(Ba
       const timestamp = now();
       const jobId = createId('backup_job');
       const backupId = createId('backup');
-      const pkg = this.createEncryptedBackupPackage(this.buildDataExportPayload(input.profile ?? 'encrypted-full'), input.passphrase);
+      const requestedProfile = input.profile === 'encrypted-full' ? 'encrypted-redacted' : input.profile ?? 'encrypted-redacted';
+      const pkg = this.createEncryptedBackupPackage(this.buildDataExportPayload(requestedProfile), input.passphrase);
       this.insertDataMobilityJob({
         id: jobId,
         operationKind: 'encrypted-backup',
         status: 'completed',
         source: 'nexachat',
-        profile: 'encrypted-full',
+        profile: pkg.profile,
         summary: t('data.backup.summary.created'),
         manifestJson: JSON.stringify({ ...pkg, payload: '[ENCRYPTED_PAYLOAD]' }),
         manifestHash: pkg.manifestHash,
@@ -361,8 +362,8 @@ export function DataService<TBase extends ServiceConstructor<ServiceContext>>(Ba
           `INSERT INTO data_backups (id, job_id, profile, encrypted, redacted, manifest_hash, package_json, created_at)
            VALUES (?, ?, ?, 1, 1, ?, ?, ?)`,
         )
-        .run(backupId, jobId, 'encrypted-full', pkg.manifestHash, JSON.stringify(pkg), timestamp);
-      this.audit('data.backup.encrypted.created', 'data_backup', backupId, { profile: 'encrypted-full', encrypted: true, manifestHash: pkg.manifestHash });
+        .run(backupId, jobId, pkg.profile, pkg.manifestHash, JSON.stringify(pkg), timestamp);
+      this.audit('data.backup.encrypted.created', 'data_backup', backupId, { profile: pkg.profile, encrypted: true, manifestHash: pkg.manifestHash });
       return this.requireDataBackup(backupId);
     });
   }

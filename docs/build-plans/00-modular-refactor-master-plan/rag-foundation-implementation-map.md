@@ -2,12 +2,13 @@
 
 ## Current Facts
 
-- Repository root was confirmed with `git rev-parse --show-toplevel`; the actual root is recorded in `PROJECT_PROGRESS.md` and the final run report.
+- Repository root can be confirmed with `git rev-parse --show-toplevel`; docs should avoid local absolute paths.
 - Current top-level modules remain Chat, Models, Knowledge Base, Tools, Gateway, Data, Settings.
 - Root route remains `/ -> /chat/conversations`.
 - Gateway remains a standalone core module.
-- Knowledge import currently supports text-like inputs only: text, Markdown, JSON, CSV, and log-like text.
-- PDF, Office, OCR, real rerank models, arbitrary MCP execution, Agent sandbox, and workflow runtime are not complete.
+- Knowledge import supports text-like inputs only: text, Markdown, JSON, CSV, and log-like text.
+- Knowledge retrieval is local-first: SQLite chunk records plus SQLite JSON embedding/vector records when embeddings are available, with lexical fallback when they are not.
+- PDF, Office, OCR, real rerank models, external/specialized vector DB, arbitrary MCP execution, Agent sandbox, and workflow runtime are not complete.
 
 ## Existing Contracts
 
@@ -18,15 +19,17 @@
 - Main process owns provider calls, knowledge retrieval, context assembly, citation persistence, and usage records.
 - Renderer reads snapshot/API results and displays status; it does not access SQLite, raw provider secrets, or raw filesystem paths.
 
-## Gaps Addressed In This Run
+## Implemented RAG Foundation
 
-- OpenAI-compatible embeddings now have a real `/embeddings` adapter path.
+- OpenAI-compatible embeddings have a real `/embeddings` adapter path.
 - Anthropic and Gemini native adapters explicitly do not support embeddings in this implementation.
 - Local vector storage uses SQLite `knowledge_embeddings.vector_json` with deterministic cosine scoring.
 - Retrieval is vector-first when provider-backed embeddings exist and falls back to lexical with a recorded reason when they do not.
-- Retrieval traces now include provider/model, candidate counts, citation counts, score summary, timings, and error fields.
-- Chat already persisted citations; this run routes chat retrieval through the updated async retrieval path.
-- Usage records now share request type, total token, estimated flag, latency, status, and error fields across chat, eval, and embeddings.
+- Retrieval traces include provider/model, knowledge scope, candidate counts, citation counts, score summary, timings, selected chunk ids, and error/fallback fields.
+- Chat retrieval uses the main-process retrieval/context/provider path, injects cited context into provider messages, and persists structured citations.
+- Usage records share request type, total token, estimated flag, latency, status, and error fields across chat, Gateway chat/responses, eval, and embeddings.
+- Rerank has a minimal disabled-by-default extension contract; disabled/error paths preserve original retrieval results and do not invent rerank scores.
+- Knowledge UI shows embedding provider/model readiness, Gateway `/v1/embeddings` readiness, latest embedding health/log status, and retrieval trace timing/fallback details.
 
 ## Files Modified
 
@@ -53,7 +56,8 @@
 - Embedding vectors are stored in SQLite JSON for maintainability, not a specialized vector DB.
 - Query text in retrieval traces is redacted and truncated, but still intentionally auditable.
 - Constructor seed uses lexical indexing because provider-backed embeddings cannot be awaited safely during synchronous service construction.
-- Rerank is only represented as a disabled placeholder in score metadata.
+- Rerank is disabled by default and has no provider-backed scoring implementation yet.
+- Import scope is intentionally text-like; PDF, Office, and OCR extraction need separate parser and citation work before they can be claimed.
 
 ## Acceptance Criteria
 

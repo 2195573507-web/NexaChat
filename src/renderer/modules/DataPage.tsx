@@ -30,7 +30,7 @@ export function DataPage({ activeTab, snapshot, api, onAction }: TabPageProps) {
           title={t('data.backup.title')}
           description={activeTab.featureBoundary}
           status={<StatusPillLite label={latestBackup?.profile ?? t('common.none')} state={latestBackup ? 'ready' : 'muted'} />}
-          actions={<CommandButton variant="primary" icon={<Archive size={15} />} disabled={!backupPassphraseValid || pending.isPending('data.backup')} disabledReason={t('data.backup.passphrase.required')} onClick={() => onAction(t('data.toast.backupCreated'), () => pending.runPending('data.backup', () => api.createEncryptedBackup({ profile: 'encrypted-full', passphrase: backupPassphrase })))}>{pending.isPending('data.backup') ? t('app.status.busy') : t('data.backup.create')}</CommandButton>}
+          actions={<CommandButton variant="primary" icon={<Archive size={15} />} disabled={!backupPassphraseValid || pending.isPending('data.backup')} disabledReason={t('data.backup.passphrase.required')} onClick={() => onAction(t('data.toast.backupCreated'), () => pending.runPending('data.backup', () => api.createEncryptedBackup({ profile: 'encrypted-redacted', passphrase: backupPassphrase })))}>{pending.isPending('data.backup') ? t('app.status.busy') : t('data.backup.create')}</CommandButton>}
         />
         <div className="tool-layout">
         <ConfigList title={t('data.backup.title')} description={activeTab.featureBoundary}>

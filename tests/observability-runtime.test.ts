@@ -4,11 +4,27 @@ import {
   buildUsageTrend,
   buildRedactedObservabilityExport,
   filterObservabilityRequestLogs,
+  normalizeObservabilityQuery,
   normalizeObservabilityPrivacySettings,
 } from '../src/shared/observabilityRuntime';
 import type { AuditLog, ExecutionTraceEvent, GatewayLog, KnowledgeRetrievalTrace, Provider, RequestLog, UsageRecord } from '../src/shared/types';
 
 describe('Round 13 observability runtime', () => {
+  it('normalizes observability query privacy flags to metadata-only defaults', () => {
+    expect(normalizeObservabilityQuery()).toMatchObject({
+      includeAudit: false,
+      includeTrace: false,
+    });
+    expect(normalizeObservabilityQuery({ includeAudit: true, includeTrace: true })).toMatchObject({
+      includeAudit: true,
+      includeTrace: true,
+    });
+    expect(normalizeObservabilityQuery({ includeAudit: false, includeTrace: false })).toMatchObject({
+      includeAudit: false,
+      includeTrace: false,
+    });
+  });
+
   it('filters request logs and builds usage health and error summaries without duplicate log stores', () => {
     const requestLogs: RequestLog[] = [
       requestLog({ id: 'req_1', providerId: 'provider_1', modelId: 'model_1', status: 'completed', inputTokens: 8, outputTokens: 13, latencyMs: 40 }),
@@ -98,6 +114,12 @@ describe('Round 13 observability runtime', () => {
       authorization: 'Bearer sk-round-13-secret',
       gatewayKey: 'nxk_observability_secret',
       requestSummaryJson: '{"message":"hello secret","redactedPreview":"nxk_preview_secret"}',
+      prompt: 'private eval prompt',
+      input: 'private input',
+      content: 'private content',
+      notes: 'private notes',
+      query: 'private query',
+      outputPreview: 'private output',
       localPath: 'C:\\Users\\Example\\secret.txt',
     }, settings);
 
@@ -105,8 +127,31 @@ describe('Round 13 observability runtime', () => {
     expect(content).not.toContain('nxk_observability_secret');
     expect(content).not.toContain('nxk_preview_secret');
     expect(content).not.toContain('hello secret');
+    expect(content).not.toContain('private eval prompt');
+    expect(content).not.toContain('private input');
+    expect(content).not.toContain('private content');
+    expect(content).not.toContain('private notes');
+    expect(content).not.toContain('private query');
+    expect(content).not.toContain('private output');
     expect(content).not.toContain('C:\\Users\\Example');
     expect(content).toContain('[REDACTED]');
+  });
+
+  it('can include benign prompt snippets while still redacting secrets', () => {
+    const settings = normalizeObservabilityPrivacySettings({
+      includePromptSnippets: true,
+      includeLocalPaths: false,
+      updatedAt: 1,
+    });
+    const content = buildRedactedObservabilityExport({
+      prompt: 'benign prompt snippet',
+      apiKey: 'sk-round-13-secret',
+      localPath: 'C:\\Users\\Example\\secret.txt',
+    }, settings);
+
+    expect(content).toContain('benign prompt snippet');
+    expect(content).not.toContain('sk-round-13-secret');
+    expect(content).not.toContain('C:\\Users\\Example');
   });
 });
 

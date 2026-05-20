@@ -81,6 +81,13 @@ export const QUALITY_GATE_DEFINITIONS: QualityGateDefinition[] = [
     protects: 'Secret redaction, unsafe code patterns, shell execution, and external URL boundaries.',
   },
   {
+    id: 'release-safety-scan',
+    command: 'npm.cmd run scan:release-safety',
+    status: 'configured',
+    risk: 'release',
+    protects: 'Installer source guards, forbidden release secret fallback, and artifact copy allowlists without generating artifacts.',
+  },
+  {
     id: 'dead-link-scan',
     command: 'npm.cmd run scan:dead-links',
     status: 'configured',

@@ -120,6 +120,7 @@ export type IpcEventChannel = (typeof IPC_EVENT_CHANNELS)[keyof typeof IPC_EVENT
 export type IpcEventPhase =
   | 'queued'
   | 'started'
+  | 'retrieving'
   | 'sending'
   | 'streaming'
   | 'processing'
@@ -129,6 +130,7 @@ export type IpcEventPhase =
   | 'canceled';
 
 export type ChatStreamEventType =
+  | 'chat.stream.retrieving'
   | 'chat.stream.started'
   | 'chat.stream.chunk'
   | 'chat.stream.progress'
@@ -313,7 +315,7 @@ const feedbackLabels = new Set(['thumbs_up', 'thumbs_down', 'bug', 'unsafe', 'ot
 const requestLogStatuses = new Set(['started', 'streaming', 'completed', 'failed', 'cancelled', 'all']);
 const observabilityRetentionPolicies = new Set(['seven_days', 'thirty_days', 'ninety_days', 'forever']);
 const observabilityExportScopes = new Set(['summary', 'redacted_details']);
-const dataBackupProfiles = new Set(['metadata-redacted', 'encrypted-full']);
+const dataBackupProfiles = new Set(['metadata-redacted', 'encrypted-redacted', 'encrypted-full']);
 const importPlanModes = new Set(['record-only', 'apply-metadata']);
 const dataConflictStrategies = new Set(['keep-local', 'import-as-new', 'skip']);
 const restoreSnapshotModes = new Set(['preflight', 'rollback']);

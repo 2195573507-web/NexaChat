@@ -1,9 +1,26 @@
 ﻿# NexaChat 当前进度
 
+## 2026-05-20 RAG hardening 主线程收束
+
+- 本轮在用户要求后停止继续使用智能体，后续实现、测试、验证、提交和推送均由主线程完成。
+- 核心收束：移除 native provider 模型列表伪成功 fallback；增强 provider/Gateway/embedding 错误脱敏；Gateway 对外 provider 错误统一为通用失败信息；Chat 成功/失败都写入一致 usage 记录。
+- Knowledge Base 收束：保留 text-like 导入边界；provider-backed embeddings 失败时不造假向量；索引缺失 vector 会失败而不是静默 lexical 替代；retrieval trace 增加候选、fallback/error、timing、rerank disabled 合约字段。
+- UI 收束：Knowledge 页面以紧凑桌面工具风格展示 embedding provider/model、Gateway `/v1/embeddings` readiness、最近 embedding 状态和 retrieval preview trace/timing/fallback 信息。
+- 迁移和测试：补齐 legacy `knowledge_chunks.knowledge_base_id` 迁移、RAG 相关索引、unsupported format、Gateway embeddings、vector-first、lexical fallback、citation metadata、secret redaction、usage consistency、rerank disabled/error、Chat 无知识库回归等覆盖。
+- 仍未完成且不得夸大：PDF/Office/OCR、真实 rerank provider、外部/专用 vector DB、任意 MCP/tool/code 执行、Agent sandbox、workflow runtime、Electron sandbox enablement。
+
+## 2026-05-20 RAG hardening 文档交接
+
+- 角色：Agent 14 Documentation Agent，仅更新 RAG hardening 相关必要文档，不修改源码、配置、依赖或测试。
+- 本轮处理：补充本进度记录；复核 README 现有能力边界已准确，无需改动；更新 RAG foundation implementation map 为当前事实口径。
+- 当前真实能力口径：Knowledge Base 支持 text-like 导入、chunk、本地 SQLite JSON vector 记录、配置支持 embeddings 的 OpenAI-compatible provider 时的 vector 检索、lexical fallback、retrieval trace 与结构化 citation；Chat 会通过主进程检索链路注入 context 并持久化 citation。
+- 仍未完成且不得夸大：PDF/Office/OCR、真实 rerank provider、外部/专用 vector DB、任意 MCP/tool/code 执行、Agent sandbox、workflow runtime、Electron sandbox enablement。
+- 验证：本轮只做文档复核与 diff 检查；未运行源码测试矩阵。
+
 ## 2026-05-20 RAG foundation 与检索审计链
 
 - 任务名称：从当前 pushed baseline 继续补齐未完成能力，优先实现生产级 RAG foundation 的安全基础。
-- 实际项目根目录：已通过 `git rev-parse --show-toplevel` 确认为 `D:/NexaChat`。
+- 实际项目根目录：已通过 `git rev-parse --show-toplevel` 确认；仓库内文档不写入本机固定路径。
 - 分支与上游：`main` / `origin/main`。
 - 起始 HEAD：`52dd6c9fbe1e93bb21f1873e9f82877ccc1bf208`；用户给定旧基线 `2cbe9fdc224c8372671f0af26ee42775582ebf56` 已确认仍在历史中。
 - 工具/技能状态：已读取 `using-superpowers`、`brainstorming`、`planning-with-files`、`ralph-loop`、`impeccable`、`webapp-testing`；单数名 `using-superpower` 对应的 skill 不存在，已使用可用的 `using-superpowers`；MCP resources/templates 为空；`impeccable` context loader 未发现 PRODUCT/DESIGN 文件。

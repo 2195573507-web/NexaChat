@@ -20,9 +20,10 @@ export function getDatabase(): DatabaseContext {
   mkdirSync(userDataPath, { recursive: true });
   const databasePath = join(userDataPath, 'nexachat.sqlite');
   const db = new DatabaseSync(databasePath);
-  runPreSchemaMigrations(db);
-  db.exec(schemaSql);
-  runAdditiveMigrations(db);
+  configureDatabase(db);
+  runSchemaMigration(db, 'schema-preflight-v1', 'Pre-schema compatibility migrations', () => runPreSchemaMigrations(db));
+  runSchemaMigration(db, 'schema-core-v1', 'Create or update current schema', () => db.exec(schemaSql));
+  runSchemaMigration(db, 'schema-additive-v1', 'Run additive compatibility migrations', () => runAdditiveMigrations(db));
   context = { db, path: databasePath };
   return context;
 }
@@ -49,6 +50,7 @@ function runAdditiveMigrations(db: DatabaseSync): void {
   addColumnIfMissing(db, 'files', 'parse_completed_at', 'INTEGER');
   addColumnIfMissing(db, 'files', 'deleted_at', 'INTEGER');
   addColumnIfMissing(db, 'knowledge_chunks', 'token_count', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfMissing(db, 'knowledge_chunks', 'knowledge_base_id', 'TEXT');
   addColumnIfMissing(db, 'knowledge_chunks', 'content_hash', 'TEXT');
   addColumnIfMissing(db, 'knowledge_chunks', 'source_start', 'INTEGER');
   addColumnIfMissing(db, 'knowledge_chunks', 'source_end', 'INTEGER');
@@ -211,6 +213,59 @@ function runAdditiveMigrations(db: DatabaseSync): void {
   createPerformanceIndexes(db);
 }
 
+function configureDatabase(db: DatabaseSync): void {
+  db.exec(`
+    PRAGMA foreign_keys = ON;
+    PRAGMA busy_timeout = 5000;
+    PRAGMA journal_mode = WAL;
+  `);
+  ensureSchemaMigrationJournal(db);
+}
+
+function ensureSchemaMigrationJournal(db: DatabaseSync): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS schema_migration_runs (
+      id TEXT PRIMARY KEY,
+      version TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      error_message TEXT,
+      created_at INTEGER NOT NULL,
+      completed_at INTEGER
+    );
+  `);
+}
+
+function runSchemaMigration(db: DatabaseSync, version: string, summary: string, operation: () => void): void {
+  ensureSchemaMigrationJournal(db);
+  const timestamp = Date.now();
+  db.prepare(
+    `INSERT INTO schema_migration_runs (id, version, status, summary, error_message, created_at, completed_at)
+     VALUES (?, ?, 'running', ?, NULL, ?, NULL)
+     ON CONFLICT(version) DO UPDATE SET status = 'running', summary = excluded.summary, error_message = NULL, completed_at = NULL`,
+  ).run(`schema_${version}`, version, summary, timestamp);
+  let transactionStarted = false;
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    transactionStarted = true;
+    operation();
+    db.exec('COMMIT');
+    transactionStarted = false;
+    db.prepare("UPDATE schema_migration_runs SET status = 'completed', completed_at = ? WHERE version = ?").run(Date.now(), version);
+  } catch (error) {
+    if (transactionStarted) {
+      try {
+        db.exec('ROLLBACK');
+      } catch {
+        // Preserve the migration failure that triggered recovery.
+      }
+    }
+    db.prepare("UPDATE schema_migration_runs SET status = 'failed', error_message = ?, completed_at = ? WHERE version = ?")
+      .run(error instanceof Error ? error.message : String(error), Date.now(), version);
+    throw error;
+  }
+}
+
 function runPreSchemaMigrations(db: DatabaseSync): void {
   migrateWorkspaceColumns(db);
   migrateKnowledgeColumns(db);
@@ -225,8 +280,10 @@ function migrateWorkspaceColumns(db: DatabaseSync): void {
 
 function migrateKnowledgeColumns(db: DatabaseSync): void {
   addColumnIfMissing(db, 'files', 'workspace_id', 'TEXT');
+  addColumnIfMissing(db, 'files', 'knowledge_base_id', 'TEXT');
   addColumnIfMissing(db, 'files', 'index_status', "TEXT NOT NULL DEFAULT 'queued'");
   addColumnIfMissing(db, 'files', 'deleted_at', 'INTEGER');
+  addColumnIfMissing(db, 'knowledge_chunks', 'knowledge_base_id', 'TEXT');
   addColumnIfMissing(db, 'knowledge_chunks', 'status', "TEXT NOT NULL DEFAULT 'indexed'");
 }
 
@@ -299,5 +356,10 @@ function createPerformanceIndexes(db: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_created ON audit_logs(actor, created_at);
     CREATE INDEX IF NOT EXISTS idx_audit_logs_action_created ON audit_logs(action, created_at);
     CREATE INDEX IF NOT EXISTS idx_provider_health_created ON provider_health_records(created_at);
+    CREATE INDEX IF NOT EXISTS idx_files_deleted_updated ON files(deleted_at, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_status_created ON knowledge_chunks(status, created_at, position);
+    CREATE INDEX IF NOT EXISTS idx_knowledge_retrieval_traces_created ON knowledge_retrieval_traces(created_at);
+    CREATE INDEX IF NOT EXISTS idx_message_citations_message_score ON message_citations(message_id, score);
+    CREATE INDEX IF NOT EXISTS idx_message_citations_created ON message_citations(created_at);
   `);
 }

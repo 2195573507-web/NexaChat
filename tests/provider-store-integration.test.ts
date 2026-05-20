@@ -205,7 +205,7 @@ describe('provider invocation through NexaStore', () => {
     expect(store.getAuditLogs().map((entry) => entry.action)).toEqual(expect.arrayContaining(['model.updated', 'model.disabled', 'model.enabled', 'model.deleted']));
   });
 
-  it('keeps provider model discovery failures visible and supports native provider model-list fallback', async () => {
+  it('keeps provider model discovery failures visible without fabricating native provider success', async () => {
     const { store } = await import('../src/main/services/store');
     const provider = store.createProvider({
       name: 'Round 6 Empty Models',
@@ -229,11 +229,8 @@ describe('provider invocation through NexaStore', () => {
       apiKey: 'sk-round-06-secret',
     });
     modelListMode = 'empty';
-    await expect(store.fetchProviderModels(native.id)).resolves.toEqual([
-      { id: 'claude-3-5-sonnet-latest', name: 'claude-3-5-sonnet-latest' },
-      { id: 'claude-3-5-haiku-latest', name: 'claude-3-5-haiku-latest' },
-    ]);
-    expect(store.getProviderHealthRecords()[0]).toMatchObject({ providerId: native.id, status: 'healthy' });
+    await expect(store.fetchProviderModels(native.id)).rejects.toThrow(/model names/i);
+    expect(store.getProviderHealthRecords()[0]).toMatchObject({ providerId: native.id, status: 'error' });
   });
 
   it('routes Anthropic and Gemini chat through native adapters without leaking secrets', async () => {

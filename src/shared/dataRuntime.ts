@@ -15,7 +15,7 @@ export type DataOperationKind = (typeof DATA_OPERATION_KINDS)[number];
 export const DATA_JOB_STATUSES = ['ready', 'completed', 'failed', 'blocked'] as const;
 export type DataJobStatus = (typeof DATA_JOB_STATUSES)[number];
 
-export const DATA_BACKUP_PROFILES = ['metadata-redacted', 'encrypted-full'] as const;
+export const DATA_BACKUP_PROFILES = ['metadata-redacted', 'encrypted-redacted', 'encrypted-full'] as const;
 export type DataBackupProfile = (typeof DATA_BACKUP_PROFILES)[number];
 
 export const DATA_CONFLICT_TYPES = ['provider-name', 'model-name', 'workspace-default', 'secret-stripped'] as const;
@@ -87,6 +87,9 @@ export interface DataBackupPackage {
   profile: DataBackupProfile;
   encrypted: boolean;
   redacted: boolean;
+  fullDatabase: false;
+  rawDatabaseIncluded: false;
+  secrets: 'stripped';
   manifestHash: string;
   payload: string;
   salt?: string;
@@ -187,6 +190,9 @@ export function createRedactedBackupPackage(payload: unknown, profile: DataBacku
     profile,
     encrypted: false,
     redacted: true,
+    fullDatabase: false,
+    rawDatabaseIncluded: false,
+    secrets: 'stripped',
     manifestHash: stableHash(redactedPayload),
     payload: redactedPayload,
   };

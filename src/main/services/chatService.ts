@@ -302,8 +302,23 @@ export function ChatService<TBase extends ServiceConstructor<ServiceContext>>(Ba
     const requestId = createId('gwreq');
     const trimmedContent = input.content.trim();
     const inputTokens = estimateTokens(trimmedContent);
+    const requestType = input.metadata?.gatewayEndpoint === '/v1/responses'
+      ? 'gateway_responses'
+      : input.metadata?.gatewayEndpoint === '/v1/chat/completions'
+        ? 'gateway_chat'
+        : 'chat';
+    const requestEndpoint = input.metadata?.gatewayEndpoint === '/v1/responses' ? '/v1/responses' : '/v1/chat/completions';
     const emit = options.onEvent ?? (() => {});
     const modelForContext = this.requireModel(routeDecision.modelId);
+    emit({
+      type: 'chat.stream.retrieving',
+      phase: 'retrieving',
+      timestamp,
+      clientRequestId: input.clientRequestId,
+      conversationId: conversation.id,
+      message: t('chat.generation.retrieving'),
+      progress: 0.05,
+    });
     const retrieval = await this.retrieveKnowledge(trimmedContent, { persistCitations: false });
     const context = this.buildConversationContext(
       conversation.id,
@@ -350,7 +365,7 @@ export function ChatService<TBase extends ServiceConstructor<ServiceContext>>(Ba
     this.db
       .prepare(
         `INSERT INTO request_logs (id, conversation_id, message_id, provider_id, model_id, model_name_snapshot, route_id, gateway_request_id, status, endpoint, request_summary_json, response_summary_json, input_tokens, output_tokens, latency_ms, finish_reason, error_code, error_message, started_at, completed_at, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, NULL, ?, 'streaming', '/v1/chat/completions', ?, NULL, ?, NULL, NULL, NULL, NULL, NULL, ?, NULL, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, NULL, ?, 'streaming', ?, ?, NULL, ?, NULL, NULL, NULL, NULL, NULL, ?, NULL, ?)`,
       )
       .run(
         requestLogId,
@@ -360,6 +375,7 @@ export function ChatService<TBase extends ServiceConstructor<ServiceContext>>(Ba
         routeDecision.modelId,
         routeDecision.modelNameSnapshot,
         requestId,
+        requestEndpoint,
         JSON.stringify({
           ...this.buildChatRequestSummary(trimmedContent),
           contextStrategy,
@@ -491,6 +507,11 @@ export function ChatService<TBase extends ServiceConstructor<ServiceContext>>(Ba
           action: input.metadata?.action ?? 'send',
         }), requestLogId);
       const result = await adapter.invokeChat(providerInput);
+      const activeRequest = this.requireRequestLog(requestLogId);
+      const activeAssistant = this.requireMessage(assistantMessageId);
+      if (activeRequest.status === 'cancelled' || activeAssistant.status === 'cancelled') {
+        throw new ProviderRuntimeError(t('chat.cancelled.message'), PROVIDER_RUNTIME_ERROR_CODES.cancelled);
+      }
       const assistantContent = result.content;
       const outputTokens = result.outputTokens ?? estimateTokens(assistantContent);
       const metadata = {
@@ -557,7 +578,7 @@ export function ChatService<TBase extends ServiceConstructor<ServiceContext>>(Ba
         providerId: routeDecision.providerId,
         modelId: routeDecision.modelId,
         requestLogId,
-        requestType: input.metadata?.gatewayEndpoint === '/v1/responses' ? 'gateway_responses' : input.metadata?.gatewayEndpoint === '/v1/chat/completions' ? 'gateway_chat' : 'chat',
+        requestType,
         inputTokens: result.inputTokens ?? inputTokens,
         outputTokens,
         totalTokens: result.totalTokens ?? (result.inputTokens ?? inputTokens) + outputTokens,
@@ -602,16 +623,20 @@ export function ChatService<TBase extends ServiceConstructor<ServiceContext>>(Ba
     } catch (error) {
       const normalized = this.normalizeProviderError(error);
       const failedStatus = normalized.code === PROVIDER_RUNTIME_ERROR_CODES.cancelled ? 'cancelled' : 'failed';
+      const latencyMs = Math.max(1, now() - timestamp);
+      const currentRequest = this.requireRequestLog(requestLogId);
+      const currentAssistant = this.requireMessage(assistantMessageId);
+      const alreadyCancelled = currentRequest.status === 'cancelled' || currentAssistant.status === 'cancelled';
       this.db
         .prepare(
           `UPDATE messages
            SET content = ?, input_tokens = ?, latency_ms = ?, error_message = ?, status = ?, error_code = ?, metadata_json = ?, updated_at = ?
-           WHERE id = ?`,
+           WHERE id = ? AND status IN ('draft', 'streaming')`,
         )
         .run(
           normalized.code === PROVIDER_RUNTIME_ERROR_CODES.cancelled ? t('chat.cancelled.message') : t('chat.assistant.upstreamFailed'),
           inputTokens,
-          Math.max(1, now() - timestamp),
+          latencyMs,
           normalized.message,
           failedStatus,
           normalized.code,
@@ -629,24 +654,26 @@ export function ChatService<TBase extends ServiceConstructor<ServiceContext>>(Ba
           assistantMessageId,
         );
       this.db.prepare('DELETE FROM message_chunks WHERE message_id = ? AND request_log_id = ?').run(assistantMessageId, requestLogId);
-      this.insertMessageChunks({
-        messageId: assistantMessageId,
-        conversationId: conversation.id,
-        requestLogId,
-        chunks: [normalized.message],
-        status: 'failed',
-        chunkType: 'error',
-      });
+      if (!alreadyCancelled) {
+        this.insertMessageChunks({
+          messageId: assistantMessageId,
+          conversationId: conversation.id,
+          requestLogId,
+          chunks: [normalized.message],
+          status: failedStatus,
+          chunkType: 'error',
+        });
+      }
       this.db
         .prepare(
           `UPDATE request_logs
            SET status = ?, response_summary_json = ?, latency_ms = ?, error_code = ?, error_message = ?, completed_at = ?, message_id = ?
-           WHERE id = ?`,
+           WHERE id = ? AND status IN ('started', 'streaming')`,
         )
         .run(
           failedStatus,
           JSON.stringify({ errorCode: normalized.code, retryable: normalized.retryable }),
-          Math.max(1, now() - timestamp),
+          latencyMs,
           normalized.code,
           normalized.message,
           now(),
@@ -662,7 +689,22 @@ export function ChatService<TBase extends ServiceConstructor<ServiceContext>>(Ba
         modelId: routeDecision.modelId,
         errorCode: normalized.code,
       });
-      this.recordProviderHealth(routeDecision.providerId, routeDecision.modelId, 'error', Math.max(1, now() - timestamp), 'chat', normalized.code, normalized.message);
+      this.recordUsage({
+        workspaceId: conversation.workspaceId,
+        providerId: routeDecision.providerId,
+        modelId: routeDecision.modelId,
+        requestLogId,
+        requestType,
+        inputTokens,
+        outputTokens: 0,
+        totalTokens: inputTokens,
+        tokenUsageEstimated: true,
+        latencyMs,
+        status: failedStatus,
+        errorCode: normalized.code,
+        costEstimate: 0,
+      });
+      this.recordProviderHealth(routeDecision.providerId, routeDecision.modelId, 'error', latencyMs, 'chat', normalized.code, normalized.message);
       emit({
         type: normalized.code === PROVIDER_RUNTIME_ERROR_CODES.cancelled ? 'chat.stream.canceled' : 'chat.stream.failed',
         phase: normalized.code === PROVIDER_RUNTIME_ERROR_CODES.cancelled ? 'canceled' : 'failed',

@@ -1,6 +1,6 @@
 import { createId, now } from '../utils/ids.js';
 import { translate } from '../../shared/i18n.js';
-import { PROVIDER_RUNTIME_ERROR_CODES, getProviderAdapterName } from '../../shared/providerRuntime.js';
+import { PROVIDER_RUNTIME_ERROR_CODES, type ProviderRuntimeErrorCode } from '../../shared/providerRuntime.js';
 import { SECURITY_ACTION_PERMISSIONS } from '../../shared/securityRuntime.js';
 import type {
   Model,
@@ -51,7 +51,8 @@ export function ModelService<TBase extends ServiceConstructor<ServiceContext>>(B
 
     const start = now();
     try {
-      const result = await adapter.fetchModels(provider, this.getProviderSecret(provider));
+      const apiKey = this.getProviderSecret(provider);
+      const result = await adapter.fetchModels(provider, apiKey);
       this.db
         .prepare('UPDATE providers SET health_status = ?, last_checked_at = ?, updated_at = ? WHERE id = ?')
         .run('healthy', start, now(), providerId);
@@ -63,7 +64,7 @@ export function ModelService<TBase extends ServiceConstructor<ServiceContext>>(B
       }, SECURITY_ACTION_PERMISSIONS.providerTest);
       return result.modelNames.map((name) => ({ id: name, name }));
     } catch (error) {
-      const normalized = this.normalizeProviderError(error);
+      const normalized = this.normalizeProviderError(error, [this.getProviderSecret(provider)]);
       this.db
         .prepare('UPDATE providers SET health_status = ?, last_checked_at = ?, updated_at = ? WHERE id = ?')
         .run('error', start, now(), providerId);
@@ -72,7 +73,9 @@ export function ModelService<TBase extends ServiceConstructor<ServiceContext>>(B
         errorCode: normalized.code,
         errorMessage: normalized.message,
       }, SECURITY_ACTION_PERMISSIONS.providerTest);
-      throw error;
+      throw new ProviderRuntimeError(normalized.message, normalized.code as ProviderRuntimeErrorCode, {
+        retryable: normalized.retryable,
+      });
     }
   }
 

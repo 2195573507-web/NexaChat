@@ -45,7 +45,7 @@ export function TabPanel({
     <div
       id={`panel-${moduleId}-${tab.id}`}
       className={['page-stack', className].filter(Boolean).join(' ')}
-      role="tabpanel"
+      role="region"
       aria-label={tab.label}
       data-module={moduleId}
       data-tab={tab.id}

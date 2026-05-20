@@ -45,7 +45,7 @@ try {
   await window.locator('.app-frame').waitFor({ timeout: 20_000 });
   await window.locator('.brand-mark').waitFor({ timeout: 5_000 });
   await window.locator('.rail-item').first().waitFor({ timeout: 5_000 });
-  await window.locator('main [role="tabpanel"][data-module="chat"][data-tab="conversations"]').waitFor({ timeout: 5_000 });
+  await window.locator('main [role="region"][data-module="chat"][data-tab="conversations"]').waitFor({ timeout: 5_000 });
   if (app.windows().length !== 1) {
     throw new Error(`Expected one packaged app window, got ${app.windows().length}.`);
   }

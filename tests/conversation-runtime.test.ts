@@ -66,6 +66,25 @@ describe('Round 7 conversation runtime', () => {
     }
   });
 
+  it('keeps chat working when no knowledge files are indexed', async () => {
+    const { store } = await import('../src/main/services/store');
+    const provider = store.createProvider({ name: 'Round 7 No Knowledge Provider', type: 'openai-compatible', baseUrl, apiKey: 'sk-round-07' });
+    const model = store.createModel({ providerId: provider.id, name: 'round-07-chat', supportsStreaming: false });
+    for (const file of store.getKnowledgeFiles()) {
+      store.deleteKnowledgeFile({ fileId: file.id });
+    }
+
+    const response = await store.sendMessage({
+      content: 'chat should work with no indexed knowledge',
+      modelId: model.id,
+    });
+
+    expect(response.assistantMessage.status).toBe('completed');
+    expect(response.assistantMessage.content).toContain('round 7 upstream');
+    expect(store.getKnowledgeCitations(response.assistantMessage.id)).toHaveLength(0);
+    expect(response.requestLog.requestSummaryJson).toContain('"knowledgeCitationCount":0');
+  });
+
   it('retries, regenerates, exports, compares models, and cancels failed requests through store methods', async () => {
     const { store } = await import('../src/main/services/store');
     const provider = store.createProvider({ name: 'Round 7 Provider', type: 'openai-compatible', baseUrl, apiKey: 'sk-round-07' });
@@ -84,6 +103,7 @@ describe('Round 7 conversation runtime', () => {
     const exported = store.exportConversation({ conversationId: conversation.id, format: 'markdown', redacted: true });
     responseMode = 'fail';
     const failed = await store.sendMessage({ conversationId: conversation.id, content: 'fail then cancel', modelId: primary.id });
+    const failedUsage = store.getUsageRecords().find((record) => record.requestLogId === failed.requestLog.id);
     const cancelled = store.cancelMessage({ requestLogId: failed.requestLog.id });
 
     expect(retry.assistantMessage.content).toContain('round 7 upstream');
@@ -92,6 +112,14 @@ describe('Round 7 conversation runtime', () => {
     expect(new Set(compared.responses.map((response) => response.requestLog.id)).size).toBe(2);
     expect(exported.content).toContain('# Round 7 operations');
     expect(store.getSnapshot().conversationExports).toHaveLength(1);
+    expect(failedUsage).toMatchObject({
+      requestType: 'chat',
+      status: 'failed',
+      errorCode: 'provider_upstream_error',
+      inputTokens: expect.any(Number),
+      outputTokens: 0,
+      tokenUsageEstimated: true,
+    });
     expect(cancelled.requestLog.status).toBe('cancelled');
   });
 

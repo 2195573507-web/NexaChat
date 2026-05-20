@@ -44,7 +44,7 @@ import {
   mapUsageRecord,
   mapWorkspace,
 } from '../repositories/mappers.js';
-import { redactHeaders, redactSensitive } from '../security/redaction.js';
+import { redactHeaders, redactKnownSecrets, redactSensitive } from '../security/redaction.js';
 import { decodeSecretValue, encodeSecretValue } from '../security/secretStorage.js';
 import { createId, estimateTokens, now, previewSecret } from '../utils/ids.js';
 import { diagnoses } from '../../shared/errors.js';
@@ -53,6 +53,7 @@ import {
   PROVIDER_RUNTIME_ERROR_CODES,
   PROVIDER_RUNTIME_POLICY,
   getProviderAdapterName,
+  type ProviderRuntimeErrorCode,
 } from '../../shared/providerRuntime.js';
 import { normalizeThemeMode } from '../../shared/theme.js';
 import {
@@ -63,6 +64,7 @@ import {
 } from '../../shared/conversationRuntime.js';
 import {
   KNOWLEDGE_RUNTIME_POLICY,
+  applyKnowledgeRerank,
   chunkKnowledgeText,
   lexicalEmbedding,
   normalizeKnowledgeImport,
@@ -124,6 +126,7 @@ import {
   type ObservabilityPrivacySettings,
   type ObservabilityQueryInput,
 } from '../../shared/observabilityRuntime.js';
+import type { ChatStreamEventPayload } from '../../shared/ipc.js';
 import type {
   AgentDefinition,
   AppSnapshot,
@@ -639,6 +642,13 @@ export class ServiceContext {
     const topK = Math.min(Math.max(1, Math.floor(options.topK ?? KNOWLEDGE_RUNTIME_POLICY.defaultTopK)), KNOWLEDGE_RUNTIME_POLICY.maxTopK);
     const timestamp = now();
     const startedAt = Date.now();
+    let candidateQueryMs = 0;
+    let queryEmbeddingAttemptMs = 0;
+    let embeddingDeserializeMs = 0;
+    let scoringMs = 0;
+    let tracePersistMs = 0;
+    let citationBuildMs = 0;
+    const candidateStartedAt = Date.now();
     const candidates = this.db
       .prepare(
         `SELECT
@@ -674,35 +684,49 @@ export class ServiceContext {
         embedding_strategy: KnowledgeRetrievalInput['strategy'] | null;
         vector_json: string | null;
       }>;
+    candidateQueryMs = Math.max(0, Date.now() - candidateStartedAt);
     let queryEmbedding: EmbeddingExecution | null = null;
     let strategy = requestedStrategy;
     let fallbackReason: string | null = null;
     let retrievalError: { code: string; message: string } | null = null;
     if (requestedStrategy === 'vector' && candidates.some((chunk) => chunk.embedding_strategy === 'vector')) {
+      const queryEmbeddingStartedAt = Date.now();
       try {
         queryEmbedding = await this.generateEmbeddingVectors([query], { allowLexicalFallback: false, requestType: 'retrieval_query' });
       } catch (error) {
-        const normalized = this.normalizeProviderError(error);
+      const normalized = this.normalizeProviderError(error);
         retrievalError = { code: normalized.code, message: normalized.message };
         strategy = 'lexical';
         fallbackReason = normalized.code;
+      } finally {
+        queryEmbeddingAttemptMs = Math.max(0, Date.now() - queryEmbeddingStartedAt);
       }
     } else if (requestedStrategy === 'vector') {
       strategy = 'lexical';
       fallbackReason = 'no_vector_embeddings';
     }
-    const scoredInput: KnowledgeScoredChunkInput[] = candidates.map((chunk) => ({
-      id: chunk.id,
-      fileId: chunk.file_id,
-      fileName: chunk.file_name,
-      content: chunk.content,
-      citation: chunk.citation,
-      position: Number(chunk.position),
-      strategy: chunk.embedding_strategy === 'vector' && strategy === 'vector' ? 'vector' : 'lexical',
-      vector: chunk.vector_json ? JSON.parse(chunk.vector_json) as number[] : lexicalEmbedding(chunk.content),
-      vectorProviderId: chunk.provider_id,
-      vectorModelId: chunk.model_id,
-    }));
+    const embeddingDeserializeStartedAt = Date.now();
+    const scoredInput: KnowledgeScoredChunkInput[] = [];
+    const seenChunkIds = new Set<string>();
+    for (const chunk of candidates) {
+      if (seenChunkIds.has(chunk.id)) {
+        continue;
+      }
+      seenChunkIds.add(chunk.id);
+      scoredInput.push({
+        id: chunk.id,
+        fileId: chunk.file_id,
+        fileName: chunk.file_name,
+        content: chunk.content,
+        citation: chunk.citation,
+        position: Number(chunk.position),
+        strategy: chunk.embedding_strategy === 'vector' && strategy === 'vector' ? 'vector' : 'lexical',
+        vector: chunk.vector_json ? JSON.parse(chunk.vector_json) as number[] : lexicalEmbedding(chunk.content),
+        vectorProviderId: chunk.provider_id,
+        vectorModelId: chunk.model_id,
+      });
+    }
+    embeddingDeserializeMs = Math.max(0, Date.now() - embeddingDeserializeStartedAt);
     const vectorCandidates = scoredInput.filter((chunk) => chunk.strategy === 'vector');
     const lexicalCandidates = scoredInput.filter((chunk) => chunk.strategy === 'lexical');
     const candidateInput = strategy === 'vector' && vectorCandidates.length > 0 ? vectorCandidates : scoredInput.map((chunk) => ({ ...chunk, strategy: 'lexical' as const }));
@@ -710,15 +734,32 @@ export class ServiceContext {
       strategy = 'lexical';
       fallbackReason ??= 'no_vector_candidates';
     }
-    const scored = scoreKnowledgeChunks(query, candidateInput, topK, strategy === 'vector' ? queryEmbedding?.vectors[0] : null);
+    const scoringStartedAt = Date.now();
+    const initiallyScored = scoreKnowledgeChunks(query, candidateInput, topK, strategy === 'vector' ? queryEmbedding?.vectors[0] : null);
+    scoringMs = Math.max(0, Date.now() - scoringStartedAt);
+    const rerankResult = await applyKnowledgeRerank(initiallyScored, { enabled: false });
+    const scored = rerankResult.chunks;
     const retrievalId = createId('retrieval');
     const scores = scored.map((chunk) => chunk.score);
     const scoreSummary = {
       max: scores.length > 0 ? Math.max(...scores) : 0,
       min: scores.length > 0 ? Math.min(...scores) : 0,
       average: scores.length > 0 ? Number((scores.reduce((sum, score) => sum + score, 0) / scores.length).toFixed(6)) : 0,
-      rerank: 'disabled',
+      rerank: rerankResult.status,
+      rerankErrorCode: rerankResult.errorCode,
     };
+    const timings = {
+      totalMs: Math.max(1, Date.now() - startedAt),
+      candidateQueryMs,
+      queryEmbeddingAttemptMs,
+      queryEmbeddingMs: queryEmbedding?.latencyMs ?? 0,
+      embeddingDeserializeMs,
+      scoringMs,
+      tracePersistMs,
+      citationBuildMs,
+      rerankMs: rerankResult.latencyMs,
+    };
+    const tracePersistStartedAt = Date.now();
     this.db
       .prepare(
         `INSERT INTO knowledge_retrieval_traces (id, query, strategy, top_k, provider_id, model_id, model_name_snapshot, knowledge_scope_json, candidate_count, vector_candidate_count, lexical_candidate_count, final_citation_count, score_summary_json, timings_json, error_code, error_message, selected_chunk_ids_json, result_count, fallback_reason, created_at)
@@ -733,16 +774,12 @@ export class ServiceContext {
         queryEmbedding?.modelId ?? null,
         queryEmbedding?.modelNameSnapshot ?? null,
         JSON.stringify({ workspaceId: DEFAULT_WORKSPACE_ID, fileIds: Array.from(new Set(candidates.map((chunk) => chunk.file_id))) }),
-        candidates.length,
+        scoredInput.length,
         vectorCandidates.length,
         lexicalCandidates.length,
         scored.length,
         JSON.stringify(scoreSummary),
-        JSON.stringify({
-          totalMs: Math.max(1, Date.now() - startedAt),
-          queryEmbeddingMs: queryEmbedding?.latencyMs ?? 0,
-          rerankMs: 0,
-        }),
+        JSON.stringify(timings),
         retrievalError?.code ?? null,
         retrievalError?.message ?? null,
         JSON.stringify(scored.map((chunk) => chunk.id)),
@@ -750,6 +787,13 @@ export class ServiceContext {
         fallbackReason,
         timestamp,
       );
+    tracePersistMs = Math.max(0, Date.now() - tracePersistStartedAt);
+    timings.tracePersistMs = tracePersistMs;
+    timings.totalMs = Math.max(1, Date.now() - startedAt);
+    this.db
+      .prepare('UPDATE knowledge_retrieval_traces SET timings_json = ? WHERE id = ?')
+      .run(JSON.stringify(timings), retrievalId);
+    const citationBuildStartedAt = Date.now();
     const citations = scored.map((chunk) => this.buildKnowledgeCitation({
       retrievalId,
       chunkId: chunk.id,
@@ -763,6 +807,12 @@ export class ServiceContext {
       timestamp,
       persist: options.persistCitations ?? false,
     }));
+    citationBuildMs = Math.max(0, Date.now() - citationBuildStartedAt);
+    timings.citationBuildMs = citationBuildMs;
+    timings.totalMs = Math.max(1, Date.now() - startedAt);
+    this.db
+      .prepare('UPDATE knowledge_retrieval_traces SET timings_json = ? WHERE id = ?')
+      .run(JSON.stringify(timings), retrievalId);
     return {
       trace: this.requireKnowledgeRetrievalTrace(retrievalId),
       citations,
@@ -995,6 +1045,7 @@ export class ServiceContext {
     },
   ): Promise<EmbeddingExecution> {
     const normalized = values.map((value) => value.trim()).filter(Boolean);
+    const estimatedInputTokens = estimateTokens(normalized.join('\n'));
     if (normalized.length === 0) {
       return {
         strategy: 'lexical',
@@ -1048,13 +1099,16 @@ export class ServiceContext {
           inputHash: createHash('sha256').update(normalized.join('\n')).digest('hex').slice(0, 16),
           requestType: options.requestType ?? 'embeddings',
         }),
-        estimateTokens(normalized.join('\n')),
+        estimatedInputTokens,
         startedAt,
         startedAt,
       );
 
     try {
       const result = await adapter.invokeEmbeddings({ provider, model, apiKey, input: normalized });
+      if (result.embeddings.length !== normalized.length || result.embeddings.some((vector) => !Array.isArray(vector) || vector.length === 0)) {
+        throw new ProviderRuntimeError('Embedding provider returned an invalid vector count.', PROVIDER_RUNTIME_ERROR_CODES.invalidResponse);
+      }
       const inputTokens = result.inputTokens ?? estimateTokens(normalized.join('\n'));
       const totalTokens = result.totalTokens ?? inputTokens;
       this.db
@@ -1099,7 +1153,7 @@ export class ServiceContext {
         fallbackReason: null,
       };
     } catch (error) {
-      const normalizedError = this.normalizeProviderError(error);
+      const normalizedError = this.normalizeProviderError(error, [apiKey]);
       const latencyMs = Math.max(1, now() - startedAt);
       this.db
         .prepare(
@@ -1121,9 +1175,9 @@ export class ServiceContext {
         modelId: model.id,
         requestLogId,
         requestType: 'embeddings',
-        inputTokens: estimateTokens(normalized.join('\n')),
+        inputTokens: estimatedInputTokens,
         outputTokens: 0,
-        totalTokens: estimateTokens(normalized.join('\n')),
+        totalTokens: estimatedInputTokens,
         tokenUsageEstimated: true,
         latencyMs,
         status: 'failed',
@@ -1145,7 +1199,9 @@ export class ServiceContext {
           fallbackReason: normalizedError.code,
         };
       }
-      throw error;
+      throw new ProviderRuntimeError(normalizedError.message, normalizedError.code as ProviderRuntimeErrorCode, {
+        retryable: normalizedError.retryable,
+      });
     }
   }
 
@@ -1224,7 +1280,10 @@ export class ServiceContext {
     chunks.forEach((chunk, index) => {
       const chunkId = createId('kchunk');
       const embeddingId = createId('kembed');
-      const vector = embeddings.vectors[index] ?? lexicalEmbedding(chunk.content);
+      const vector = embeddings.vectors[index];
+      if (!Array.isArray(vector) || vector.length === 0) {
+        throw new Error('Embedding vector missing for knowledge chunk.');
+      }
       const citation = `${fileName}#chunk-${index + 1}`;
       this.db
         .prepare(
@@ -1597,14 +1656,14 @@ export class ServiceContext {
     return row ? decodeSecretValue(row.encrypted_value) : null;
   }
 
-  protected normalizeProviderError(error: unknown): { code: string; message: string; retryable: boolean } {
+  protected normalizeProviderError(error: unknown, secrets: Array<string | null | undefined> = []): { code: string; message: string; retryable: boolean } {
     if (error instanceof ProviderRuntimeError) {
-      return { code: error.code, message: redactSensitive(error.message), retryable: error.retryable };
+      return { code: error.code, message: redactKnownSecrets(error.message, secrets), retryable: error.retryable };
     }
     if (error instanceof Error) {
-      return { code: PROVIDER_RUNTIME_ERROR_CODES.upstreamError, message: redactSensitive(error.message), retryable: false };
+      return { code: PROVIDER_RUNTIME_ERROR_CODES.upstreamError, message: redactKnownSecrets(error.message, secrets), retryable: false };
     }
-    return { code: PROVIDER_RUNTIME_ERROR_CODES.upstreamError, message: redactSensitive(String(error)), retryable: false };
+    return { code: PROVIDER_RUNTIME_ERROR_CODES.upstreamError, message: redactKnownSecrets(String(error), secrets), retryable: false };
   }
 
   protected audit(
@@ -2110,15 +2169,18 @@ export class ServiceContext {
     const salt = randomBytes(16);
     const iv = randomBytes(12);
     const key = pbkdf2Sync(normalized, salt, 120000, 32, 'sha256');
-    const plaintext = JSON.stringify(createRedactedBackupPackage(payload, 'encrypted-full'));
+    const plaintext = JSON.stringify(createRedactedBackupPackage(payload, 'encrypted-redacted'));
     const cipher = createCipheriv('aes-256-gcm', key, iv);
     const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
     const authTag = cipher.getAuthTag();
     return {
       version: DATA_MANIFEST_VERSION,
-      profile: 'encrypted-full',
+      profile: 'encrypted-redacted',
       encrypted: true,
       redacted: true,
+      fullDatabase: false,
+      rawDatabaseIncluded: false,
+      secrets: 'stripped',
       manifestHash: createHash('sha256').update(plaintext).digest('hex'),
       payload: encrypted.toString('base64'),
       salt: salt.toString('base64'),
@@ -2249,12 +2311,13 @@ export interface ServiceContext {
   cancelMessage(input: CancelMessageInput): ChatResponse;
   compareModels(input: CompareModelsInput): Promise<CompareModelsResponse>;
   exportConversation(input: ExportConversationInput): ConversationExport;
-  sendMessage(input: SendMessageInput, options?: { onEvent?: (payload: unknown) => void }): Promise<ChatResponse>;
+  sendMessage(input: SendMessageInput, options?: { onEvent?: (payload: Omit<ChatStreamEventPayload, 'requestId'>) => void }): Promise<ChatResponse>;
   getGatewayKeys(): GatewayApiKey[];
   getGatewayLogs(): GatewayLog[];
   listGatewayLogs(input?: GatewayLogPageInput): PageResult<GatewayLog>;
   getGatewayStatus(): GatewayStatus;
   setGatewayRuntime(enabled: boolean, recentError?: string | null, listenerState?: GatewayStatus['listenerState']): GatewayStatus;
+  isGatewayPersistedEnabled(): boolean;
   createGatewayKey(input: GatewayKeyCreateInput | string): GatewayKeyCreated;
   updateGatewayKey(input: GatewayKeyUpdateInput): GatewayApiKey;
   rotateGatewayKey(input: GatewayKeyRotateInput): GatewayKeyCreated;

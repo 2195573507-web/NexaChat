@@ -3,8 +3,10 @@ import { join } from 'node:path';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { translate } from '../src/shared/i18n';
+import { applyKnowledgeRerank, type KnowledgeScoredChunk } from '../src/shared/knowledgeRuntime';
 
 let dataDir = '';
+let upstreamMode: 'ok' | 'embedding-error' = 'ok';
 
 vi.mock('electron', () => ({
   app: {
@@ -19,6 +21,7 @@ vi.mock('electron', () => ({
 
 beforeEach(() => {
   vi.resetModules();
+  upstreamMode = 'ok';
   dataDir = join(process.cwd(), 'test-results', `round-09-knowledge-${Date.now()}-${Math.random().toString(16).slice(2)}`);
   mkdirSync(dataDir, { recursive: true });
   process.env.NEXACHAT_DATA_DIR = dataDir;
@@ -32,6 +35,39 @@ afterEach(async () => {
 });
 
 describe('Round 9 knowledge runtime', () => {
+  it('keeps rerank disabled by default and preserves scored chunks on rerank errors', async () => {
+    const chunks: KnowledgeScoredChunk[] = [{
+      id: 'chunk_1',
+      fileId: 'file_1',
+      fileName: 'note.md',
+      content: 'rerank contract chunk',
+      citation: 'note.md#chunk-1',
+      position: 0,
+      strategy: 'lexical',
+      vector: [1, 0],
+      score: 0.7,
+      vectorScore: 0.6,
+      lexicalScore: 1,
+    }];
+
+    await expect(applyKnowledgeRerank(chunks)).resolves.toMatchObject({
+      status: 'disabled',
+      chunks,
+      errorCode: null,
+    });
+    await expect(applyKnowledgeRerank(chunks, {
+      enabled: true,
+      reranker: async () => {
+        throw new Error('upstream rerank unavailable');
+      },
+    })).resolves.toMatchObject({
+      status: 'error',
+      chunks,
+      errorCode: 'rerank_failed',
+      errorMessage: 'upstream rerank unavailable',
+    });
+  });
+
   it('rejects unsupported binary and Office/OCR-style imports without creating chunks', async () => {
     const { store } = await import('../src/main/services/store');
     const unsupportedParserMessage = translate('zh-CN', 'knowledge.errors.unsupportedParser');
@@ -88,7 +124,12 @@ describe('Round 9 knowledge runtime', () => {
     expect(store.getKnowledgeChunks(file.id).every((chunk) => chunk.status === 'indexed')).toBe(true);
 
     const deleted = store.deleteKnowledgeFile({ fileId: file.id });
+    const embeddingRows = store.getRawDatabaseForTesting()
+      .prepare("SELECT status FROM knowledge_embeddings WHERE chunk_id IN (SELECT id FROM knowledge_chunks WHERE file_id = ?)")
+      .all(file.id) as Array<{ status: string }>;
     expect(deleted.indexStatus).toBe('deleted');
+    expect(embeddingRows.length).toBeGreaterThan(0);
+    expect(embeddingRows.every((row) => row.status === 'deleted')).toBe(true);
     expect(store.getKnowledgeFiles().some((candidate) => candidate.id === file.id)).toBe(false);
     expect((await store.previewKnowledgeRetrieval({ query: 'structured citations for chat context' })).citations.some((citation) => citation.fileId === file.id)).toBe(false);
   });
@@ -116,11 +157,39 @@ describe('Round 9 knowledge runtime', () => {
 
       expect(file.embeddingStatus).toBe('embedded');
       const vector = await store.previewKnowledgeRetrieval({ query: 'provider backed vector citations', strategy: 'vector' });
+      const vectorTimings = JSON.parse(vector.trace.timingsJson ?? '{}') as Record<string, number>;
+      const vectorScoreSummary = JSON.parse(vector.trace.scoreSummaryJson ?? '{}') as Record<string, unknown>;
       expect(vector.trace.strategy).toBe('vector');
       expect(vector.trace.providerId).toBe(provider.id);
       expect(vector.trace.modelId).toBe(model.id);
+      expect(vector.trace.candidateCount).toBeGreaterThanOrEqual(1);
+      expect(vector.trace.vectorCandidateCount).toBeGreaterThanOrEqual(1);
+      expect(vector.trace.finalCitationCount).toBe(vector.citations.length);
+      expect(vector.trace.fallbackReason).toBeNull();
+      expect(vectorTimings).toEqual(expect.objectContaining({
+        totalMs: expect.any(Number),
+        candidateQueryMs: expect.any(Number),
+        queryEmbeddingAttemptMs: expect.any(Number),
+        queryEmbeddingMs: expect.any(Number),
+        scoringMs: expect.any(Number),
+        tracePersistMs: expect.any(Number),
+        citationBuildMs: expect.any(Number),
+        rerankMs: 0,
+      }));
+      expect(vectorScoreSummary.rerank).toBe('disabled');
       expect(vector.citations[0]?.strategy).toBe('vector');
       expect(store.getUsageRecords().some((record) => record.requestType === 'embeddings' && record.status === 'completed')).toBe(true);
+
+      upstreamMode = 'embedding-error';
+      const fallback = await store.previewKnowledgeRetrieval({ query: 'provider backed vector citations', strategy: 'vector' });
+      const fallbackTimings = JSON.parse(fallback.trace.timingsJson ?? '{}') as Record<string, number>;
+      expect(fallback.trace.strategy).toBe('lexical');
+      expect(fallback.trace.errorCode).toBe('provider_upstream_error');
+      expect(fallback.trace.errorMessage).not.toContain('sk-round-09-embedding');
+      expect(fallback.trace.fallbackReason).toBe('provider_upstream_error');
+      expect(fallback.trace.lexicalCandidateCount).toBeGreaterThanOrEqual(1);
+      expect(fallbackTimings.queryEmbeddingAttemptMs).toEqual(expect.any(Number));
+      expect(fallback.citations.every((citation) => citation.strategy === 'lexical')).toBe(true);
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
     }
@@ -156,6 +225,13 @@ describe('Round 9 knowledge runtime', () => {
 
       const citations = store.getKnowledgeCitations(response.assistantMessage.id);
       expect(citations.length).toBeGreaterThanOrEqual(1);
+      expect(citations[0]).toMatchObject({
+        messageId: response.assistantMessage.id,
+        requestLogId: response.requestLog.id,
+        fileName: 'rag-note.md',
+        citation: expect.stringContaining('rag-note.md#chunk-'),
+        retrievalId: expect.any(String),
+      });
       expect(response.assistantMessage.metadataJson).toContain('retrievalId');
       expect(response.requestLog.requestSummaryJson).toContain('knowledgeCitationCount');
     } finally {
@@ -180,6 +256,10 @@ function handleRequest(request: IncomingMessage, response: ServerResponse): void
     return;
   }
   if (request.url === '/v1/embeddings') {
+    if (upstreamMode === 'embedding-error') {
+      writeJson(response, 500, { error: { message: 'embedding failed with sk-round-09-embedding' } });
+      return;
+    }
     writeJson(response, 200, {
       object: 'list',
       data: [{ object: 'embedding', index: 0, embedding: [0.9, 0.1, 0.1] }],
