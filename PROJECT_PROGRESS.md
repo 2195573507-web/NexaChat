@@ -114,3 +114,8 @@
 - 已完成最终验证矩阵：`git diff --check`、`npm.cmd run typecheck`、`npm.cmd run scan:quality`、`npm.cmd run test`、`npm.cmd run build`、`npm.cmd run test:ui-smoke`、`npm.cmd run test:electron-smoke`。
 - 已推送实现闭环到 `origin/main`，远端 `main` 确认为 `920e821127331778a1969159fb2de84a112f6053`；最终文档审计修正作为独立收尾提交记录。
 - 后续变更必须继续保持 chat-first 7 模块、`/ -> /chat/conversations`、本地优先、能力标签诚实和 preload IPC 隔离。
+
+## 2026-05-20 深度项目风险审计
+
+- 审计报告：`docs/audits/deep-project-risk-audit-2026-05-20.md`；实际审计约 60 分钟，用户将并行 Agent 限制为最多 2 个；未修改源码、测试、配置、依赖、构建或发布产物。
+- 验证：`npm.cmd run typecheck` 通过；`npm.cmd run test` 通过；未运行 build/package/release，因为本轮只允许审计文档输出。HEAD：`9ff96dfcd1ea62d32c53d553d768e64f1b9fb392`；写入前 `git status --short` 为空。
