@@ -117,6 +117,59 @@ describe('local gateway provider forwarding chain', () => {
     expect(store.getGatewayLogs().some((entry) => entry.statusCode === 502)).toBe(true);
   });
 
+  it('maps /v1/responses basic text input through the same audited provider chain', async () => {
+    const { store } = await import('../src/main/services/store');
+    const { createLocalGatewayServer } = await import('../src/main/services/localGateway');
+    const provider = store.createProvider({
+      name: 'Gateway Responses Upstream',
+      type: 'openai-compatible',
+      baseUrl: upstreamBaseUrl,
+      apiKey: 'sk-gateway-secret',
+    });
+    const model = store.createModel({ providerId: provider.id, name: 'gateway-chat', supportsStreaming: false });
+    const createdKey = store.createGatewayKey({
+      name: 'Round responses gateway smoke',
+      scopes: ['chat:write'],
+      quotaLimit: 10,
+      rateLimitPerMinute: 10,
+    });
+    gateway = createLocalGatewayServer();
+    const gatewayUrl = await listen(gateway);
+
+    const response = await fetch(`${gatewayUrl}/v1/responses`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${createdKey.key}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: model.name,
+        input: [
+          {
+            role: 'user',
+            content: [{ type: 'input_text', text: 'gateway responses should forward' }],
+          },
+        ],
+      }),
+    });
+    const body = await response.json() as {
+      object?: string;
+      output_text?: string;
+      output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
+      nexachat?: { mode?: string; requestLogId?: string; unsupported?: string[] };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.object).toBe('response');
+    expect(body.output_text).toBe('gateway upstream response');
+    expect(body.output?.[0]?.content?.[0]).toMatchObject({ type: 'output_text', text: 'gateway upstream response' });
+    expect(body.nexachat?.mode).toBe('basic-text');
+    expect(body.nexachat?.unsupported).toContain('tools');
+    expect(body.nexachat?.requestLogId).toBeTruthy();
+    expect(store.getUsageRecords()).toHaveLength(1);
+    expect(store.getGatewayLogs().some((entry) => entry.statusCode === 200 && entry.path === '/v1/responses' && entry.requestLogId === body.nexachat?.requestLogId)).toBe(true);
+  });
+
   it('streams /v1/chat/completions as OpenAI-compatible SSE chunks', async () => {
     const { store } = await import('../src/main/services/store');
     const { createLocalGatewayServer } = await import('../src/main/services/localGateway');

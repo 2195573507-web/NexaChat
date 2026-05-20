@@ -21,6 +21,7 @@ export const DESKTOP_ENTRY = {
     winUnpackedDir: 'release/win-unpacked',
     packagedExecutable: 'release/win-unpacked/NexaChat.exe',
     packagedAppDir: 'release/win-unpacked/resources/app',
+    packagedIconIco: 'release/win-unpacked/resources/app/assets/app-icon.ico',
     installerScript: 'release/NexaChat-Setup.ps1',
     electronSmokeUserData: 'test-results/electron-smoke-user-data',
     packageSmokeUserData: 'test-results/package-smoke-user-data',

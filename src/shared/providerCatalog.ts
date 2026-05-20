@@ -18,8 +18,8 @@ export type ProviderCatalogEntry = {
 export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
   { type: 'openai-compatible', labelKey: 'provider.type.openaiCompatible', requiresAdapter: true },
   { type: 'openai', labelKey: 'provider.type.openai', requiresAdapter: true },
-  { type: 'anthropic', labelKey: 'provider.type.anthropic', requiresAdapter: false },
-  { type: 'gemini', labelKey: 'provider.type.gemini', requiresAdapter: false },
+  { type: 'anthropic', labelKey: 'provider.type.anthropic', requiresAdapter: true },
+  { type: 'gemini', labelKey: 'provider.type.gemini', requiresAdapter: true },
   { type: 'deepseek', labelKey: 'provider.type.deepseek', requiresAdapter: true },
   { type: 'qwen', labelKey: 'provider.type.qwen', requiresAdapter: true },
   { type: 'ollama', labelKey: 'provider.type.ollama', requiresAdapter: true },

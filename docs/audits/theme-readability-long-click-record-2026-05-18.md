@@ -1,7 +1,7 @@
 # Theme Readability and Long-Click Test Record - 2026-05-18
 
 ## Scope
-- Project root: `D:/NexaChat`.
+- Project root: detected by Git; this historical note avoids storing the local absolute path.
 - Branch: `main`.
 - Baseline commit: `dc74830f84ed5022aeb7110a56a313e872ea0630`.
 - Initial environment: `npm.cmd --version` -> `11.11.0`; `node --version` -> `v24.14.1`.

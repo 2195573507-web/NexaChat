@@ -1,7 +1,7 @@
 # NexaChat Full Project Health Remediation - 2026-05-20
 
 ## Baseline
-- Real repo root: `D:/NexaChat`
+- Real repo root: detected with `git rev-parse --show-toplevel`; this historical note avoids storing the local absolute path.
 - Branch: `main`
 - Baseline commit: `56de597a2ebde458714043095d6114b0d6f04247`
 - Date/timezone: 2026-05-20, Asia/Shanghai

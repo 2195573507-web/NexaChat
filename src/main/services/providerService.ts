@@ -14,7 +14,7 @@ import type {
   Model,
   ModelInput,
 } from '../../shared/types.js';
-import { testOpenAiCompatibleProvider } from '../adapters/openAiCompatibleAdapter.js';
+import { getProviderAdapter } from '../adapters/providerAdapterRegistry.js';
 import { discoverProvider } from './providerDiscovery.js';
 import { ServiceContext, type ServiceConstructor } from './serviceContext.js';
 
@@ -157,10 +157,11 @@ export function ProviderService<TBase extends ServiceConstructor<ServiceContext>
     this.requirePermission(SECURITY_ACTION_PERMISSIONS.providerTest, 'provider', providerId);
     const provider = this.requireProvider(providerId);
     const start = now();
-    const adapterName = getProviderAdapterName(provider.type);
+    const adapter = getProviderAdapter(provider.type);
+    const adapterName = adapter?.name ?? getProviderAdapterName(provider.type);
     const apiKey = this.getProviderSecret(provider);
-    const health = adapterName === 'openai-compatible'
-      ? await testOpenAiCompatibleProvider(provider, apiKey)
+    const health = adapter
+      ? await adapter.testProvider(provider, apiKey)
       : {
           ok: false,
           latencyMs: Math.max(1, now() - start),

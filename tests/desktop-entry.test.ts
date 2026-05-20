@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { DESKTOP_ENTRY } from '../src/shared/desktopEntry';
 
 const repoRoot = process.cwd();
+const pngSignature = '89504e470d0a1a0a';
 
 function expectRepoFile(relativePath: string): void {
   accessSync(join(repoRoot, relativePath), constants.F_OK);
@@ -15,12 +16,40 @@ describe('desktop entry authority', () => {
     expect(DESKTOP_ENTRY.productName).toBe('NexaChat');
     expect(DESKTOP_ENTRY.relativePaths.packagedExecutable).toBe('release/win-unpacked/NexaChat.exe');
     expect(DESKTOP_ENTRY.relativePaths.packagedAppDir).toBe('release/win-unpacked/resources/app');
+    expect(DESKTOP_ENTRY.relativePaths.packagedIconIco).toBe('release/win-unpacked/resources/app/assets/app-icon.ico');
     expect(DESKTOP_ENTRY.relativePaths.installerScript).toBe('release/NexaChat-Setup.ps1');
     expect(DESKTOP_ENTRY.relativePaths.iconIco).toBe('assets/app-icon.ico');
     expect(DESKTOP_ENTRY.relativePaths.iconPng).toBe('assets/app-icon.png');
 
     expectRepoFile(DESKTOP_ENTRY.relativePaths.iconIco);
     expectRepoFile(DESKTOP_ENTRY.relativePaths.iconPng);
+  });
+
+  it('keeps the Windows icon as a valid multi-size ICO container', () => {
+    const icon = readFileSync(join(repoRoot, DESKTOP_ENTRY.relativePaths.iconIco));
+    const imageCount = icon.readUInt16LE(4);
+    const iconSizes = new Set<number>();
+
+    expect(icon.readUInt16LE(0)).toBe(0);
+    expect(icon.readUInt16LE(2)).toBe(1);
+    expect(imageCount).toBeGreaterThanOrEqual(5);
+    expect(imageCount).toBeLessThanOrEqual(8);
+
+    for (let index = 0; index < imageCount; index += 1) {
+      const entryOffset = 6 + index * 16;
+      const width = icon[entryOffset] || 256;
+      const height = icon[entryOffset + 1] || 256;
+      const imageBytes = icon.readUInt32LE(entryOffset + 8);
+      const imageOffset = icon.readUInt32LE(entryOffset + 12);
+
+      iconSizes.add(width);
+      expect(height).toBe(width);
+      expect(imageOffset).toBeGreaterThanOrEqual(6 + imageCount * 16);
+      expect(imageOffset + imageBytes).toBeLessThanOrEqual(icon.length);
+      expect(icon.subarray(imageOffset, imageOffset + 8).toString('hex')).toBe(pngSignature);
+    }
+
+    expect(iconSizes).toEqual(new Set([16, 32, 48, 64, 128, 256]));
   });
 
   it('exposes desktop entry package scripts', () => {

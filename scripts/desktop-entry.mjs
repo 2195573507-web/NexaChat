@@ -20,6 +20,7 @@ export const desktopEntry = {
     winUnpackedDir: 'release/win-unpacked',
     packagedExecutable: 'release/win-unpacked/NexaChat.exe',
     packagedAppDir: 'release/win-unpacked/resources/app',
+    packagedIconIco: 'release/win-unpacked/resources/app/assets/app-icon.ico',
     installerScript: 'release/NexaChat-Setup.ps1',
     packageSmokeUserData: 'test-results/package-smoke-user-data',
     installerSmokeDir: 'test-results/installer-smoke',
@@ -80,7 +81,7 @@ export function getPackagedShortcutExpectation() {
     targetPath: fromRoot(desktopEntry.relativePaths.packagedExecutable),
     arguments: '',
     workingDirectory: fromRoot(desktopEntry.relativePaths.winUnpackedDir),
-    iconLocation: `${normalizeForCompare(fromRoot(desktopEntry.relativePaths.iconIco))},0`,
+    iconLocation: `${normalizeForCompare(fromRoot(desktopEntry.relativePaths.packagedIconIco))},0`,
   };
 }
 

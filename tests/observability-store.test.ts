@@ -68,7 +68,7 @@ describe('Round 13 observability store chain', () => {
     const feedback = store.createFeedback({
       label: 'bug',
       requestLogId: chat.requestLog.id,
-      notes: 'The local path D:\\NexaChat\\secret.txt and sk-round-13-secret must be redacted.',
+      notes: 'The local path C:\\Users\\Example\\secret.txt and sk-round-13-secret must be redacted.',
     });
     expect(feedback.requestLogId).toBe(chat.requestLog.id);
     expect(feedback.notes).not.toContain('sk-round-13-secret');
@@ -89,7 +89,7 @@ describe('Round 13 observability store chain', () => {
     const exported = store.exportObservability({ providerId: provider.id });
     expect(exported.redacted).toBe(true);
     expect(exported.content).not.toContain('sk-round-13-secret');
-    expect(exported.content).not.toContain('D:\\NexaChat');
+    expect(exported.content).not.toContain('C:\\Users\\Example');
     expect(store.getAuditLogs().some((entry) => entry.action === 'observability.exported')).toBe(true);
   });
 });

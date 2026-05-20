@@ -10,7 +10,8 @@ import type {
   Provider,
   ProviderModelOption
 } from '../../shared/types.js';
-import { ProviderRuntimeError, fetchOpenAiCompatibleModels } from '../adapters/openAiCompatibleAdapter.js';
+import { ProviderRuntimeError } from '../adapters/openAiCompatibleAdapter.js';
+import { getProviderAdapter } from '../adapters/providerAdapterRegistry.js';
 import { ServiceContext, type ServiceConstructor } from './serviceContext.js';
 
 const t = (key: Parameters<typeof translate>[1], params?: Parameters<typeof translate>[2]) => translate('zh-CN', key, params);
@@ -34,8 +35,8 @@ export function ModelService<TBase extends ServiceConstructor<ServiceContext>>(B
     if (!provider.enabled) {
       throw new Error(`Provider is disabled: ${providerId}`);
     }
-    const adapterName = getProviderAdapterName(provider.type);
-    if (adapterName !== 'openai-compatible') {
+    const adapter = getProviderAdapter(provider.type);
+    if (!adapter) {
       this.recordProviderHealth(
         providerId,
         null,
@@ -50,7 +51,7 @@ export function ModelService<TBase extends ServiceConstructor<ServiceContext>>(B
 
     const start = now();
     try {
-      const result = await fetchOpenAiCompatibleModels(provider, this.getProviderSecret(provider));
+      const result = await adapter.fetchModels(provider, this.getProviderSecret(provider));
       this.db
         .prepare('UPDATE providers SET health_status = ?, last_checked_at = ?, updated_at = ? WHERE id = ?')
         .run('healthy', start, now(), providerId);

@@ -204,7 +204,7 @@ describe('provider invocation through NexaStore', () => {
     expect(store.getAuditLogs().map((entry) => entry.action)).toEqual(expect.arrayContaining(['model.updated', 'model.disabled', 'model.enabled', 'model.deleted']));
   });
 
-  it('keeps provider model discovery failures and unsupported providers on the existing adapter path', async () => {
+  it('keeps provider model discovery failures visible and supports native provider model-list fallback', async () => {
     const { store } = await import('../src/main/services/store');
     const provider = store.createProvider({
       name: 'Round 6 Empty Models',
@@ -221,14 +221,66 @@ describe('provider invocation through NexaStore', () => {
     await expect(store.fetchProviderModels(provider.id)).rejects.toThrow(/upstream failed/i);
     expect(store.getProviderHealthRecords()[0]).toMatchObject({ providerId: provider.id, status: 'error' });
 
-    const unsupported = store.createProvider({
-      name: 'Round 6 Unsupported Provider',
+    const native = store.createProvider({
+      name: 'Round 6 Native Provider',
       type: 'anthropic',
       baseUrl,
       apiKey: 'sk-round-06-secret',
     });
-    await expect(store.fetchProviderModels(unsupported.id)).rejects.toMatchObject({ code: 'provider_unsupported' });
-    expect(store.getProviderHealthRecords()[0]).toMatchObject({ providerId: unsupported.id, status: 'error' });
+    modelListMode = 'empty';
+    await expect(store.fetchProviderModels(native.id)).resolves.toEqual([
+      { id: 'claude-3-5-sonnet-latest', name: 'claude-3-5-sonnet-latest' },
+      { id: 'claude-3-5-haiku-latest', name: 'claude-3-5-haiku-latest' },
+    ]);
+    expect(store.getProviderHealthRecords()[0]).toMatchObject({ providerId: native.id, status: 'healthy' });
+  });
+
+  it('routes Anthropic and Gemini chat through native adapters without leaking secrets', async () => {
+    const { store } = await import('../src/main/services/store');
+    const anthropicProvider = store.createProvider({
+      name: 'Round Native Anthropic Provider',
+      type: 'anthropic',
+      baseUrl,
+      apiKey: 'sk-native-anthropic-secret',
+    });
+    const anthropicModel = store.createModel({
+      providerId: anthropicProvider.id,
+      name: 'claude-test',
+      supportsStreaming: false,
+    });
+
+    const anthropic = await store.sendMessage({
+      content: 'call anthropic native adapter',
+      modelId: anthropicModel.id,
+    });
+
+    expect(anthropic.assistantMessage.content).toBe('native anthropic store response');
+    expect(anthropic.assistantMessage.metadataJson).toContain('anthropic-native');
+    expect(anthropic.requestLog.requestSummaryJson).toContain('anthropic-native');
+    expect(anthropic.requestLog.requestSummaryJson).not.toContain('sk-native-anthropic-secret');
+
+    const geminiProvider = store.createProvider({
+      name: 'Round Native Gemini Provider',
+      type: 'gemini',
+      baseUrl,
+      apiKey: 'sk-native-gemini-secret',
+    });
+    const geminiModel = store.createModel({
+      providerId: geminiProvider.id,
+      name: 'gemini-1.5-pro',
+      supportsStreaming: false,
+    });
+
+    const gemini = await store.sendMessage({
+      content: 'call gemini native adapter',
+      modelId: geminiModel.id,
+    });
+
+    expect(gemini.assistantMessage.content).toBe('native gemini store response');
+    expect(gemini.assistantMessage.metadataJson).toContain('gemini-native');
+    expect(gemini.requestLog.requestSummaryJson).toContain('gemini-native');
+    expect(gemini.requestLog.requestSummaryJson).not.toContain('sk-native-gemini-secret');
+    expect(store.getUsageRecords()).toHaveLength(2);
   });
 
   it('saves Provider and discovered models through the canonical creation paths without leaking API keys', async () => {
@@ -279,6 +331,25 @@ function handleRequest(request: IncomingMessage, response: ServerResponse): void
       model: 'round-06-chat',
       choices: [{ index: 0, message: { role: 'assistant', content: 'store upstream response' }, finish_reason: 'stop' }],
       usage: { prompt_tokens: 7, completion_tokens: 11, total_tokens: 18 },
+    });
+    return;
+  }
+  if (request.url === '/v1/messages') {
+    writeJson(response, 200, {
+      id: 'msg_store_native',
+      type: 'message',
+      role: 'assistant',
+      model: 'claude-test',
+      content: [{ type: 'text', text: 'native anthropic store response' }],
+      stop_reason: 'end_turn',
+      usage: { input_tokens: 4, output_tokens: 6 },
+    });
+    return;
+  }
+  if (request.url?.startsWith('/v1/models/gemini-1.5-pro:generateContent')) {
+    writeJson(response, 200, {
+      candidates: [{ content: { parts: [{ text: 'native gemini store response' }] }, finishReason: 'STOP' }],
+      usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 7, totalTokenCount: 12 },
     });
     return;
   }

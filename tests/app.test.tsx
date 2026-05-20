@@ -307,7 +307,8 @@ describe('NexaChat renderer', () => {
     });
     openFeature(gateway, gateway.tabs.find((tab) => tab.id === 'docs')!);
     expect(activePanel()).toHaveTextContent(GATEWAY_AVAILABLE_ENDPOINTS[0]);
-    expect(activePanel()).toHaveTextContent(GATEWAY_RESERVED_ENDPOINTS[0]);
+    expect(activePanel()).toHaveTextContent('/v1/responses');
+    expect(activePanel()).toHaveTextContent(translate('zh-CN', 'gateway.responsesBasic.title'));
     expect(activePanel()).toHaveTextContent(translate('zh-CN', 'gateway.chatNotRequired'));
     expect(activePanel()).toHaveTextContent(translate('zh-CN', 'gateway.alias.boundary'));
 
@@ -1013,7 +1014,7 @@ describe('navigation authority', () => {
       apiKey: '',
     });
     expect(DEFAULT_MODEL_FORM).toEqual({ name: '' });
-    expect(GATEWAY_AVAILABLE_ENDPOINTS).toEqual(['/v1/models', '/v1/chat/completions', '/v1/embeddings']);
-    expect(GATEWAY_RESERVED_ENDPOINTS).toEqual(['/v1/responses']);
+    expect(GATEWAY_AVAILABLE_ENDPOINTS).toEqual(['/v1/models', '/v1/chat/completions', '/v1/embeddings', '/v1/responses']);
+    expect(GATEWAY_RESERVED_ENDPOINTS).toEqual([]);
   });
 });

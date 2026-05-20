@@ -6,7 +6,7 @@
 - Baseline commit: `5acc4bc00cd1a0deca1f1f3aab34da778146e16b`.
 - Branch: `main`.
 - Upstream: `origin/main`.
-- Repository root detected by Git: `D:/NexaChat`.
+- Repository root detected by Git; this historical note avoids storing the local absolute path.
 
 This iteration focused on truthful documentation, UI readability, accessibility semantics, service registry readability, Electron/IPC boundary documentation, and validation coverage. It did not remove working features, create duplicate legacy paths, or claim unsupported capabilities.
 

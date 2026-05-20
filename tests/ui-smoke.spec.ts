@@ -320,6 +320,7 @@ test('core management pages keep real contracts behind lightweight tabs', async 
   await expect(page.locator('main [data-tab="keys"] .inline-notice').getByText(translate('zh-CN', 'gateway.oneTimeKey'))).toBeVisible();
   await openFeature(page, gateway, gateway.tabs.find((tab) => tab.id === 'docs')!);
   await expect(page.locator('main [data-tab="docs"]').getByText('/v1/responses', { exact: true })).toBeVisible();
+  await expect(page.locator('main [data-tab="docs"]').getByText(translate('zh-CN', 'gateway.responsesBasic.title'))).toBeVisible();
   await expect(page.locator('main [data-tab="docs"]').getByText(translate('zh-CN', 'gateway.alias.boundary'))).toBeVisible();
 
   await openFeature(page, knowledge, knowledge.tabs.find((tab) => tab.id === 'files')!);

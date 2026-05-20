@@ -416,7 +416,8 @@ export function ModelsPage({ activeTab, snapshot, api, onAction }: TabPageProps)
           rows={[
             { label: t('provider.type.openaiCompatible'), value: PROVIDER_CATALOG.find((entry) => entry.type === 'openai-compatible') ? t('common.available') : t('common.unsupported') },
             { label: t('provider.type.deepseek'), value: t('stage.environment-limited') },
-            { label: t('provider.type.anthropic'), value: t('stage.reserved') },
+            { label: t('provider.type.anthropic'), value: t('common.available') },
+            { label: t('provider.type.gemini'), value: t('common.available') },
             { label: t('provider.type.ollama'), value: t('stage.environment-limited') },
           ]}
         />

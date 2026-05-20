@@ -17,6 +17,8 @@ const shortcutPath = getDesktopShortcutPath();
 if (target === 'packaged') {
   assertExists(expectation.targetPath, 'Packaged shortcut target');
 }
+const [iconPath] = expectation.iconLocation.split(',');
+assertExists(iconPath, 'Shortcut icon');
 
 const script = `
 $shortcutPath = ${JSON.stringify(shortcutPath)}

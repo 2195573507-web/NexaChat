@@ -2,9 +2,12 @@ import type { ProviderType } from './types.js';
 
 export const PROVIDER_ADAPTER_NAMES = {
   openAiCompatible: 'openai-compatible',
+  anthropic: 'anthropic-native',
+  gemini: 'gemini-native',
 } as const;
 
 export type ProviderAdapterName = (typeof PROVIDER_ADAPTER_NAMES)[keyof typeof PROVIDER_ADAPTER_NAMES];
+export type ProviderNativeAdapterName = (typeof PROVIDER_ADAPTER_NAMES)[keyof typeof PROVIDER_ADAPTER_NAMES];
 
 export const OPENAI_COMPATIBLE_ENDPOINTS = {
   models: '/models',
@@ -47,7 +50,10 @@ const openAiCompatibleTypes: ProviderType[] = [
 ];
 
 export function getProviderAdapterName(providerType: ProviderType): ProviderAdapterName | null {
-  return openAiCompatibleTypes.includes(providerType) ? PROVIDER_ADAPTER_NAMES.openAiCompatible : null;
+  if (openAiCompatibleTypes.includes(providerType)) return PROVIDER_ADAPTER_NAMES.openAiCompatible;
+  if (providerType === 'anthropic') return PROVIDER_ADAPTER_NAMES.anthropic;
+  if (providerType === 'gemini') return PROVIDER_ADAPTER_NAMES.gemini;
+  return null;
 }
 
 export function isRetryableProviderStatus(status: number): boolean {

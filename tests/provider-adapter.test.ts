@@ -5,6 +5,7 @@ import {
   invokeOpenAiCompatibleChat,
   testOpenAiCompatibleProvider,
 } from '../src/main/adapters/openAiCompatibleAdapter';
+import { getProviderAdapter } from '../src/main/adapters/providerAdapterRegistry';
 import {
   PROVIDER_RUNTIME_ERROR_CODES,
   PROVIDER_RUNTIME_POLICY,
@@ -15,7 +16,7 @@ let server: Server | null = null;
 let baseUrl = '';
 let lastAuth = '';
 let chatAttempts = 0;
-let mode: 'json' | 'stream' | 'retry' | 'timeout' | 'unauthorized' = 'json';
+let mode: 'json' | 'stream' | 'retry' | 'timeout' | 'unauthorized' | 'anthropic-json' | 'anthropic-stream' | 'gemini-json' | 'gemini-stream' = 'json';
 
 const provider: Provider = {
   id: 'provider_test',
@@ -156,10 +157,138 @@ describe('OpenAI-compatible provider adapter', () => {
   });
 });
 
+describe('native provider adapter registry', () => {
+  it('invokes Anthropic native text and streaming paths with redacted adapter metadata', async () => {
+    const adapter = getProviderAdapter('anthropic');
+    if (!adapter) throw new Error('Missing Anthropic adapter.');
+    const nativeProvider = { ...provider, type: 'anthropic' as const, baseUrl };
+
+    mode = 'anthropic-json';
+    const json = await adapter.invokeChat({
+      provider: nativeProvider,
+      model,
+      apiKey: 'sk-ant-secret',
+      messages: [{ role: 'user', content: 'hello anthropic' }],
+      stream: false,
+    });
+    expect(lastAuth).toBe('sk-ant-secret');
+    expect(json.content).toBe('anthropic json response');
+    expect(json.inputTokens).toBe(4);
+    expect(json.outputTokens).toBe(6);
+    expect(adapter.getRequestSummary({
+      provider: nativeProvider,
+      model,
+      apiKey: 'sk-ant-secret',
+      messages: [{ role: 'user', content: 'hello anthropic' }],
+    }).adapter).toBe('anthropic-native');
+    expect(JSON.stringify(adapter.getRequestSummary({
+      provider: nativeProvider,
+      model,
+      apiKey: 'sk-ant-secret',
+      messages: [{ role: 'user', content: 'hello anthropic' }],
+    }))).not.toContain('sk-ant-secret');
+
+    mode = 'anthropic-stream';
+    const chunks: string[] = [];
+    const streamed = await adapter.invokeChat({
+      provider: nativeProvider,
+      model,
+      apiKey: 'sk-ant-secret',
+      messages: [{ role: 'user', content: 'stream anthropic' }],
+      stream: true,
+      onChunk: (chunk) => chunks.push(chunk),
+    });
+    expect(streamed.content).toBe('anthropic streamed response');
+    expect(streamed.streamed).toBe(true);
+    expect(chunks).toEqual(['anthropic ', 'streamed ', 'response']);
+  });
+
+  it('invokes Gemini native text and streaming paths and fetches model list', async () => {
+    const adapter = getProviderAdapter('gemini');
+    if (!adapter) throw new Error('Missing Gemini adapter.');
+    const nativeProvider = { ...provider, type: 'gemini' as const, baseUrl };
+
+    const models = await adapter.fetchModels(nativeProvider, 'sk-gemini-secret');
+    expect(models.modelNames).toEqual(['gemini-1.5-pro']);
+    expect(lastAuth).toBe('sk-gemini-secret');
+
+    mode = 'gemini-json';
+    const json = await adapter.invokeChat({
+      provider: nativeProvider,
+      model: { ...model, name: 'gemini-1.5-pro' },
+      apiKey: 'sk-gemini-secret',
+      messages: [{ role: 'user', content: 'hello gemini' }],
+      stream: false,
+    });
+    expect(json.content).toBe('gemini json response');
+    expect(json.inputTokens).toBe(5);
+    expect(json.outputTokens).toBe(7);
+    expect(json.totalTokens).toBe(12);
+
+    mode = 'gemini-stream';
+    const streamed = await adapter.invokeChat({
+      provider: nativeProvider,
+      model: { ...model, name: 'gemini-1.5-pro' },
+      apiKey: 'sk-gemini-secret',
+      messages: [{ role: 'user', content: 'stream gemini' }],
+      stream: true,
+    });
+    expect(streamed.content).toBe('gemini streamed response');
+    expect(streamed.streamed).toBe(true);
+  });
+});
+
 function handleRequest(request: IncomingMessage, response: ServerResponse): void {
   lastAuth = String(request.headers.authorization ?? '');
+  if ((request.url === '/models' || request.url === '/v1/models') && request.headers['x-goog-api-key']) {
+    lastAuth = String(request.headers['x-goog-api-key'] ?? '');
+    writeJson(response, 200, {
+      models: [
+        { name: 'models/gemini-1.5-pro', supportedGenerationMethods: ['generateContent'] },
+        { name: 'models/gemini-embed', supportedGenerationMethods: ['embedContent'] },
+      ],
+    });
+    return;
+  }
   if (request.url === '/v1/models') {
     writeJson(response, 200, { object: 'list', data: [{ id: 'test-chat', object: 'model' }] });
+    return;
+  }
+  if (request.url === '/messages' || request.url === '/v1/messages') {
+    lastAuth = String(request.headers['x-api-key'] ?? '');
+    if (mode === 'anthropic-stream') {
+      response.writeHead(200, { 'content-type': 'text/event-stream' });
+      response.write('data: {"type":"content_block_delta","delta":{"text":"anthropic "}}\n\n');
+      response.write('data: {"type":"content_block_delta","delta":{"text":"streamed "}}\n\n');
+      response.write('data: {"type":"content_block_delta","delta":{"text":"response","stop_reason":"end_turn"},"usage":{"input_tokens":4,"output_tokens":6}}\n\n');
+      response.end('data: [DONE]\n\n');
+      return;
+    }
+    writeJson(response, 200, {
+      id: 'msg_test',
+      type: 'message',
+      role: 'assistant',
+      model: 'claude-test',
+      content: [{ type: 'text', text: 'anthropic json response' }],
+      stop_reason: 'end_turn',
+      usage: { input_tokens: 4, output_tokens: 6 },
+    });
+    return;
+  }
+  if (request.url?.startsWith('/models/gemini-1.5-pro:') || request.url?.startsWith('/v1/models/gemini-1.5-pro:')) {
+    lastAuth = String(request.headers['x-goog-api-key'] ?? '');
+    if (mode === 'gemini-stream') {
+      response.writeHead(200, { 'content-type': 'text/event-stream' });
+      response.write('data: {"candidates":[{"content":{"parts":[{"text":"gemini "}]}}]}\n\n');
+      response.write('data: {"candidates":[{"content":{"parts":[{"text":"streamed "}]}}]}\n\n');
+      response.write('data: {"candidates":[{"content":{"parts":[{"text":"response"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":5,"candidatesTokenCount":7,"totalTokenCount":12}}\n\n');
+      response.end('data: [DONE]\n\n');
+      return;
+    }
+    writeJson(response, 200, {
+      candidates: [{ content: { parts: [{ text: 'gemini json response' }] }, finishReason: 'STOP' }],
+      usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 7, totalTokenCount: 12 },
+    });
     return;
   }
   if (request.url === '/v1/chat/completions') {

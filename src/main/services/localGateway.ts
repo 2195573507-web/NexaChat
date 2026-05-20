@@ -74,9 +74,13 @@ export function createLocalGatewayServer(): Server {
         await handleEmbeddings(request, response, startedAt);
         return;
       }
+      if (request.method === 'POST' && path === GATEWAY_ENDPOINT.responses) {
+        await handleResponses(request, response, startedAt);
+        return;
+      }
       if (path === GATEWAY_ENDPOINT.responses) {
-        writeGatewayError(response, 'reserved_endpoint');
-        recordGatewayEvent(request, path, 501, startedAt, null, null, 'reserved_endpoint');
+        writeGatewayError(response, 'not_found');
+        recordGatewayEvent(request, path, 404, startedAt, null, null, 'not_found');
         return;
       }
       writeGatewayError(response, 'not_found');
@@ -89,6 +93,102 @@ export function createLocalGatewayServer(): Server {
       recordGatewayEvent(request, path, GATEWAY_ERROR_STATUS[gatewayError.code], startedAt, null, null, gatewayError.code);
     }
   });
+}
+
+async function handleResponses(request: IncomingMessage, response: ServerResponse, startedAt: number): Promise<void> {
+  const auth = authorize(request, GATEWAY_ENDPOINT_SCOPES['/v1/responses']);
+  if (!auth.ok) {
+    const code = auth.errorCode ?? 'invalid_key';
+    writeGatewayError(response, code);
+    recordGatewayEvent(request, GATEWAY_ENDPOINT.responses, GATEWAY_ERROR_STATUS[code], startedAt, auth.key, auth.scope, code);
+    return;
+  }
+
+  const body = await readJsonBody(request);
+  const unsupported = unsupportedResponsesFields(body);
+  if (unsupported.length > 0) {
+    writeGatewayError(response, 'unsupported_field', `Unsupported /v1/responses fields in this basic build: ${unsupported.join(', ')}.`);
+    recordGatewayEvent(request, GATEWAY_ENDPOINT.responses, 400, startedAt, auth.key, auth.scope, 'unsupported_field');
+    return;
+  }
+
+  const normalizedInput = normalizeResponsesInput(body.input);
+  if (!normalizedInput) {
+    writeGatewayError(response, 'invalid_request', '/v1/responses basic version requires a non-empty text input.');
+    recordGatewayEvent(request, GATEWAY_ENDPOINT.responses, 400, startedAt, auth.key, auth.scope, 'invalid_request');
+    return;
+  }
+
+  const modelId = store.resolveGatewayModelId(typeof body.model === 'string' ? body.model : undefined);
+  const result = await store.sendMessage({
+    content: normalizedInput,
+    modelId,
+    contextStrategy: 'recent_n',
+    metadata: {
+      gatewayEndpoint: GATEWAY_ENDPOINT.responses,
+      gatewayResponsesMode: 'basic-text',
+    },
+  });
+
+  if (result.requestLog.status === 'failed') {
+    writeJson(response, 502, {
+      error: {
+        message: result.requestLog.errorMessage ?? 'Provider invocation failed.',
+        type: result.requestLog.errorCode ?? 'provider_error',
+      },
+      nexachat: {
+        mode: 'basic-text',
+        conversationId: result.conversation.id,
+        requestLogId: result.requestLog.id,
+        routeDecision: result.routeDecision,
+      },
+    });
+    recordGatewayEvent(request, GATEWAY_ENDPOINT.responses, 502, startedAt, auth.key, auth.scope, 'provider_error', result.requestLog.id);
+    return;
+  }
+
+  const outputText = result.assistantMessage.content;
+  writeJson(response, 200, {
+    id: result.requestLog.gatewayRequestId ?? result.requestLog.id,
+    object: 'response',
+    created_at: Math.floor(Date.now() / 1000),
+    status: 'completed',
+    model: result.routeDecision.modelNameSnapshot,
+    output: [
+      {
+        id: `${result.assistantMessage.id}_output`,
+        type: 'message',
+        status: 'completed',
+        role: 'assistant',
+        content: [
+          {
+            type: 'output_text',
+            text: outputText,
+          },
+        ],
+      },
+    ],
+    output_text: outputText,
+    usage: {
+      input_tokens: result.assistantMessage.inputTokens ?? 0,
+      output_tokens: result.assistantMessage.outputTokens ?? 0,
+      total_tokens: (result.assistantMessage.inputTokens ?? 0) + (result.assistantMessage.outputTokens ?? 0),
+    },
+    nexachat: {
+      mode: 'basic-text',
+      unsupported: [
+        'tools',
+        'parallel_tool_calls',
+        'background',
+        'multimodal_input',
+        'advanced_reasoning',
+      ],
+      conversationId: result.conversation.id,
+      requestLogId: result.requestLog.id,
+      routeDecision: result.routeDecision,
+    },
+  });
+  recordGatewayEvent(request, GATEWAY_ENDPOINT.responses, 200, startedAt, auth.key, auth.scope, null, result.requestLog.id);
 }
 
 export async function stopLocalGateway(): Promise<void> {
@@ -353,6 +453,56 @@ async function handleEmbeddings(request: IncomingMessage, response: ServerRespon
     },
   });
   recordGatewayEvent(request, GATEWAY_ENDPOINT.embeddings, 200, startedAt, auth.key, auth.scope, null);
+}
+
+function unsupportedResponsesFields(body: Record<string, unknown>): string[] {
+  const unsupported = [
+    'tools',
+    'tool_choice',
+    'parallel_tool_calls',
+    'background',
+    'modalities',
+    'reasoning',
+    'previous_response_id',
+    'instructions',
+    'include',
+  ];
+  return unsupported.filter((field) => body[field] !== undefined);
+}
+
+function normalizeResponsesInput(input: unknown): string {
+  if (typeof input === 'string') {
+    return input.trim();
+  }
+  if (!Array.isArray(input)) {
+    return '';
+  }
+  const textParts = input.flatMap((item) => {
+    if (typeof item === 'string') {
+      return [item];
+    }
+    if (!item || typeof item !== 'object') {
+      return [];
+    }
+    const record = item as Record<string, unknown>;
+    if (typeof record.content === 'string') {
+      return [record.content];
+    }
+    if (Array.isArray(record.content)) {
+      return record.content.flatMap((contentItem) => {
+        if (typeof contentItem === 'string') {
+          return [contentItem];
+        }
+        if (!contentItem || typeof contentItem !== 'object') {
+          return [];
+        }
+        const contentRecord = contentItem as Record<string, unknown>;
+        return typeof contentRecord.text === 'string' ? [contentRecord.text] : [];
+      });
+    }
+    return [];
+  });
+  return textParts.join('\n').trim();
 }
 
 function authorize(request: IncomingMessage, scope: GatewayScope) {

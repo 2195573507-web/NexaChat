@@ -98,14 +98,14 @@ describe('Round 13 observability runtime', () => {
       authorization: 'Bearer sk-round-13-secret',
       gatewayKey: 'nxk_observability_secret',
       requestSummaryJson: '{"message":"hello secret","redactedPreview":"nxk_preview_secret"}',
-      localPath: 'D:\\NexaChat\\secret.txt',
+      localPath: 'C:\\Users\\Example\\secret.txt',
     }, settings);
 
     expect(content).not.toContain('sk-round-13-secret');
     expect(content).not.toContain('nxk_observability_secret');
     expect(content).not.toContain('nxk_preview_secret');
     expect(content).not.toContain('hello secret');
-    expect(content).not.toContain('D:\\NexaChat');
+    expect(content).not.toContain('C:\\Users\\Example');
     expect(content).toContain('[REDACTED]');
   });
 });

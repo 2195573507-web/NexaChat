@@ -1,6 +1,6 @@
 import { Copy, KeyRound, Play, Power, RotateCcw, Save, ShieldAlert, TrendingUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { GATEWAY_AVAILABLE_ENDPOINTS, GATEWAY_DEFAULT_KEY_POLICY, GATEWAY_ENDPOINT, GATEWAY_RESERVED_ENDPOINTS } from '../../shared/gatewayRuntime';
+import { GATEWAY_AVAILABLE_ENDPOINTS, GATEWAY_DEFAULT_KEY_POLICY, GATEWAY_ENDPOINT } from '../../shared/gatewayRuntime';
 import { buildUsageTrend, type UsageTrendPoint } from '../../shared/observabilityRuntime';
 import type { GatewayApiKey, UsageTrendBucket } from '../../shared/types';
 import { GATEWAY_DOCS, FORM_DEFAULTS } from '../../shared/uiCopy';
@@ -211,7 +211,7 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
           </ToolSection>
         </ConfigList>
         <ConfigDetail title={t('nav.gateway.docs.label')} description={t('nav.gateway.docs.boundary')}>
-          <InlineNotice tone="warning" title={t('gateway.reserved.title')} detail={GATEWAY_RESERVED_ENDPOINTS.join(', ')} />
+          <InlineNotice tone="info" title={t('gateway.responsesBasic.title')} detail={t('gateway.responsesBasic.detail')} />
           <InlineNotice tone="info" title={t('gateway.alias.boundary')} detail={t('gateway.alias.boundary.detail')} />
           <CommandButton icon={<Copy size={15} />} onClick={() => copyText(chatCommand)}>{t('app.error.copy')}</CommandButton>
         </ConfigDetail>
@@ -256,7 +256,7 @@ export function GatewayPage({ activeTab, snapshot, api, onAction }: TabPageProps
             { label: t('gateway.keyCount'), value: snapshot.gatewayKeys.length },
             { label: t('gateway.listenerState'), value: gatewayStatus.listenerState },
             { label: t('settings.about.bindHost'), value: endpointBase },
-            { label: t('gateway.reserved.title'), value: GATEWAY_ENDPOINT.responses },
+            { label: t('gateway.responsesBasic.title'), value: GATEWAY_ENDPOINT.responses },
             { label: t('gateway.recentError'), value: gatewayStatus.recentError ?? gatewayStatus.lastStartError ?? t('common.none') },
           ]}
         />

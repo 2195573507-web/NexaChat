@@ -99,7 +99,7 @@ describe('Round 8 gateway runtime authority', () => {
     expect(store.getModels().some((model) => model.name === 'imported-chat' && model.enabled)).toBe(false);
   });
 
-  it('separates available gateway endpoints from reserved responses and serves embeddings', async () => {
+  it('lists basic responses as available, enforces its chat scope, rejects unsupported response fields, and serves embeddings', async () => {
     const { store } = await import('../src/main/services/store');
     const { createLocalGatewayServer } = await import('../src/main/services/localGateway');
     const created = store.createGatewayKey({
@@ -111,20 +111,50 @@ describe('Round 8 gateway runtime authority', () => {
     gateway = createLocalGatewayServer();
     const url = await listen(gateway);
 
-    expect(store.getGatewayStatus().endpoints).toEqual(['/v1/models', '/v1/chat/completions', '/v1/embeddings']);
-    expect(store.getGatewayStatus().endpoints).not.toContain('/v1/responses');
+    expect(store.getGatewayStatus().endpoints).toEqual(['/v1/models', '/v1/chat/completions', '/v1/embeddings', '/v1/responses']);
 
-    const reserved = await fetch(`${url}/v1/responses`, {
+    const scopeDenied = await fetch(`${url}/v1/responses`, {
       method: 'POST',
       headers: {
         authorization: `Bearer ${created.key}`,
         'content-type': 'application/json',
       },
-      body: JSON.stringify({ input: 'reserved' }),
+      body: JSON.stringify({ input: 'scope denied' }),
     });
-    const reservedBody = await reserved.json() as { error: { type: string } };
-    expect(reserved.status).toBe(501);
-    expect(reservedBody.error.type).toBe('reserved_endpoint');
+    const scopeDeniedBody = await scopeDenied.json() as { error: { type: string } };
+    expect(scopeDenied.status).toBe(403);
+    expect(scopeDeniedBody.error.type).toBe('scope_denied');
+
+    const responseKey = store.createGatewayKey({
+      name: 'Round responses validation key',
+      scopes: ['chat:write'],
+      quotaLimit: 10,
+      rateLimitPerMinute: 10,
+    });
+    const unsupported = await fetch(`${url}/v1/responses`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${responseKey.key}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ input: 'tool call should be rejected', tools: [{ type: 'function' }] }),
+    });
+    const unsupportedBody = await unsupported.json() as { error: { type: string; message: string } };
+    expect(unsupported.status).toBe(400);
+    expect(unsupportedBody.error.type).toBe('unsupported_field');
+    expect(unsupportedBody.error.message).toContain('tools');
+
+    const invalidInput = await fetch(`${url}/v1/responses`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${responseKey.key}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ input: '' }),
+    });
+    const invalidInputBody = await invalidInput.json() as { error: { type: string } };
+    expect(invalidInput.status).toBe(400);
+    expect(invalidInputBody.error.type).toBe('invalid_request');
 
     const embeddings = await fetch(`${url}/v1/embeddings`, {
       method: 'POST',
@@ -140,6 +170,9 @@ describe('Round 8 gateway runtime authority', () => {
     expect(embeddingsBody.data).toHaveLength(2);
     expect(embeddingsBody.data[0].embedding.length).toBeGreaterThan(0);
     expect(embeddingsBody.nexachat.strategy).toBe('lexical');
+    expect(store.getGatewayLogs().some((entry) => entry.path === '/v1/responses' && entry.statusCode === 403 && entry.errorCode === 'scope_denied')).toBe(true);
+    expect(store.getGatewayLogs().some((entry) => entry.path === '/v1/responses' && entry.statusCode === 400 && entry.errorCode === 'unsupported_field')).toBe(true);
+    expect(store.getGatewayLogs().some((entry) => entry.path === '/v1/responses' && entry.statusCode === 400 && entry.errorCode === 'invalid_request')).toBe(true);
   });
 });
 

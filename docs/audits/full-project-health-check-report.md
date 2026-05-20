@@ -3,7 +3,7 @@
 ## 基线
 
 - 审计日期：2026-05-18。
-- 实际项目根目录：`D:/NexaChat`。
+- 实际项目根目录：由 `git rev-parse --show-toplevel` 在本机检测得到；报告不保留本机固定路径。
 - 分支：`main`。
 - 上游：`origin/main`。
 - 起始 HEAD：`dc74830f84ed5022aeb7110a56a313e872ea0630`。
@@ -48,7 +48,7 @@
 
 ## 已验证命令
 
-- `git rev-parse --show-toplevel` -> `D:/NexaChat`。
+- `git rev-parse --show-toplevel` -> 本机 NexaChat 仓库根目录。
 - `git branch --show-current` -> `main`。
 - 起始 `git rev-parse HEAD` -> `dc74830f84ed5022aeb7110a56a313e872ea0630`。
 - `git rev-parse --abbrev-ref --symbolic-full-name @{u}` -> `origin/main`。

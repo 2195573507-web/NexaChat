@@ -25,17 +25,17 @@ export const GATEWAY_AVAILABLE_ENDPOINTS = [
   GATEWAY_ENDPOINT.models,
   GATEWAY_ENDPOINT.chatCompletions,
   GATEWAY_ENDPOINT.embeddings,
-] as const;
-
-export const GATEWAY_RESERVED_ENDPOINTS = [
   GATEWAY_ENDPOINT.responses,
 ] as const;
+
+export const GATEWAY_RESERVED_ENDPOINTS = [] as const;
 
 export const GATEWAY_ENDPOINT_SCOPES = {
   '/v1/models': 'models:read',
   '/v1/chat/completions': 'chat:write',
   '/v1/embeddings': 'embeddings:write',
-} as const satisfies Record<Exclude<GatewayEndpoint, '/v1/responses'>, GatewayScope>;
+  '/v1/responses': 'chat:write',
+} as const satisfies Record<GatewayEndpoint, GatewayScope>;
 
 export const GATEWAY_KEY_STATES = ['active', 'disabled', 'revoked', 'expired', 'quota_exceeded'] as const;
 export type GatewayKeyState = (typeof GATEWAY_KEY_STATES)[number];
@@ -54,8 +54,9 @@ export const GATEWAY_ERROR_CODES = [
   'rate_limited',
   'body_too_large',
   'invalid_json',
+  'invalid_request',
   'not_found',
-  'reserved_endpoint',
+  'unsupported_field',
   'provider_error',
   'internal_error',
 ] as const;
@@ -72,8 +73,9 @@ export const GATEWAY_ERROR_STATUS: Record<GatewayErrorCode, number> = {
   rate_limited: 429,
   body_too_large: 413,
   invalid_json: 400,
+  invalid_request: 400,
   not_found: 404,
-  reserved_endpoint: 501,
+  unsupported_field: 400,
   provider_error: 502,
   internal_error: 500,
 };
@@ -89,8 +91,9 @@ export const GATEWAY_ERROR_MESSAGES: Record<GatewayErrorCode, string> = {
   rate_limited: 'Gateway API key rate limit was reached.',
   body_too_large: 'Request body is too large.',
   invalid_json: 'Request body is not valid JSON.',
+  invalid_request: 'Request body did not match this endpoint contract.',
   not_found: 'Endpoint not found.',
-  reserved_endpoint: '/v1/responses is reserved in this build.',
+  unsupported_field: 'Request uses fields that are outside the current basic gateway contract.',
   provider_error: 'Provider invocation failed.',
   internal_error: 'Internal gateway error.',
 };

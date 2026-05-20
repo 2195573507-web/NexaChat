@@ -1,10 +1,22 @@
 ﻿# NexaChat 当前进度
 
+## 2026-05-20 Roadmap 能力补全实现
+
+- 任务名称：按 `docs/build-plans/00-modular-refactor-master-plan/capability-completion-roadmap.md` 补齐可行能力。
+- 实际项目根目录：通过 `git rev-parse --show-toplevel` 检测，最终绝对路径见本轮中文报告；仓库内文档不写入本机固定路径。
+- 分支与上游：`main` / `origin/main`。
+- 上一轮文档提交推送：本轮开始先执行 `git push origin main`，结果为 `Everything up-to-date`。
+- 本轮已实现：Gateway `/v1/responses` basic text；Chat typed stream / IPC partial 基础链路状态同步；Provider adapter registry；Anthropic native 与 Gemini native 第一版文本 chat、基础 streaming、模型列表或 fallback、API key 验证、错误映射；相关 UI/i18n 能力边界文案。
+- 本轮保持未完成并诚实标注：完整 OpenAI Responses API、tools/multimodal/background/reasoning；PDF/Office/OCR；真实 embedding/vector/rerank；Data full restore/cleanup；Electron sandbox；真实 MCP/Agent sandbox/workflow runtime。
+- 新增/更新测试：Gateway basic responses 成功、scope/validation/日志；统一 provider chain；Anthropic/Gemini native adapter；provider store 集成；Gateway UI/i18n 和 UI smoke。
+- 验证结果：`npm.cmd run typecheck` 通过；相关能力定向 Vitest 通过，9 files / 64 tests；`npm.cmd run test` 通过，26 files / 132 tests，仅有既有 `node:sqlite` experimental warning；`npm.cmd run build` 通过；`npm.cmd run test:ui-smoke` 通过，7 tests；`npm.cmd run test:electron-smoke` 通过；`npm.cmd run scan:quality` 通过；`git diff --check` 通过，仅 CRLF normalization warnings。
+- 提交与推送：本条记录将随本轮最终提交进入 `main` 并推送到 `origin/main`；实际 commit hash、push 结果和最终 `git status` 以最终中文报告为准。
+
 ## 2026-05-20 全项目健康体检与修复
 
 - 任务名称：全项目健康体检与确认问题修复。
 - 时间：2026-05-20 13:29 至最终提交推送完成。
-- 实际项目根目录：`D:/NexaChat`。
+- 实际项目根目录：由 Git 根目录检测得到；历史记录不保留本机固定路径。
 - 分支与上游：`main` / `origin/main`。
 - 基线提交：`56de597a2ebde458714043095d6114b0d6f04247`。
 - 最终提交：`PENDING_FINAL_COMMIT`（提交 hash 无法自引用写入同一提交，实际 hash 以最终报告和 `git rev-parse HEAD` 为准）。
@@ -19,7 +31,7 @@
 ## 2026-05-20 集成质量提升迭代
 
 - 时间：2026-05-20 12:09 至最终验证完成。
-- 实际项目根目录：`D:/NexaChat`。
+- 实际项目根目录：由 Git 根目录检测得到；历史记录不保留本机固定路径。
 - 分支与上游：`main` / `origin/main`。
 - 基线提交：`5acc4bc00cd1a0deca1f1f3aab34da778146e16b`。
 - 主要实现提交：`78c5b738dc431def216af36fb5105668325e190a`。最终本地 HEAD 以本轮结束时 `git rev-parse HEAD` 和最终报告为准。
@@ -43,7 +55,7 @@
 
 ## 2026-05-18 主题可读性与长点击任务闭环
 
-- 实际项目根目录：`D:/NexaChat`。
+- 实际项目根目录：由 Git 根目录检测得到；历史记录不保留本机固定路径。
 - 起始 HEAD：`dc74830f84ed5022aeb7110a56a313e872ea0630`。
 - 已保留历史长点击证据：`test-results/long-click/2026-05-18-theme-readability-2h/results.json` 与 `results.md`，记录 121.12 分钟、6 个 agents、99 个真实点击功能、7 个模块和 Shared shell 覆盖。
 - 已修复主题可读性问题：placeholder、disabled、selected、primary/status foreground/background 语义 token，暗色状态 pill/notice，`.app-frame` 文本继承，命令栏和 shell surface。

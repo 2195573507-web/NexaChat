@@ -24,7 +24,8 @@ import type {
   SendMessageInput
 } from '../../shared/types.js';
 import type { ChatStreamEventPayload } from '../../shared/ipc.js';
-import { ProviderRuntimeError, getProviderRequestSummary, invokeOpenAiCompatibleChat } from '../adapters/openAiCompatibleAdapter.js';
+import { ProviderRuntimeError } from '../adapters/openAiCompatibleAdapter.js';
+import { getProviderAdapter } from '../adapters/providerAdapterRegistry.js';
 import { ServiceContext, type ServiceConstructor } from './serviceContext.js';
 
 const t = (key: Parameters<typeof translate>[1], params?: Parameters<typeof translate>[2]) => translate('zh-CN', key, params);
@@ -437,8 +438,9 @@ export function ChatService<TBase extends ServiceConstructor<ServiceContext>>(Ba
     try {
       const provider = this.requireProvider(routeDecision.providerId);
       const model = modelForContext;
-      const adapterName = getProviderAdapterName(provider.type);
-      if (adapterName !== 'openai-compatible') {
+      const adapter = getProviderAdapter(provider.type);
+      const adapterName = adapter?.name ?? getProviderAdapterName(provider.type);
+      if (!adapter) {
         throw new ProviderRuntimeError(t('models.errors.unsupportedProvider'), PROVIDER_RUNTIME_ERROR_CODES.unsupportedProvider);
       }
       const apiKey = this.getProviderSecret(provider);
@@ -478,7 +480,7 @@ export function ChatService<TBase extends ServiceConstructor<ServiceContext>>(Ba
       this.db
         .prepare('UPDATE request_logs SET request_summary_json = ? WHERE id = ?')
         .run(JSON.stringify({
-          ...getProviderRequestSummary(providerInput),
+          ...adapter.getRequestSummary(providerInput),
           ...this.buildChatRequestSummary(trimmedContent),
           contextStrategy,
           routeReason: routeDecision.reason,
@@ -488,7 +490,7 @@ export function ChatService<TBase extends ServiceConstructor<ServiceContext>>(Ba
           knowledgeCitationCount: retrieval.citations.length,
           action: input.metadata?.action ?? 'send',
         }), requestLogId);
-      const result = await invokeOpenAiCompatibleChat(providerInput);
+      const result = await adapter.invokeChat(providerInput);
       const assistantContent = result.content;
       const outputTokens = result.outputTokens ?? estimateTokens(assistantContent);
       const metadata = {
