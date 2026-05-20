@@ -10,8 +10,8 @@ Per the release-packaging task boundary, no source, runtime, IPC, database, rout
 
 - Repository root: detected with `git rev-parse --show-toplevel`.
 - Branch state: `main` matched `origin/main`.
-- Final docs-only baseline commit before this report: `00d049fbd6368a5ab7941bc942c9d389b6969154`.
-- Worktree state: clean before this report was added.
+- Latest observed docs/audit baseline commit: `2c5d2991725c9607ee9731ed0612e4ac7790b70a`.
+- Worktree state: clean before this report refinement was added.
 - Index lock: absent.
 - Blocking processes:
   - Vite dev server on `127.0.0.1:5173`.
@@ -28,6 +28,13 @@ The waiting period was used for read-only release planning across these tracks:
 - Verification: planned typecheck, tests, build, UI smoke, Electron smoke, package generation, content inspection, and packaged smoke testing.
 - Documentation: saved the refined packaging plan to `docs/packaging/windows-installer-packaging-plan.md`.
 - Future automation: recorded GitHub Releases, signing, updater, and macOS packaging as future work only.
+
+Later read-only refinement after audit commit `2c5d2991725c9607ee9731ed0612e4ac7790b70a` confirmed:
+
+- `package:release` still produces only `win-unpacked`, a PowerShell installer helper, and `release-manifest.json`; it does not produce a `.exe` installer.
+- The existing PowerShell installer helper accepts an arbitrary `-InstallRoot` and clears that directory before copying files, so it must not be treated as a production installer without separate dangerous-path guards.
+- Desktop metadata is currently duplicated between `src/shared/desktopEntry.ts` and `scripts/desktop-entry.mjs`, so future installer metadata changes must keep both authorities aligned.
+- The release plan now calls out an explicit artifact-content scan and a packaged secret-storage gate rather than relying only on `.gitignore`, builder defaults, or smoke mode.
 
 ## Why Implementation Was Deferred
 

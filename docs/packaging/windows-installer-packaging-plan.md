@@ -14,10 +14,14 @@ No source, runtime, IPC, database, route, provider, Gateway, Knowledge Base, Too
 - Production renderer loading: `src/main/index.ts` serves `dist` through the `nexachat://app/index.html` protocol when `VITE_DEV_SERVER_URL` is absent.
 - Existing icon assets: `assets/app-icon.ico` and `assets/app-icon.png`.
 - Existing release output directory: `release/`, ignored by git.
+- Existing desktop metadata is duplicated between `src/shared/desktopEntry.ts` and `scripts/desktop-entry.mjs`; any packaging metadata change must keep these authorities aligned until they are consolidated.
+- The current app id is `local.nexachat`; the installer implementation should move release metadata to a stable reverse-DNS id such as `com.nexachat.desktop`.
 
 ## Recommended Packaging Stack
 
 Use `electron-builder` for the Windows `.exe` installer because the repository is already an Electron/Vite app and does not have a maintained Forge or builder configuration. Keep the existing custom unpacked package scripts only if they remain useful for smoke tests during the migration.
+
+The existing `package:release` path produces `release/win-unpacked`, `release/NexaChat-Setup.ps1`, and `release/release-manifest.json`; it does not produce a Windows `.exe` installer. The generated PowerShell installer script must not be treated as the production installer because it accepts an arbitrary `-InstallRoot` and clears that directory before copying files. If the script remains for internal smoke testing, add dangerous-path rejection separately; the real release artifact should come from NSIS/electron-builder.
 
 Recommended dependency:
 
@@ -65,9 +69,13 @@ The installer must exclude:
 - source-only development files and tests unless a runtime dependency is proven to require them
 - docs unless intentionally shipped in an about/help surface
 
+The implementation should add an explicit artifact-content scan rather than relying on `.gitignore` or electron-builder defaults alone. At minimum, scan the unpacked payload and installer staging output for forbidden filenames/extensions and obvious secret patterns before declaring the package acceptable.
+
 ## Runtime Data Safety
 
 NexaChat runtime data is created under Electron `app.getPath('userData')`, with test overrides using `NEXACHAT_DATA_DIR` or smoke-test user-data paths. The installer must not bundle any existing local runtime data. Validation should inspect both the unpacked app and installer contents for forbidden filenames and secret patterns.
+
+Packaged smoke should also assert that release-like environments do not depend on `NEXACHAT_ALLOW_INSECURE_SECRET_STORAGE=1` or `local-dev:v1` secret fallback. Existing smoke tests set `NEXACHAT_ELECTRON_SMOKE=1`, which is useful for launch verification but is not by itself proof of normal production safeStorage behavior.
 
 ## Validation Matrix
 
@@ -90,6 +98,8 @@ After adding a real NSIS `.exe` installer command, add or run these checks as we
 - Confirm `release/*.exe` exists and matches the expected artifact naming pattern.
 - Confirm `release/win-unpacked/resources/app` contains the production renderer, Electron main/preload output, icons, and package metadata.
 - Confirm no forbidden files are present in the unpacked payload or installer archive inspection output.
+- Confirm `package:release` or the new packaging script actually produces an `.exe`, not only `win-unpacked` and a PowerShell helper.
+- Confirm release metadata authorities agree on product name, app id, icon path, packaged executable path, and artifact name.
 - Run a packaged app smoke test when the Windows environment allows it.
 - If running the installer is blocked by permissions, document the exact blocker and perform unpacked/package-content verification instead.
 
